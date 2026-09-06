@@ -81,8 +81,12 @@ test.describe("deep-link onboarding (/start)", () => {
     const nameInput = page.getByLabel("Name");
     const prefilledName = await nameInput.inputValue();
     expect(prefilledName.trim().length).toBeGreaterThan(0);
-    // The control-plane slug shape: adjective-animal-4hex.
-    expect(prefilledName).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*-[0-9a-f]{4}$/);
+    // A name the OWNER recognises, not a random slug. The wizard deliberately prefills
+    // `my <app title>` for a deep link (dashboard/pods/new/page.tsx: "Friendly, app-based default
+    // the user recognises"). This asserted the old adjective-animal-4hex shape and has been failing
+    // ever since that changed — testing the exact behaviour the product decided against.
+    expect(prefilledName).toMatch(/^my /i);
+    expect(prefilledName.toLowerCase()).toContain("ask your docs");
 
     // First-touch ref recorded on the account the instant /start was hit — before any Create
     // click.
@@ -117,14 +121,29 @@ test.describe("deep-link onboarding (/start)", () => {
 
     // The fake stack gives a freshly-launched pod a session URL almost immediately, so it
     // reaches "ready" fast — exactly when the 2-card walkthrough should appear instead of the
-    // default coach-mark tour. Exactly two cards; dismissing strips the one-shot URL flag.
-    const walkthrough = page.getByRole("dialog", { name: /your ask your docs is live/i });
+    // default coach-mark tour. Two steps; finishing strips the one-shot URL flag.
+    //
+    // This is a COACH-MARK tour, not a modal with both cards on screen at once. It was changed
+    // deliberately (deeplink-walkthrough.tsx: the modal "read as a confusing duplicate of the
+    // dashboard, owner report"), and the assertions below were never updated — they looked for a
+    // dialog named after the card heading and a "Continue to the dashboard" button, neither of
+    // which exists. The dialog is labelled "How it works"; the headings are its step titles.
+    const walkthrough = page.getByRole("dialog", { name: /how it works/i });
     await expect(walkthrough).toBeVisible({ timeout: 20_000 });
     await expect(walkthrough.getByText("Your Ask Your Docs is live")).toBeVisible();
+    // Step 2 is reached by advancing, not by being on screen already.
+    await walkthrough.getByRole("button", { name: /^next$/i }).click();
     await expect(walkthrough.getByText("Steer it from Claude")).toBeVisible();
-    await walkthrough.getByRole("button", { name: /continue to the dashboard/i }).click();
+    await walkthrough.getByRole("button", { name: /^done$/i }).click();
     await expect(walkthrough).toHaveCount(0);
-    expect(page.url()).not.toContain("from=deeplink");
+    // The flag is stripped by a router.replace inside the dismiss handler (pod-cockpit.tsx
+    // dismissDeeplinkWalkthrough), which lands AFTER the dialog unmounts — reading page.url()
+    // straight away races it.
+    // 15s, not the 5s default: the replace lands after a dev-server render and blew the default
+    // once in three runs. The walkthrough assertion above already allows 20s for the same reason.
+    await expect
+      .poll(() => page.url(), { timeout: 15_000 })
+      .not.toContain("from=deeplink");
   });
 
   test("unauthenticated deep link is carried through sign-in via next=, not a bare query param", async ({

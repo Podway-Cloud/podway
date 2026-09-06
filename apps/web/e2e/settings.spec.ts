@@ -12,7 +12,10 @@ test.describe("settings — relay connect", () => {
     await login(page, "approved");
     await page.goto("/dashboard/settings");
 
-    await expect(page.getByText(/Relay — fetch from your own machine/i)).toBeVisible();
+    // The card's title. It used to read "Relay — fetch from your own machine"; that copy no longer
+    // exists anywhere in the app, so this could never pass again. What follows — the badge, the
+    // minted command, the countdown — is what actually proves the card works.
+    await expect(page.getByText("Relay", { exact: true }).first()).toBeVisible();
     // No relay running for a fresh owner.
     await expect(page.getByText("Not connected")).toBeVisible();
 
