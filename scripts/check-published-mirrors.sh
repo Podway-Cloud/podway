@@ -52,5 +52,28 @@ if [ -z "$PUB" ] || [ "$PUB" = "d41d8cd98f00b204e9800998ecf8427e" ]; then note "
 elif [ "$PUB" = "$OWN" ]; then note "published selfhost/install.sh == source"
 else bad "published selfhost/install.sh differs from source — the oss-mirror sync has not run for this commit"; fi
 
+# 4. is the SOURCE MIRROR itself current, or has it silently stopped syncing?
+#
+# Comparing one FILE cannot answer this. On 2026-09-06 this script reported "all published artifacts
+# match source" while the public mirror sat FIVE merges behind: the sync workflow had been failing on
+# an expired token since 19:28, and none of that day's merges happened to touch install.sh. A mirror
+# that stops syncing looks exactly like a mirror with nothing to sync.
+#
+# Each sync lands one squashed commit whose subject ends "@ <short-sha>" of the source it exported,
+# so the mirror records how far it got. Compare that against our HEAD.
+SRC_SHA="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null)"
+MIR_SHA="$(fetch https://api.github.com/repos/podway-cloud/podway/commits/main \
+  | python3 -c 'import json,sys,re
+m=re.search(r"@ ([0-9a-f]{7,})", json.load(sys.stdin)["commit"]["message"].splitlines()[0])
+print(m.group(1) if m else "")' 2>/dev/null)"
+if [ -z "$MIR_SHA" ] || [ -z "$SRC_SHA" ]; then
+  note "source mirror: could not determine its last synced commit — skipped"
+elif [ "${SRC_SHA#"$MIR_SHA"}" != "$SRC_SHA" ] || [ "${MIR_SHA#"$SRC_SHA"}" != "$MIR_SHA" ]; then
+  note "source mirror synced at $MIR_SHA == HEAD $SRC_SHA"
+else
+  BEHIND="$(git -C "$ROOT" rev-list --count "$MIR_SHA..HEAD" 2>/dev/null || echo '?')"
+  bad "source mirror last synced $MIR_SHA — HEAD is $SRC_SHA ($BEHIND ahead); the sync workflow is failing or has not run"
+fi
+
 [ "$FAIL" -eq 0 ] && echo "  all published artifacts match source" || echo "  PUBLISHED ARTIFACTS HAVE DRIFTED" >&2
 exit "$FAIL"

@@ -43,6 +43,16 @@ export function sanitizeSessionName(raw: string | undefined): string {
   return clean || "podway pod";
 }
 
+/**
+ * The agent's credential file on a REAL POD, as an absolute path.
+ *
+ * Do NOT "fix" this to os.homedir(). The pod-agent is PID 1 and runs as ROOT — it drops to `dev`
+ * with `su - dev` for everything user-facing (init.sh) — so homedir() here resolves to /root and
+ * every credential check on every pod would silently look in the wrong place.
+ *
+ * Because it is absolute, it is also WRONG anywhere that is not a pod. Inside the server, prefer
+ * `credPathFor()`, which honours the configured `credential.path` and only falls back to this.
+ */
 export function credentialsPathForAgent(agent: string): string {
   return agent === "codex" ? "/home/dev/.codex/auth.json" : "/home/dev/.claude/.credentials.json";
 }

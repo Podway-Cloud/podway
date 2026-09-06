@@ -996,7 +996,7 @@ export class AgentServer {
             if (agent === "codex") {
               this.ensureCodexDaemon("agent_restart");
             } else if (
-              !existsSync(credentialsPathForAgent(agent)) &&
+              !existsSync(this.credPathFor(agent)) &&
               this.greeter?.agentAuth !== "setup-token" &&
               this.greeter?.agentAuth !== "api-key"
             ) {
@@ -2266,7 +2266,7 @@ export class AgentServer {
   private primaryRcState(): RcState {
     if (!this.credential || this.credential.agent === "codex") return "unknown";
     const id = this.credential.agent;
-    const cred = credentialState(id, credentialsPathForAgent(id));
+    const cred = credentialState(id, this.credPathFor(id));
     const hasSessionUrl = Boolean(this.agentSessionUrls.get(id) ?? this.lastSessionUrl);
     return classifyRcState({
       authed: cred.authed,
@@ -2300,7 +2300,7 @@ export class AgentServer {
       // authed is now TOKEN-AWARE (false when the login has hard-expired), not mere file-presence —
       // the blind spot that hid a dead claude login for weeks (2026-08-22). loginExpired distinguishes
       // "was signed in, token died → reconnect" from "never signed in → first-time login".
-      const cred = credentialState(id, credentialsPathForAgent(id));
+      const cred = credentialState(id, this.credPathFor(id));
       // Live auth-failure/gate/bounded-restore tracking (failStateWatchdog) is PRIMARY-CLAUDE ONLY —
       // sessionStateFromDisk/the bridge signal is per-pid and codex has its own daemon self-heal (see
       // failStateWatchdog's own doc comment). An added (non-primary) Claude degrades to the file-only
@@ -2405,6 +2405,10 @@ export class AgentServer {
    * developer's REAL credential file is both non-hermetic and alarming.
    *
    * Prefer the configured path for the configured agent; fall back for every other agent.
+   *
+   * EVERY credential path in this file goes through here. SEVEN call sites used to reach past
+   * it to the absolute path; they agreed on a pod and diverged only under test, so nothing ever
+   * failed loudly enough to find them.
    */
   private credPathFor(id: string): string {
     return id === this.credential?.agent && this.credential?.path
@@ -2527,7 +2531,7 @@ export class AgentServer {
       app: m.app.port != null ? { port: m.app.port, listening: m.app.listening } : null,
       codexRuntimeMissing:
         this.codexOnPod() &&
-        existsSync(credentialsPathForAgent("codex")) &&
+        existsSync(this.credPathFor("codex")) &&
         !existsSync(CODEX_STANDALONE),
     });
   }
@@ -3235,13 +3239,13 @@ export class AgentServer {
     // Codex may be the primary OR an added agent — key off presence + its own
     // creds, not `credential.agent` (which is the primary only; that guard left
     // codex-added-to-a-Claude-pod with no RC daemon, ever).
-    if (!this.codexOnPod() || !existsSync(credentialsPathForAgent("codex"))) return;
+    if (!this.codexOnPod() || !existsSync(this.credPathFor("codex"))) return;
     if (existsSync(CODEX_RC_OFF)) return; // the owner switched RC off — stay off
     // Codex login hit its hard expiry — the daemon would spawn into a logged-out account and fail on
     // every boot/resume/toggle. Skip; loginExpired detection + Reconnect own recovery. Fail open on an
     // unreadable/absent expiry field (credentialExpired only flags a KNOWN expiry in the past).
     try {
-      if (credentialState("codex", credentialsPathForAgent("codex")).expired) {
+      if (credentialState("codex", this.credPathFor("codex")).expired) {
         this.log.info("codex_rc_skip_login_expired", { reason });
         return;
       }
@@ -3285,7 +3289,7 @@ export class AgentServer {
     | { manualPairingCode: string; pairingCode: string; expiresAt: number; deviceName: string }
     | { error: string }
   > {
-    if (!this.codexOnPod() || !existsSync(credentialsPathForAgent("codex")))
+    if (!this.codexOnPod() || !existsSync(this.credPathFor("codex")))
       return { error: "Codex isn't signed in on this pod" };
     if (!existsSync(CODEX_STANDALONE)) return { error: "codex standalone build missing" };
     this.ensureCodexDaemon("pair-request"); // no-op if already running
