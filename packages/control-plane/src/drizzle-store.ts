@@ -33,7 +33,10 @@ function toRecord(row: Row): PodRecord {
     machineId: row.machineId,
     imageDigest: row.imageDigest,
     configHash: row.configHash ?? null,
+    relentlessHold: row.relentlessHold,
+    relentlessWake: row.relentlessWake,
     updatingSince: row.updatingSince ? row.updatingSince.toISOString() : null,
+    updateQueuedSince: row.updateQueuedSince ? row.updateQueuedSince.toISOString() : null,
     maintenanceKind: row.maintenanceKind ?? null,
     updateStage: row.updateStage ?? null,
     t3Control: row.t3Control ?? false,
@@ -83,7 +86,10 @@ export class DrizzlePodStore implements PodStore {
       machineId: record.machineId,
       imageDigest: record.imageDigest,
       configHash: record.configHash ?? null,
+      relentlessHold: record.relentlessHold ?? false,
+      relentlessWake: record.relentlessWake ?? false,
       updatingSince: record.updatingSince ? new Date(record.updatingSince) : null,
+      updateQueuedSince: record.updateQueuedSince ? new Date(record.updateQueuedSince) : null,
       maintenanceKind: record.maintenanceKind ?? null,
       updateStage: record.updateStage,
       t3Control: record.t3Control ?? false,
@@ -148,8 +154,12 @@ export class DrizzlePodStore implements PodStore {
     if (patch.machineId !== undefined) set.machineId = patch.machineId;
     if (patch.imageDigest !== undefined) set.imageDigest = patch.imageDigest;
     if (patch.configHash !== undefined) set.configHash = patch.configHash;
+    if (patch.relentlessHold !== undefined) set.relentlessHold = patch.relentlessHold;
+    if (patch.relentlessWake !== undefined) set.relentlessWake = patch.relentlessWake;
     if (patch.updatingSince !== undefined)
       set.updatingSince = patch.updatingSince ? new Date(patch.updatingSince) : null;
+    if (patch.updateQueuedSince !== undefined)
+      set.updateQueuedSince = patch.updateQueuedSince ? new Date(patch.updateQueuedSince) : null;
     if (patch.maintenanceKind !== undefined) set.maintenanceKind = patch.maintenanceKind;
     if (patch.updateStage !== undefined) set.updateStage = patch.updateStage;
     if (patch.t3Control !== undefined) set.t3Control = patch.t3Control;

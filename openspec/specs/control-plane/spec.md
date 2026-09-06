@@ -308,6 +308,20 @@ fail the image update — the pod simply keeps its existing layer.
 - **AND** an update still within the stale window SHALL NOT be disturbed, so a legitimately slow
   recreate is never interrupted
 
+#### Scenario: A pod waiting its turn in a batch update says so
+
+- **WHEN** a batch image update is started for several pods
+- **THEN** every pod in the batch SHALL be marked QUEUED on its row BEFORE any recreate begins, so
+  the wait is durable state rather than a loop variable in one process — a batch interrupted by a
+  restart leaves a visible, resumable queue instead of silently stranding the pods it never reached
+- **AND** a pod's queued mark SHALL be cleared when its own update starts, so "queued" can never
+  outlive the wait it describes
+- **AND** a pod the batch never reaches — it failed, threw, or the process went down — SHALL have its
+  queued mark cleared, because a pod left flagged as waiting is locked out of its own cockpit
+  indefinitely, which is a worse failure than the interruption the mark exists to prevent
+- **AND** queue POSITION SHALL be derived by counting pods still queued with an earlier mark, never
+  stored, since a stored position would have to be rewritten on every row as the batch drains
+
 ### Requirement: Encrypted app-secret management
 
 The control plane SHALL manage per-pod app secrets through an encrypted secret vault, owner-scoped.

@@ -1035,6 +1035,27 @@ export async function updatePodImage(slug: string): Promise<ActionResult> {
  * turns (reads `idle` instantly) isn't interrupted mid-task. See docs/plans/fleet-updates.md. */
 const IDLE_UPDATE_DWELL_MS = 10 * 60 * 1000;
 
+/**
+ * "Agentic behavior" — how much a pod does on its own while its owner is away.
+ *
+ * Two flags in one call because the modal saves them together, but they stay SEPARATE all the way
+ * down: `hold` (the Stop hook) only refuses a stop and never starts a turn, so it is free; `wake`
+ * nudges an idle pod and each nudge is a BILLED agent turn. Collapsing them anywhere in the stack
+ * would hide a bill behind what reads as a behaviour setting.
+ */
+export async function setPodAgenticBehavior(
+  slug: string,
+  next: { hold: boolean; wake: boolean },
+): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    await getPodService().setAgenticBehavior(user.id, slug, next);
+    revalidatePath("/dashboard");
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
 /** Fleet-updates (C): per-pod auto-update opt-out, from the pod Settings toggle. */
 export async function setPodAutoUpdate(slug: string, enabled: boolean): Promise<ActionResult> {
   const user = await requireUser();

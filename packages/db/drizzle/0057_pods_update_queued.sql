@@ -1,0 +1,19 @@
+-- Mark a pod that is QUEUED for a batch image update but has not started yet.
+--
+-- A bulk update recreates pods one at a time (never burst the Incus box), so in a 24-pod batch the
+-- last pod waits roughly 36 minutes at ~90s each. Until now nothing recorded that wait: pods 2..24
+-- looked completely normal and still offered "Update available", so an owner could open the cockpit,
+-- start changing something, and have the pod flip to "Updating" underneath them mid-edit.
+--
+-- Worse, the queue lived only in one web process's memory (a `for (const id of ids)` loop in a
+-- detached handler). A restart mid-batch stranded the remainder silently — nothing had recorded that
+-- they were ever queued, so nothing could report or resume them.
+--
+-- Set when the pod is enqueued; cleared when its own update starts (updating_since takes over) or
+-- when the batch abandons it. Deliberately NOT a queue position: position changes as the batch
+-- drains, and rewriting every row on each step is churn. Surfaces derive it instead, by counting
+-- rows still queued with an earlier stamp.
+--
+-- Backward-compatible: nullable, no default, no data rewritten. Old app code running against the new
+-- schema simply ignores the column, which is what makes a rollout safe in both editions.
+ALTER TABLE "pods" ADD COLUMN IF NOT EXISTS "update_queued_since" timestamp;

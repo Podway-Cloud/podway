@@ -130,7 +130,24 @@ export interface PodRecord {
    * whatever imageDigest still says. `updateStage` is the coarse phase for display.
    * These are the RENDER source of truth so the list card + cockpit reflect an
    * in-flight update straight from the backend, refresh-safe (never client-only). */
+  /**
+   * "Agentic behavior": how much this pod does on its own while its owner is away.
+   *
+   * TWO flags because the halves cost differently — `hold` (the Stop hook) only refuses a stop and
+   * never starts a turn, so it is free; `wake` nudges an idle pod and each nudge is a BILLED agent
+   * turn. One flag would hide a bill behind a behaviour setting. Both default false.
+   */
+  relentlessHold: boolean;
+  relentlessWake: boolean;
   updatingSince: string | null;
+  /**
+   * ISO time this pod was QUEUED for a batch image update but has not started yet. Bulk updates
+   * recreate one pod at a time, so a pod can wait ~36 minutes in a 24-pod batch. Surfaces use this
+   * to say "queued" instead of still offering "Update available", and to refuse the cockpit so an
+   * owner does not start an edit that the update is about to interrupt. Cleared when this pod's own
+   * update starts (updatingSince takes over) or when the batch abandons it.
+   */
+  updateQueuedSince: string | null;
   /** Which maintenance is in flight: an update or a resize. Both restart the pod and
    * share updatingSince/updateStage, so this is what lets a surface say the right
    * word instead of calling every restart an "update". */

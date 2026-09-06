@@ -145,6 +145,7 @@ export default async function Dashboard() {
               t3Control: p.t3Control,
               t3Since: p.t3Since,
               updateReady: updateReady(p),
+              queued: Boolean(p.updateQueuedSince),
               updating: isUpdating(p),
               imageDigest: p.imageDigest,
               autoUpdate: p.autoUpdate,

@@ -43,6 +43,20 @@ export interface PodSpec {
   /** BYO-repo: the user's chosen "owner/name" to clone into ~/work (or undefined). */
   githubRepo?: string;
   kickoff: ResolvedPod["kickoff"];
+  /**
+   * The relentless switches, delivered to the pod rather than set on it.
+   *
+   * TWO switches, not one, because the halves cost differently: `hold` is the Stop hook, which
+   * only ever REFUSES a stop and never starts a turn, so it is free; `wake` nudges an idle pod,
+   * and every nudge is a BILLED agent turn. A single toggle would hide a bill behind what looks
+   * like a behaviour setting.
+   *
+   * Delivered here because this file is rewritten on boot AND on every config refresh. Setting
+   * the flag on the pod by hand does not survive: it was wiped mid-trial on 2026-09-06 and the
+   * wall went OFF silently, which is the worst failure this mechanism has — indistinguishable
+   * from a wall with nothing to block.
+   */
+  relentless: { hold: boolean; wake: boolean };
   egress: ResolvedPod["egress"];
   claudeFiles: string[]; // guest-relative paths of injected .claude files
 }
@@ -79,6 +93,9 @@ export async function buildInitFiles(
     /** Pod-level agent override (multi-agent-plan.md slice 3); falls back to the
      * env's declared agents when absent. */
     agents?: ResolvedPod["agents"];
+    /** Per-pod relentless switches; both default OFF when the caller says nothing. */
+    relentlessHold?: boolean;
+    relentlessWake?: boolean;
     /** Pod-level auth-mode override; falls back to the env's default when absent. */
     agentAuth?: ResolvedPod["agentAuth"];
   },
@@ -183,6 +200,12 @@ export async function buildInitFiles(
     // into ~/work at first boot; init.sh uses the PODWAY_GH_CLONE_TOKEN secret.
     githubRepo: input.githubRepo,
     kickoff: input.resolved.kickoff,
+    // OFF unless the owner asks. A pod must never inherit an enforcement wall, and `wake` must
+    // never start spending on its own.
+    relentless: {
+      hold: input.relentlessHold ?? false,
+      wake: input.relentlessWake ?? false,
+    },
     egress: input.resolved.egress,
     claudeFiles: claudeFiles.sort(),
   };

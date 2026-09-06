@@ -69,6 +69,25 @@ export function paneAcceptsInput(paneText: string): boolean {
   return !agentGone(paneText) && !atBlockingGate(paneText);
 }
 
+/**
+ * Does this pane hold a LIVE agent TUI, as opposed to a bare shell?
+ *
+ * Every other predicate here is negative — "not exited", "not gated" — and a plain `bash` pane
+ * passes all of them: it carries no exit marker and shows no gate. That was fine while the only way
+ * to reach a login was typing into the agent's own pane, because waiting for the login menu doubled
+ * as the liveness proof. Once the login moved to its OWN window (so an autonomous agent could not
+ * type over the owner's sign-in prompt), that proof was gone and a reconnect beside a dead agent
+ * would have reported success — hiding exactly the failure control-plane uses to decide whether to
+ * respawn.
+ *
+ * Keyed on the TUI's own frame: the box-drawing rule it draws around its input, or its footer hint.
+ * A shell renders neither. Deliberately loose — this decides "respawn or not", so a false NEGATIVE
+ * (an unnecessary respawn) is far cheaper than a false positive (silently leaving a dead agent).
+ */
+export function looksLikeAgentTui(paneText: string): boolean {
+  return /[─━]{8,}/.test(paneText) || /shift\+tab to cycle|bypass permissions/i.test(paneText);
+}
+
 /** Which known blocking gate a pane is showing. `atBlockingGate` only says "some gate is up, don't
  * type"; the menu WATCHDOG needs to know WHICH one so it can drive the right answer (or surface an
  * owner-decision one). `bypass` is tested with its dual-match so the working status line never counts;

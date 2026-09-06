@@ -17,6 +17,7 @@ import {
   renamePod,
   setPodPreviewPublic,
   setPodAutoUpdate,
+  setPodAgenticBehavior,
   updatePodImage,
   podUpdateProgress,
   t3Progress,
@@ -59,6 +60,10 @@ import AgentCards from "@/components/agent-cards";
 import PreviewCard from "@/components/preview-card";
 import T3ConnectPanel from "@/components/t3-connect-panel";
 import { SettingRow } from "@/components/setting-row";
+import {
+  AgenticBehaviorDialog,
+  describeAgenticBehavior,
+} from "@/components/agentic-behavior-dialog";
 import HealthStrip from "@/components/health-strip";
 import HealthPanel from "@/components/health-panel";
 import ActivityTab from "@/components/activity-tab";
@@ -173,6 +178,16 @@ export interface PodCockpitProps {
   /** Durable update-in-flight state from the pod row (ISO), so re-entering the
    * cockpit shows "Updating…" from the backend — not client-only. Null = not updating. */
   updatingSince: string | null;
+  /** "Agentic behavior": how much this pod does on its own while the owner is away. */
+  relentlessHold?: boolean;
+  relentlessWake?: boolean;
+  /** Set while this pod is QUEUED for a batch update but has not started. The cockpit takes
+   *  over, because a bulk update recreates pods one at a time and this pod may wait ~36
+   *  minutes in a 24-pod batch — long enough for an owner to start an edit that its turn
+   *  then interrupts part-way through. */
+  updateQueuedSince: string | null;
+  /** Pods still ahead of this one in the batch, derived server-side. Null when unknown. */
+  queueAhead?: number | null;
   updateStageInitial: string | null;
   /** Which maintenance the row says is in flight, if any. Seeded durably so the
    * right word survives a refresh mid-operation. */
@@ -264,6 +279,10 @@ export default function PodCockpit(props: PodCockpitProps) {
     addableAgents = [],
     updateInfo,
     updatingSince,
+    relentlessHold = false,
+    relentlessWake = false,
+    updateQueuedSince,
+    queueAhead = null,
     updateStageInitial,
     maintenanceKindInitial,
     t3Control,
@@ -367,6 +386,10 @@ export default function PodCockpit(props: PodCockpitProps) {
   // Seeded from the DURABLE row state (updatingSince), so re-entering the cockpit
   // mid-update shows "Updating…" straight from the backend. The poll below keeps
   // it live and calls router.refresh() when the backend says it's done.
+  // Local mirror so the ROW DESCRIPTION updates the moment the modal saves. The description is
+  // where an owner reads what the pod is actually doing, so a stale one is worse than none:
+  // this mechanism's failures are silent, and a row that lies about them hides exactly that.
+  const [agentic, setAgentic] = useState({ hold: relentlessHold, wake: relentlessWake });
   const [updating, setUpdating] = useState(Boolean(updatingSince));
   // T3 Code enable/disable wizard state — seeded durably from the row (t3Since), kept live by the
   // poll below (mirrors the update flow). `inControl` drives the banner + hiding conflicting controls.
@@ -1040,6 +1063,32 @@ export default function PodCockpit(props: PodCockpitProps) {
       />
     );
   }
+
+  // QUEUED for a batch update: the same full-page takeover, for the same reason. The pod is
+  // healthy right now, but a bulk update recreates pods ONE AT A TIME, so it may sit here ~36
+  // minutes in a 24-pod batch and then restart without warning. Letting the owner work in that
+  // window means cutting them off part-way through a change.
+  //
+  // The web TERMINAL deliberately stays open (owner call, 2026-09-06). A deliberate asymmetry,
+  // not an oversight: the cockpit's controls mutate durable pod state a recreate can interrupt
+  // half-applied, whereas a terminal session is the owner's own work and already interruptible.
+  // Locking someone out of a healthy pod for ~36 minutes to spare them a ~90s restart is the
+  // worse trade, so the copy says controls are paused and POINTS AT the terminal rather than
+  // claiming the pod is unreachable.
+  if (updateQueuedSince && !updating && !onboarding) {
+    return (
+      <PodUpdating
+        name={name}
+        slug={slug}
+        environmentName={environmentName}
+        agentsLabel={agentsLabel}
+        kind="queued"
+        stage={null}
+        elapsedSec={0}
+        aheadCount={queueAhead}
+      />
+    );
+  }
   // Enabling/turning off T3 Code replaces the cockpit with its own full-page flow, same as an update.
   // `!connecting` hands straight to the connect wizard below without a cockpit frame in between.
   if (t3Enabling && !connecting && !onboarding) {
@@ -1617,6 +1666,28 @@ export default function PodCockpit(props: PodCockpitProps) {
               )}
             </CardContent>
           </Card>
+
+          {/* Agentic behavior lives in CONTROL, not Settings: it is about what the agents DO, which is
+              what this tab is for. ONE row with two switches behind it — two because the halves differ
+              (holding a stop costs nothing; waking an idle pod starts a turn), one row because this is an
+              infrequent, consequential choice that must not read as two everyday toggles.
+              The DESCRIPTION names BOTH states so they are legible WITHOUT opening the dialog: this
+              mechanism fails silently, and a switch reading "on" proves nothing.
+              Both editions — a self-host pod runs an agent too, so this is not gated on !oss. */}
+          <Card className="gap-1 border-0 bg-transparent py-0 shadow-none">
+            <CardContent className="px-0">
+              <SettingRow label="Agentic behavior" desc={describeAgenticBehavior(agentic)}>
+                <AgenticBehaviorDialog
+                  value={agentic}
+                  disabled={pending || updating}
+                  onSave={async (next) => {
+                    setAgentic(next);
+                    act(() => setPodAgenticBehavior(slug, next), "update agentic behavior");
+                  }}
+                />
+              </SettingRow>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="settings" className="min-h-[20rem] space-y-4">
@@ -1692,6 +1763,7 @@ export default function PodCockpit(props: PodCockpitProps) {
               self-host updates are a host-level compose pull, not a per-pod action. A pod running a
               service (always-on) is the shape you'd exclude, so it restarts only when YOU choose. */}
           {!oss && (
+
             <SettingRow
               label="Auto-update"
               desc={

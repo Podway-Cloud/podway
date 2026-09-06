@@ -1022,7 +1022,13 @@ export class GatewayServer {
     // (test:1, 2026-08-29). Wake the pod on its prior image + fail the update so it's retryable.
     const unstuckUpdates =
       (await this.config.control.reconcileStuckUpdates?.().catch(() => [] as string[])) ?? [];
-    return [...woken, ...refreshed, ...unstuck, ...unstuckUpdates];
+    // Release a pod left flagged QUEUED by a batch update that never reached it. The batch clears
+    // its own stamps on every exit path, but cannot if the process is killed outright — and a
+    // queued pod's cockpit is BLOCKED, so a stale stamp locks an owner out of a healthy pod
+    // indefinitely, which is worse than the mid-edit interruption the stamp exists to prevent.
+    const releasedQueue =
+      (await this.config.control.reconcileStrandedQueue?.().catch(() => [] as string[])) ?? [];
+    return [...woken, ...refreshed, ...unstuck, ...unstuckUpdates, ...releasedQueue];
   }
 
   /** Reap relay connection rows that have been disconnected for a long time (a relay paired once and

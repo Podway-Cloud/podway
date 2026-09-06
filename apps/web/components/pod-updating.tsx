@@ -43,19 +43,60 @@ export default function PodUpdating({
   kind,
   stage,
   elapsedSec,
+  aheadCount = null,
 }: {
   name: string | null;
   slug: string;
   environmentName: string;
   agentsLabel: string;
-  kind: "update" | "resize";
+  kind: "update" | "resize" | "queued";
   stage: string | null;
   elapsedSec: number;
+  /** Pods still ahead of this one in the batch. Derived at render time, so it can be null. */
+  aheadCount?: number | null;
 }) {
-  const verb = kind === "resize" ? "Resizing" : "Updating";
+  const verb = kind === "resize" ? "Resizing" : kind === "queued" ? "Queued" : "Updating";
   // Active stage = the emitted key; unknown/null → treat as the first (we've only just started).
   const activeIdx = Math.max(0, STAGES.findIndex((s) => s.key === stage));
   const pct = Math.min(100, Math.round(((activeIdx + 0.5) / STAGES.length) * 100));
+
+  // QUEUED is a different screen, not a stage of this one: there is no progress to show, because
+  // nothing has started. It takes over the cockpit for the same reason an update does — a bulk
+  // update recreates pods one at a time, so this pod may wait ~36 minutes in a 24-pod batch, and an
+  // owner who starts editing in that window gets cut off mid-change when its turn arrives.
+  //
+  // Deliberately NO elapsed timer and NO stage list: both would imply work is happening. The honest
+  // signal is the queue position, which shrinks as the batch drains.
+  if (kind === "queued") {
+    return (
+      <div className="mx-auto w-full max-w-xl px-4 py-8">
+        <PhaseHeader title={name || slug} label="Queued for update" tone="warning" />
+        <p className="font-mono text-[12px] text-muted-foreground/70">
+          {environmentName} · {agentsLabel}
+        </p>
+        <p className="mt-2 text-[13.5px] text-muted-foreground">
+          This pod restarts shortly as part of a batch update. Your workspace stays exactly as it is,
+          and the cockpit comes back automatically when it&apos;s done.
+        </p>
+        <Card className="mt-6">
+          <CardContent className="flex items-center gap-3 py-4">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-warning" aria-hidden />
+            <span className="text-[13.5px] text-foreground">
+              {aheadCount === null
+                ? "Waiting for its turn"
+                : aheadCount === 0
+                  ? "Starting next"
+                  : `About ${aheadCount} pod${aheadCount === 1 ? "" : "s"} ahead`}
+            </span>
+          </CardContent>
+        </Card>
+        <p className="mt-4 text-[12.5px] text-muted-foreground/70">
+          Controls are paused so a change you make now isn&apos;t interrupted part-way through. The web
+          terminal still works if you need the pod before then.
+        </p>
+      </div>
+    );
+  }
 
   // A live seconds tick so the elapsed counter moves even between the parent's poll cycles.
   const [tick, setTick] = useState(0);

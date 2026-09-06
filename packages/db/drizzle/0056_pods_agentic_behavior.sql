@@ -1,0 +1,22 @@
+-- Per-pod "Agentic behavior": how much a pod does on its own while its owner is away.
+--
+-- TWO columns, not one, because the halves cost differently and a single flag would hide a bill
+-- behind what reads as a behaviour setting:
+--   * relentless_hold — the Stop hook. It only ever REFUSES a stop; it never starts a turn, so it
+--     costs nothing.
+--   * relentless_wake — the idle nudge. Every nudge is a BILLED agent turn.
+--
+-- Both default FALSE. A pod must never inherit an enforcement wall by accident, and nothing may
+-- start spending on the owner's behalf without them asking.
+--
+-- These are DELIVERED to the pod through its spec file rather than set on the pod, because a flag
+-- written on the pod does not survive: the platform rewrites that file on boot and on every config
+-- refresh, and a hand-set flag was wiped mid-trial on 2026-09-06 — the wall went off SILENTLY, which
+-- is this mechanism's worst failure mode because it is indistinguishable from a wall with nothing
+-- to block.
+--
+-- Backward-compatible: nullable-with-default, no data rewritten, so old app code running against the
+-- new schema during a rollout is unaffected in both editions.
+ALTER TABLE "pods" ADD COLUMN IF NOT EXISTS "relentless_hold" boolean DEFAULT false NOT NULL;
+--> statement-breakpoint
+ALTER TABLE "pods" ADD COLUMN IF NOT EXISTS "relentless_wake" boolean DEFAULT false NOT NULL;

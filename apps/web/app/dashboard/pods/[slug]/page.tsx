@@ -78,6 +78,13 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
     throw e;
   }
 
+  // Queue position only matters while this pod is actually waiting, and computing it walks the
+  // pod rows — no reason to pay for that on every cockpit render. Best-effort: a failure costs
+  // only the number, and the screen then reads "Waiting for its turn" instead of a count.
+  const queueAhead = pod.updateQueuedSince
+    ? await svc.queueAheadOf(pod.id).catch(() => null)
+    : null;
+
   if (pod.status === "error") {
     // If the pod's environment no longer resolves (renamed/removed), retrying
     // can't help — rebuilding needs the template. Say so and offer only Delete.
@@ -290,6 +297,10 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
         podAgents={podAgents}
         addableAgents={addableAgents}
         updatingSince={pod.updatingSince}
+        relentlessHold={pod.relentlessHold}
+        relentlessWake={pod.relentlessWake}
+        updateQueuedSince={pod.updateQueuedSince}
+        queueAhead={queueAhead}
         updateStageInitial={pod.updateStage}
         maintenanceKindInitial={pod.maintenanceKind}
         t3Control={pod.t3Control}

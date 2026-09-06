@@ -57,6 +57,90 @@ agent on a BYO API key" below).
 - **AND** the check SHALL be repeated over a grace window rather than acting on first sight, so a
   normal delete-then-write during a successful login is not mistaken for destruction
 
+#### Scenario: Reconnecting a still-VALID login surfaces its sign-in link
+
+- **WHEN** an owner asks to reconnect an agent whose credentials file still exists — the normal case
+  for renewing a login that is valid but EXPIRING, which is what the Reconnect button is for
+- **THEN** the sign-in link SHALL be published to the cockpit anyway, and SHALL NOT be discarded on
+  the grounds that the pod is "already signed in"
+- **AND** the link SHALL stop being offered as soon as a new credential is written, so a dead
+  sign-in URL is never left on screen after a successful reconnect
+- **AND** the offer SHALL expire on its own, so an abandoned attempt goes quiet without intervention
+
+The gates previously keyed on the credentials file being ABSENT. The link was therefore deleted on
+every health tick while a valid credential existed, and the cockpit waited forever (test pod,
+2026-09-06, both attempts). It only ever proceeded when a failed exchange DELETED the credentials —
+the destruction was what unblocked the flow, which is the clearest sign the condition was wrong.
+
+#### Scenario: A wrapped sign-in URL is recovered whole
+
+- **WHEN** the agent CLI prints its sign-in URL across several pane rows, the last of which is padded
+  with trailing spaces because the capture preserves them
+- **THEN** the URL SHALL be rejoined including its final row, since the trailing `state` parameter
+  lives there and OAuth rejects the URL without it
+- **AND** the rejoin SHALL still stop at a row that is not part of the URL, such as a shell prompt,
+  so no surrounding text is swallowed into the link
+
+#### Scenario: A reconnect's sign-in prompt survives an autonomous agent
+
+- **WHEN** an owner starts a reconnect on a pod whose agent is actively working
+- **THEN** the login SHALL be driven in a DEDICATED window, never the agent's own pane, so the
+  agent's output cannot erase the prompt the owner is about to paste their code into
+- **AND** the agent SHALL keep working throughout, rather than being frozen behind a prompt
+- **AND** the sign-in link SHALL be read from that window, since that is where it is printed
+
+Driving the login in the agent's pane is a race the agent wins: it is autonomous, so its next turn
+prints over the prompt. Observed on a test pod (2026-09-06): the owner fetched their OAuth code,
+returned to paste it, and the pane had moved on to writing a file and running a command — there was
+nothing left to paste into, and the cockpit fell back to its normal view because no login was in
+progress any more. Relentless working makes this strictly worse, so the fix separates the two rather
+than trying to win the race.
+
+#### Scenario: A reconnect beside a DEAD agent still reports failure
+
+- **WHEN** a reconnect is requested on a pod whose agent pane is a bare shell rather than a live
+  agent
+- **THEN** it SHALL report failure so the caller respawns the agent, even though the login itself
+  could have been completed in the dedicated window
+- **AND** the check SHALL be a POSITIVE test for a live agent UI, because a bare shell carries no
+  exit marker and shows no gate, so every negative predicate passes it
+
+#### Scenario: The sign-in code reaches the window that asked for it
+
+- **WHEN** an owner submits their sign-in code from the cockpit
+- **THEN** it SHALL be delivered to the window currently showing the sign-in prompt, not to the
+  agent's own window
+- **AND** a pod with no separate sign-in window — a first-boot login — SHALL still receive it in the
+  agent's window, since that is where its prompt is
+
+Moving where a prompt LIVES means moving the input that answers it. When the login moved to its own
+window and this did not follow, the pasted code went to a pane that was not asking while the prompt
+waited in the other one, and the cockpit sat on "Signing in…" indefinitely (test pod, 2026-09-06).
+
+#### Scenario: A finished sign-in leaves nothing behind
+
+- **WHEN** a reconnect's login completes and a new credential is written
+- **THEN** the dedicated sign-in window SHALL be retired, so the owner is not left with a stray tab
+  in their pod terminal
+- **AND** closing it SHALL be best-effort: the reconnect has already succeeded by then, so a window
+  that will not close must never turn a success into a failure
+
+The agent CLI ends a successful login on "Login successful. Press Enter to continue…" and waits for a
+keypress nobody sends, so the window otherwise sits there indefinitely (observed after a fully-expired
+reconnect on a test pod, 2026-09-06).
+
+#### Scenario: The whole reconnect path is exercised in one run
+
+- **WHEN** the reconnect behaviour is tested
+- **THEN** a single test SHALL drive the PATH end to end — request, link published, code delivered,
+  credential replaced, window retired — not each piece in isolation
+
+Seven separate bugs shipped in this flow because every piece had passing tests and nothing exercised
+the path. Each was only visible once the previous was fixed, so they surfaced one per owner attempt
+across an afternoon. Three of them were not logic errors at all: two halves of the system disagreed
+about where something lived — which handler set a flag, which window showed a prompt, which file held
+a credential — and no unit test can see a disagreement between two things it tests separately.
+
 #### Scenario: Already-authenticated pod skips login
 
 - **WHEN** a subscription-mode pod boots and a credentials file already exists on its

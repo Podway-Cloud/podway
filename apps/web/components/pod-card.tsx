@@ -57,6 +57,8 @@ export interface PodCardProps {
   t3Control?: boolean;
   t3Since?: string | null;
   updateReady?: boolean;
+  /** Queued behind a batch update: the badge becomes a statement, not an invitation. */
+  queued?: boolean;
   updating?: boolean;
   /** The pod's CURRENT image digest (what it's leaving) — shown in the bulk-update list. */
   imageDigest?: string | null;
@@ -93,6 +95,7 @@ export default function PodCard({
   t3Control = false,
   t3Since = null,
   updateReady = false,
+  queued = false,
   updating: serverUpdating = false,
   canRetry = true,
   podAgents = [],
@@ -324,7 +327,15 @@ export default function PodCard({
               {/* Only on a RUNNING pod — the badge is a call to update, which you can't act on for a
                   suspended/waking pod (a suspended pod picks up the image on its next resume anyway,
                   so surfacing it there is just noise). */}
-              {!updating && updateReady && status === "running" && (
+              {/* A pod already QUEUED behind a batch update says so instead. "Update available" is an
+                  invitation to act, and inviting a click on an update that is already coming — and whose
+                  cockpit now refuses — is exactly the confusion this change exists to remove. */}
+              {!updating && queued && status === "running" && (
+                <span className="shrink-0 rounded-md bg-warning/15 px-1.5 py-0.5 text-[11px] font-semibold text-warning">
+                  Update queued
+                </span>
+              )}
+              {!updating && !queued && updateReady && status === "running" && (
                 <span className="shrink-0 rounded-md bg-warning/15 px-1.5 py-0.5 text-[11px] font-semibold text-warning">
                   Update available
                 </span>

@@ -74,24 +74,13 @@ function tmux(args: string[], opts: TmuxExecOpts = {}): Promise<string> {
 }
 
 /**
- * Extract the most recent URLs from a tmux session. Two wrapping regimes:
- * - Plain output wrapped by tmux: joined-line capture (`-J`) recovers it whole.
- * - TUI screens (e.g. the Claude login box) draw a long URL as SEPARATE
- *   full-width rows — nothing is "wrapped" from tmux's perspective, so `-J`
- *   can't help. We rejoin those: while a URL match runs to the end of a
- *   full-width row and the next row is pure URL-charset, append it.
- * Returns up to `limit` most-recent unique URLs (most recent last); fragments
- * that are strict prefixes of a longer recovered URL are dropped.
+ * The PURE half of extractLinks: turn captured pane text into complete URLs.
+ *
+ * Split out so the wrapped-URL rejoin is testable. It has now failed twice in production and both
+ * times the symptom was the same — the cockpit stuck on "Getting Claude's sign-in link…" because
+ * the trailing `&state=` was lost — so it gets a test rather than a third fix.
  */
-export async function extractLinks(
-  sessionName: string,
-  opts: { scrollback?: number; limit?: number } & TmuxExecOpts = {},
-): Promise<string[]> {
-  const scrollback = opts.scrollback ?? 200;
-  const limit = opts.limit ?? 5;
-  const exec: TmuxExecOpts = { uid: opts.uid, gid: opts.gid };
-
-  const text = await tmux(["capture-pane", "-pJ", "-S", `-${scrollback}`, "-t", sessionName], exec);
+export function linksFromPaneText(text: string, limit = 5): string[] {
   if (!text) return [];
 
   const lines = text.split("\n");
@@ -112,7 +101,31 @@ export async function extractLinks(
       // exactly the real URL's boundary.
       if (m.index + m[0].length === line.length) {
         for (let row = i + 1; row < lines.length; row++) {
-          const next = lines[row];
+          // TRIM THE ROW FIRST. `capture-pane -J` PRESERVES trailing spaces, so the last row of a
+          // wrapped URL — the short one — arrives padded to the pane width. URL_CONTINUATION is
+          // anchored and disallows spaces, so that row failed and the rejoin stopped one row early,
+          // dropping the trailing `&state=…`. isCompleteAuthUrl then rejected the URL forever and the
+          // cockpit sat on "Getting Claude's sign-in link…" (test:1, 2026-09-06; measured: the state
+          // row was len=79 with a six-space tail — failing the test, passing once trimmed).
+          //
+          // This is also the 'Missing state parameter' failure from 2026-08-22: that fix corrected the
+          // width maths but not the padding, so the same final row was still being lost.
+          const raw = lines[row];
+          if (!raw) break;
+          // `capture-pane -J` PRESERVES trailing spaces, so the LAST row of a wrapped URL — being
+          // short — arrives padded to the pane width and fails the anchored charset test. That lost
+          // the trailing `&state=`, the URL never completed, and the cockpit sat on "Getting Claude's
+          // sign-in link…" (test:1, 2026-09-06; the state row measured len=79 with a six-space tail).
+          //
+          // But the trailing space is LOAD-BEARING elsewhere: it is what ends the rejoin at a shell
+          // prompt. Trimming unconditionally made `bash-5.2$ ` read as URL charset and the rejoin
+          // swallowed the prompt into the URL — caught by the real-PTY tests, which is why they exist.
+          //
+          // So a padded row is only accepted when it CONTINUES QUERY PARAMS (`=` or `&`). A prompt has
+          // neither; every real continuation of an OAuth URL has both.
+          const trimmed = raw.replace(/\s+$/, "");
+          const padded = trimmed.length !== raw.length;
+          const next = !padded || /[=&]/.test(trimmed) ? trimmed : raw;
           if (!next || !URL_CONTINUATION.test(next)) break;
           url += next;
           i = row; // consumed — don't re-scan these rows as fresh fragments
@@ -131,6 +144,29 @@ export async function extractLinks(
   // Drop truncated fragments when a longer version was recovered.
   const complete = unique.filter((u) => !unique.some((v) => v !== u && v.startsWith(u)));
   return complete.slice(-limit);
+}
+
+/**
+ * Extract the most recent URLs from a tmux session. Two wrapping regimes:
+ * - Plain output wrapped by tmux: joined-line capture (`-J`) recovers it whole.
+ * - TUI screens (e.g. the Claude login box) draw a long URL as SEPARATE
+ *   full-width rows — nothing is "wrapped" from tmux's perspective, so `-J`
+ *   can't help. We rejoin those: while a URL match runs to the end of a
+ *   full-width row and the next row is pure URL-charset, append it.
+ * Returns up to `limit` most-recent unique URLs (most recent last); fragments
+ * that are strict prefixes of a longer recovered URL are dropped.
+ */
+export async function extractLinks(
+  sessionName: string,
+  opts: { scrollback?: number; limit?: number } & TmuxExecOpts = {},
+): Promise<string[]> {
+  const scrollback = opts.scrollback ?? 200;
+  const limit = opts.limit ?? 5;
+  const exec: TmuxExecOpts = { uid: opts.uid, gid: opts.gid };
+
+  const text = await tmux(["capture-pane", "-pJ", "-S", `-${scrollback}`, "-t", sessionName], exec);
+  if (!text) return [];
+    return linksFromPaneText(text, limit);
 }
 
 /**
@@ -282,7 +318,18 @@ export function idleStatus(idleMs: number, thresholdMs: number, ready: boolean):
 }
 
 /** Where Claude Code records each session, incl. the RC bridge id once active. */
-const SESSIONS_DIR = "/home/dev/.claude/sessions";
+/**
+ * Where the live agent sessions write their state.
+ *
+ * Overridable ONLY so tests can be hermetic. It was a hard-coded path, and
+ * `sessionStateFromDisk()` is consulted while deciding whether remote control came up — so on
+ * any machine with a live Claude session (a dev pod, the CI runner) the greeter found a real URL
+ * and reported rcActive TRUE no matter what the test's fake tmux said. The suite then passed or
+ * failed on machine history rather than on the code, which is the exact trap greeter.test.ts
+ * already documents for the RC-session hash.
+ */
+const sessionsDir = (): string =>
+  process.env.PODWAY_SESSIONS_DIR || "/home/dev/.claude/sessions";
 
 /**
  * Is this session file's owning process still running? `<pid>.json` files are
@@ -316,7 +363,7 @@ function pidAlive(name: string): boolean {
 export function sessionStateFromDisk(): { url?: string; status?: string; waitingFor?: string } {
   let files: string[];
   try {
-    files = readdirSync(SESSIONS_DIR);
+    files = readdirSync(sessionsDir());
   } catch {
     return {};
   }
@@ -325,7 +372,7 @@ export function sessionStateFromDisk(): { url?: string; status?: string; waiting
     if (!f.endsWith(".json")) continue;
     if (!pidAlive(f.slice(0, -".json".length))) continue;
     try {
-      const j = JSON.parse(readFileSync(`${SESSIONS_DIR}/${f}`, "utf8")) as {
+      const j = JSON.parse(readFileSync(`${sessionsDir()}/${f}`, "utf8")) as {
         bridgeSessionId?: unknown;
         status?: unknown;
         waitingFor?: unknown;

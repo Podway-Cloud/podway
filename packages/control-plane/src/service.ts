@@ -192,6 +192,15 @@ const T3_ENABLE_STALE_MS = 8 * 60 * 1000;
  * gateway restart mid-recreate) strands the pod STOPPED with the row flagged forever. 8 min is
  * comfortably past any real update, so waking + failing a pod past it never interrupts a live one. */
 const UPDATE_STALE_MS = 8 * 60 * 1000;
+/**
+ * How long a pod may sit QUEUED for a batch update before we assume the batch is never coming.
+ *
+ * Deliberately much larger than UPDATE_STALE_MS: a queue is SUPPOSED to be slow. Recreates run one
+ * at a time at ~90s each, so the last pod of a 24-pod batch legitimately waits ~36 minutes, and a
+ * window shorter than that would release pods out from under a healthy batch. This is the safety
+ * net for a batch whose process died, not a timeout on waiting.
+ */
+const QUEUE_STALE_MS = 90 * 60 * 1000;
 const RESERVED_SECRET_KEYS = new Set([
   GH_CLONE_TOKEN_KEY,
   CLAUDE_OAUTH_TOKEN_SECRET,
@@ -441,7 +450,10 @@ export class PodService {
       imageDigest: null,
       // Baselined by the first reconcile (no delivery — the pod boots with the current layer).
       configHash: null,
+      relentlessHold: false,
+      relentlessWake: false,
       updatingSince: null,
+      updateQueuedSince: null,
       updateStage: null,
       maintenanceKind: null,
       t3Control: false,
@@ -934,6 +946,63 @@ export class PodService {
   /** ADMIN-SCOPED: apply an image to any pod (update, or roll back to a prior digest).
    * Awaits completion — the backoffice caller wants the resulting record, and it
    * isn't holding a user-facing navigation open the way the cockpit action was. */
+
+  /**
+   * Stamp a whole batch as QUEUED before any of it starts.
+   *
+   * A bulk update recreates pods ONE AT A TIME, so the last pod in a 24-pod batch waits roughly 36
+   * minutes at ~90s each. Before this, that wait was invisible: the queued pods looked completely
+   * normal and still offered "Update available", so an owner could open the cockpit, start editing,
+   * and have the pod flip to "Updating" underneath them mid-change.
+   *
+   * Stamping UP FRONT (not per-pod as the loop reaches it) is the point: the batch queue used to
+   * live only in one web process's memory, so a restart mid-batch stranded the remainder with
+   * nothing recorded anywhere. On the row it is durable, visible, and resumable.
+   *
+   * Best-effort per pod: a row that cannot be stamped must not stop the batch from running.
+   */
+
+  /**
+   * How many pods are still QUEUED ahead of this one — derived, never stored.
+   *
+   * A stored position would have to be rewritten on every row each time the batch advanced; this is
+   * one pass over the queued rows. Returns null when this pod is not queued, so a caller can tell
+   * "not waiting" apart from "next".
+   */
+  async queueAheadOf(id: string): Promise<number | null> {
+    const rec = await this.store.get(id).catch(() => null);
+    if (!rec?.updateQueuedSince) return null;
+    const mine = Date.parse(rec.updateQueuedSince);
+    const all = await this.store.list().catch(() => [] as PodRecord[]);
+    return all.filter((p) => {
+      if (p.id === id || !p.updateQueuedSince) return false;
+      const t = Date.parse(p.updateQueuedSince);
+      // Same-batch rows share a stamp to the millisecond, so fall back to id order for a stable,
+      // non-arbitrary tiebreak rather than counting the whole batch as "ahead" of everyone.
+      return t < mine || (t === mine && p.id < id);
+    }).length;
+  }
+
+  async markUpdateQueue(ids: string[]): Promise<void> {
+    const at = new Date().toISOString();
+    for (const id of ids) {
+      await this.store.update(id, { updateQueuedSince: at }).catch((e) => {
+        this.log.warn("mark_update_queued_failed", { podId: id, err: String(e) });
+      });
+    }
+  }
+
+  /**
+   * Clear the queued stamp for pods the batch will never reach — it finished, threw, or the caller
+   * gave up. Without this a pod abandoned mid-batch stays locked out of its own cockpit forever,
+   * which is a worse failure than the interruption the stamp exists to prevent.
+   */
+  async clearUpdateQueue(ids: string[]): Promise<void> {
+    for (const id of ids) {
+      await this.store.update(id, { updateQueuedSince: null }).catch(() => undefined);
+    }
+  }
+
   async adminUpdatePodImage(id: string, image: string): Promise<PodRecord> {
     const rec = await this.ownedByAnyone(id);
     await this.emit(rec, "update_started", { to: image });
@@ -1842,6 +1911,39 @@ export class PodService {
 
   /** Toggle preview URL visibility (owner-only ↔ public). DB-only; the gateway
    * reads the flag to decide whether a preview request needs authentication. */
+  /**
+   * Set a pod's "Agentic behavior". Owner-scoped, like every other per-pod setting.
+   *
+   * The two flags are stored and delivered separately on purpose: `hold` costs nothing (the Stop
+   * hook only refuses a stop), `wake` spends a BILLED agent turn per nudge. Collapsing them would
+   * hide a bill behind what reads as a behaviour setting.
+   *
+   * Persisted here rather than pushed at the pod, because the pod's spec file is rewritten on every
+   * config refresh — a flag set ON the pod is silently wiped, which is exactly how the wall went off
+   * unnoticed for an hour on 2026-09-06.
+   */
+  async setAgenticBehavior(
+    ownerId: string,
+    id: string,
+    next: { hold: boolean; wake: boolean },
+  ): Promise<PodRecord> {
+    const rec = await this.owned(ownerId, id);
+    const updated = await this.store.update(id, {
+      relentlessHold: next.hold,
+      relentlessWake: next.wake,
+    });
+    // Push it to the RUNNING pod, not just the row. The Stop hook reads this flag on every stop, so
+    // a change that only landed in the DB would not take effect until the pod next rebooted — a
+    // toggle that appears to do something and does not is worse than no toggle at all.
+    //
+    // Best-effort by contract: a suspended or unreachable pod must not fail the mutation. The DB is
+    // the source of truth and the pod re-reads the spec on its next boot, so the two converge.
+    await this.providerFor(rec.provider)
+      .patchPodSpec?.(id, { relentless: { hold: next.hold, wake: next.wake } })
+      .catch(() => undefined);
+    return updated;
+  }
+
   async setPreviewPublic(ownerId: string, id: string, previewPublic: boolean): Promise<PodRecord> {
     const rec = await this.owned(ownerId, id);
     const updated = await this.store.update(id, { previewPublic });
@@ -2090,6 +2192,39 @@ export class PodService {
    * (observed live: test:1 stranded 16+ min, 2026-08-29). Any pod whose update has been in flight past
    * the stale window is treated as hung → wake it back onto its CURRENT image (best-effort) and fail
    * the update so the cockpit shows an error and the owner can retry. Idempotent; safe every sweep. */
+  /**
+   * Release pods left flagged as QUEUED by a batch that never reached them.
+   *
+   * The batch clears its own stamps on every exit path, but it cannot clear them if the process is
+   * killed outright — and a queued pod's cockpit is BLOCKED, so a stale stamp locks an owner out of
+   * a healthy pod indefinitely. That is a worse failure than the mid-edit interruption the stamp
+   * exists to prevent, which is why this sweep exists at all.
+   *
+   * Only clears a stamp that is BOTH past the (generous) stale window and not currently updating —
+   * a pod whose turn arrived has `updatingSince` set and is handled by reconcileStuckUpdates.
+   */
+  async reconcileStrandedQueue(): Promise<string[]> {
+    const now = Date.now();
+    const released: string[] = [];
+    let pods: PodRecord[];
+    try {
+      pods = await this.store.list();
+    } catch {
+      return released;
+    }
+    for (const rec of pods) {
+      if (!rec.updateQueuedSince || rec.updatingSince) continue;
+      if (now - Date.parse(rec.updateQueuedSince) < QUEUE_STALE_MS) continue;
+      this.log.warn("update_queue_stranded_releasing", {
+        podId: rec.id,
+        queuedSince: rec.updateQueuedSince,
+      });
+      await this.store.update(rec.id, { updateQueuedSince: null }).catch(() => undefined);
+      released.push(rec.id);
+    }
+    return released;
+  }
+
   async reconcileStuckUpdates(): Promise<string[]> {
     const now = Date.now();
     const stuck: string[] = [];
@@ -3155,6 +3290,10 @@ export class PodService {
       updatingSince: new Date().toISOString(),
       updateStage: "starting",
       maintenanceKind: "update",
+      // This pod's turn has come: it is updating now, not waiting. Cleared HERE rather than in
+      // the batch loop, so it is cleared on every path into an update — a single pod's Update
+      // button included — and a stale "queued" badge cannot outlive the thing it describes.
+      updateQueuedSince: null,
     });
     await this.emit(rec, "update_started", { to: image });
   }

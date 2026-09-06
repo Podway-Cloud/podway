@@ -46,15 +46,31 @@ export async function POST(req: Request): Promise<Response> {
   if (!image) return NextResponse.json({ error: "No pod image is configured" }, { status: 503 });
 
   const svc = getPodService();
+  // Mark the WHOLE batch queued before any of it starts, so a pod that is 20 recreates away says so
+  // instead of still offering "Update available" — and so its cockpit can refuse rather than let an
+  // owner start an edit the update is about to interrupt. Durable on the row, so a web restart
+  // mid-batch leaves a visible, resumable queue instead of silently stranding the remainder.
+  await svc.markUpdateQueue(ids);
+
   // Detached + sequential. A failed pod is logged and skipped, never stalling the rest.
   void (async () => {
-    for (const id of ids) {
-      try {
-        await svc.adminUpdatePodImage(id, image);
-        log.info("admin_api_pod_updated", { podId: id });
-      } catch (e) {
-        log.warn("admin_api_pod_update_failed", { podId: id, err: String(e) });
+    const remaining = new Set(ids);
+    try {
+      for (const id of ids) {
+        try {
+          await svc.adminUpdatePodImage(id, image);
+          log.info("admin_api_pod_updated", { podId: id });
+        } catch (e) {
+          log.warn("admin_api_pod_update_failed", { podId: id, err: String(e) });
+        } finally {
+          // Reached either way: a pod whose update FAILED must not stay flagged as still-waiting.
+          remaining.delete(id);
+        }
       }
+    } finally {
+      // Anything the loop never reached must not stay locked out of its own cockpit. A stale queue
+      // flag is a worse failure than the interruption it exists to prevent, so clear on every path.
+      if (remaining.size) await svc.clearUpdateQueue([...remaining]).catch(() => undefined);
     }
   })();
 

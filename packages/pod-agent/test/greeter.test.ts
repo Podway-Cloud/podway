@@ -56,7 +56,23 @@ function fakeTmux(opts: {
   return { tmux, calls, get draft() { return draft; }, get transcript() { return transcript; } };
 }
 
-const fast = { pollMs: 1, readyTimeoutMs: 300, submitConfirmMs: 250, rcConfirmMs: 100 };
+// Every wait window runGreeter can enter must be capped here. `sleep` is stubbed to resolve
+// immediately, but the loops are bounded by WALL-CLOCK deadlines — so an uncapped window becomes a
+// busy-wait that still burns its full real duration. `inputReadyMs` was missing and defaults to
+// 30_000, which is past vitest's 15s timeout: that alone failed 8 tests in this file, on main, for
+// long enough that `build-test` became permanently red and stopped being read.
+// Point session-state discovery at an empty temp dir. Without this the greeter reads the REAL
+// /home/dev/.claude/sessions, finds this machine's own live session URL, and reports remote
+// control ACTIVE regardless of the fake tmux — so the suite depended on machine history.
+process.env.PODWAY_SESSIONS_DIR = mkdtempSync(path.join(tmpdir(), "greet-sessions-"));
+
+const fast = {
+  pollMs: 1,
+  readyTimeoutMs: 300,
+  submitConfirmMs: 250,
+  rcConfirmMs: 100,
+  inputReadyMs: 300,
+};
 const noSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, Math.min(ms, 1)));
 const tmpMarker = () => path.join(mkdtempSync(path.join(tmpdir(), "greet-")), "greeted");
 /**

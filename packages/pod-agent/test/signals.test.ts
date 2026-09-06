@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseWindowList, targetForWindows } from "../src/signals.js";
+import { parseWindowList, targetForWindows, linksFromPaneText } from "../src/signals.js";
 
 describe("parseWindowList (cheap-tabs)", () => {
   it("parses tmux list-windows output into sorted RawWindows", () => {
@@ -189,5 +189,37 @@ describe("setupProgressFromDisk (add-deploy-progress reader)", () => {
       setupLog: "podway-progress: Starting the database…\n",
     });
     expect(setupProgressFromDisk(home)).toBe("Starting the database…");
+  });
+});
+
+describe("linksFromPaneText — rejoining a wrapped sign-in URL", () => {
+  // The claude /login TUI slices the OAuth URL across rows, and `tmux capture-pane -J` PRESERVES
+  // trailing spaces — so the LAST row, being short, arrives padded out to the pane width. Captured
+  // verbatim from test:1 on 2026-09-06, where the state row was len=79 with a six-space tail.
+  const pane = [
+    "   Browser didn't open? Use the url below to sign in (c to copy)",
+    "https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88",
+    "ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.co",
+    "m%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile+user%3Ainf",
+    "erence+user%3Asessions%3Aclaude_code+user%3Amcp_servers+user%3Afile_upload&code_",
+    "challenge=IKdykiwh23npyo1eW9f9Pxinr5B3n3jG6L1ZiNMpZaI&code_challenge_method=S256",
+    "&state=kypLQIWClQz_wIstf7t0bhS_AzE4UqpAfykkb7FHhms      ",
+    "   Paste code here if prompted >",
+  ].join("\n");
+
+  it("keeps the trailing &state= even though its row is space-padded", () => {
+    const [url] = linksFromPaneText(pane).filter((u) => u.includes("oauth"));
+    // state is the LAST param and the one OAuth rejects the URL without. Losing it is what left the
+    // cockpit spinning on "Getting Claude's sign-in link..." and, in 2026-08-22, produced
+    // "Missing state parameter".
+    expect(url).toContain("&state=kypLQIWClQz_wIstf7t0bhS_AzE4UqpAfykkb7FHhms");
+    expect(url).toContain("redirect_uri=");
+    expect(url).not.toMatch(/\s/); // no padding smuggled into the URL itself
+  });
+
+  it("stops rejoining at a row that is not part of the URL", () => {
+    const [url] = linksFromPaneText(pane).filter((u) => u.includes("oauth"));
+    // The prompt line below the URL must never be swallowed.
+    expect(url).not.toContain("Paste code here");
   });
 });

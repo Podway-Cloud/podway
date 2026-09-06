@@ -199,6 +199,36 @@ export const pods = pgTable(
     updatingSince: timestamp("updating_since"),
     updateStage: text("update_stage"),
     /**
+     * "Agentic behavior" — how much this pod does on its own while its owner is away.
+     *
+     * TWO flags, not one, because the halves cost differently: `hold` is the Stop hook, which only
+     * ever REFUSES a stop and never starts a turn, so it is free; `wake` nudges an idle pod and
+     * every nudge is a BILLED agent turn. A single flag would hide a bill behind what reads as a
+     * behaviour setting.
+     *
+     * Both default FALSE: a pod must never inherit an enforcement wall, and nothing may start
+     * spending on the owner's behalf unasked. Delivered to the pod via its spec file rather than set
+     * on the pod — a flag written on the pod is wiped by the next config refresh, which is how the
+     * wall went off silently for an hour on 2026-09-06.
+     */
+    relentlessHold: boolean("relentless_hold").notNull().default(false),
+    relentlessWake: boolean("relentless_wake").notNull().default(false),
+
+    /**
+     * Set while a pod is QUEUED for a batch image update but has not started yet.
+     *
+     * Bulk updates recreate pods ONE AT A TIME, so the last pod in a 24-pod batch waits ~36
+     * minutes. Without this the waiting pods looked completely normal and still offered
+     * "Update available" — an owner could open the cockpit, start changing something, and have the
+     * pod flip to "Updating" underneath them. It also makes a batch stranded by a web restart
+     * visible instead of silent, because the queue is no longer just a loop variable.
+     *
+     * Cleared when this pod's own update starts (`updatingSince` takes over) or when the batch
+     * abandons it. Queue POSITION is derived, not stored: it changes as the batch drains, and
+     * rewriting every row per step is churn for a number that is one count() away.
+     */
+    updateQueuedSince: timestamp("update_queued_since"),
+    /**
      * WHICH maintenance is in flight — an update or a resize. Both stop and restart
      * the pod and both use the two columns above, so without this the surfaces
      * cannot tell them apart and a resize reads as "Updating…", sending the owner

@@ -33,6 +33,7 @@ import {
   authFailureInPane,
   agentGone,
   paneAcceptsInput,
+  looksLikeAgentTui,
   type GateKind,
 } from "@podway/shared/pane";
 import type { RcState } from "@podway/shared/protocol";
@@ -333,6 +334,43 @@ export class AgentServer {
   private readonly agentAuthValues = new Map<string, string>();
   /** Added agents whose login menu we've already driven (once each). */
   private readonly loginDriven = new Set<string>();
+  /**
+   * Agents whose OWNER asked for a reconnect and whose sign-in link we must therefore surface EVEN
+   * THOUGH a credentials file still exists.
+   *
+   * Every auth-URL path below is gated on the credentials file being ABSENT — reasonable when the
+   * only way to reach /login was being signed out, and completely wrong for the Reconnect button,
+   * whose whole purpose is renewing a login that is still valid but EXPIRING. In that case the file
+   * exists, so the tick deleted the captured URL, took the "already signed in" branch, and never
+   * published anything: the cockpit sat on "Getting Claude's sign-in link…" forever (test:1,
+   * 2026-09-06, both rounds).
+   *
+   * Round 1 only ever "unstuck" because the failed exchange DELETED the credentials — the
+   * destruction was what let the flow proceed, which is the clearest possible sign the gate is on
+   * the wrong condition.
+   *
+   * Cleared when the reconnect resolves (a new credential lands, or the flow gives up), so this can
+   * never keep a stale sign-in link alive on a healthy pod.
+   */
+  private readonly reconnectInFlight = new Map<string, number>();
+  /**
+   * The tmux window a RECONNECT drives its `/login` in — never the agent's own pane.
+   *
+   * Driving the login where the agent works is a race the agent wins: it is autonomous, so its next
+   * turn prints over the prompt and the sign-in flow simply vanishes. Observed on test:1
+   * (2026-09-06): the owner fetched their OAuth code, came back to paste it, and the pane had moved
+   * on to "Writing PLAN.md… Ran 1 shell command" — there was nothing left to paste into, and the
+   * cockpit dropped back to its normal view because no login was in progress any more.
+   *
+   * Relentless makes this strictly worse: the more autonomous the agent, the faster it clobbers the
+   * prompt. So the login gets its own window instead of trying to win the race. The credentials file
+   * is shared, so authenticating there signs the agent in exactly as before — and the agent keeps
+   * working throughout instead of being frozen behind a prompt.
+   */
+  private static readonly SIGNIN_WINDOW = "signin";
+  /** How long a requested reconnect keeps surfacing its link. Long enough for a human to finish an
+   * OAuth round-trip in a browser, short enough that an abandoned attempt goes quiet by itself. */
+  private static readonly RECONNECT_WINDOW_MS = 15 * 60 * 1000;
   /** agent id → its OWN remote-control session URL (sticky). An added Claude's RC
    * link prints in ITS window; the pod-level capture only ever watched the
    * primary's, so the added agent looked permanently unconnected. */
@@ -426,7 +464,7 @@ export class AgentServer {
    * login is covered by re-checking over a grace window instead of restoring on first sight.
    */
   private guardCredentialsThroughLogin(agent: string): void {
-    const src = credentialsPathForAgent(agent);
+    const src = this.credPathFor(agent);
     const snap = `${src}.prelogin`;
     try {
       if (!existsSync(src)) return;
@@ -849,7 +887,19 @@ export class AgentServer {
           try {
             const body = await readBounded(req);
             const { agent, text } = JSON.parse(body || "{}") as { agent?: string; text?: string };
-            const w = agent ? this.windowForAgent(agent) : null;
+            // A sign-in code must go to the window that is ASKING for it.
+            //
+            // The login was moved into its own `signin` window so an autonomous agent could not type over
+            // the owner's prompt — but this endpoint kept typing into the AGENT's window, so the code the
+            // owner pasted went to a pane that was not asking, while the prompt waited in the other one.
+            // The cockpit then sat on "Signing in…" forever (owner hit this on test:1, 2026-09-06, after
+            // the link itself finally worked).
+            //
+            // Moving where a prompt LIVES means moving the input that answers it. Prefer the signin window
+            // whenever one is open; fall back to the agent's own window for a first-boot login, which has
+            // no separate window and never needed one.
+            const signinW = this.windowIndexByName(AgentServer.SIGNIN_WINDOW);
+            const w = signinW ?? (agent ? this.windowForAgent(agent) : null);
             if (!agent || w == null || typeof text !== "string" || !text) {
               res.writeHead(400, { "Content-Type": "application/json" });
               res.end(JSON.stringify({ error: "unknown agent or empty input" }));
@@ -1023,7 +1073,47 @@ export class AgentServer {
             if (this.greeter?.agentAuth === "api-key" || this.greeter?.agentAuth === "setup-token") {
               return reply(200, { ok: false, reason: "rc-incapable" });
             }
-            const w = this.windowForAgent(agent);
+            // Liveness is judged on the AGENT's pane, ALWAYS — even though the login runs elsewhere.
+            // control-plane reads ok:false as "respawn this pod's agent", and a dead agent still needs
+            // respawning no matter where the sign-in happened. Logging in beside a corpse and reporting
+            // success would hide exactly the failure this endpoint exists to report honestly (caught by
+            // the relogin test, which spawns a bare shell as the agent).
+            const agentW = this.windowForAgent(agent);
+            if (agentW == null) return reply(200, { ok: false, reason: "no-window" });
+            const agentPane = stripAnsiText(
+              await capturePane(`${this.session.sessionName}:${agentW}`, { uid: this.tmuxUid, gid: this.tmuxGid }),
+            );
+            if (classifyGate(agentPane) !== "login-menu") {
+              if (agentGone(agentPane)) return reply(200, { ok: false, reason: "agent-not-live" });
+              // A bare shell trips NO negative predicate, so ask POSITIVELY whether an agent TUI is there.
+              // Without this a reconnect beside a dead agent reports success and control-plane, which reads
+              // ok:false as "respawn", never does.
+              if (!looksLikeAgentTui(agentPane)) {
+                return reply(200, { ok: false, reason: "login-menu-absent" });
+              }
+              if (!paneAcceptsInput(agentPane)) return reply(200, { ok: false, reason: "blocked-gate" });
+            }
+            // Drive the login in its OWN window, never the agent's pane — see SIGNIN_WINDOW. The agent
+            // keeps working; its output can no longer erase the prompt the owner is about to paste into.
+            const signinIdx = await spawnAgentWindow(
+              this.session.sessionName,
+              AgentServer.SIGNIN_WINDOW,
+              "claude /login",
+              { uid: this.tmuxUid, gid: this.tmuxGid },
+            );
+            // Fall back to the agent's own window if tmux refused to open one: a racy login still beats
+            // no login at all, and the caller is told nothing changed either way.
+            const w = signinIdx ?? this.windowForAgent(agent);
+            const usingSigninWindow = signinIdx != null;
+            // Mark the reconnect IN FLIGHT so the health tick will publish the sign-in link even though a
+            // (still valid) credentials file exists. Without this the tick deletes the captured URL every
+            // pass and the cockpit waits forever — the exact symptom this endpoint exists to cure.
+            //
+            // It belongs HERE, in /agent/relogin. It was first written into /agent/restart by mistake,
+            // because the anchor used to place it appears in both endpoints — so the reconnect path never
+            // set it and the spinner survived every other fix (owner hit it on test:1, 2026-09-06).
+            this.reconnectInFlight.set(agent, Date.now());
+            this.agentAuthValues.delete(agent);   // never hand back a link from a previous attempt
             if (w == null) return reply(200, { ok: false, reason: "no-window" });
             const target = `${this.session.sessionName}:${w}`;
             const pane = stripAnsiText(await capturePane(target, { uid: this.tmuxUid, gid: this.tmuxGid }));
@@ -1041,7 +1131,10 @@ export class AgentServer {
             // Snapshot the credentials BEFORE anything touches the login. A failed exchange deletes them
             // outright, and that is how a valid 27-day login was lost on test:1 (2026-09-06).
             this.guardCredentialsThroughLogin(agent);
-            const alreadyAtMenu = classifyGate(pane) === "login-menu";
+            // In the dedicated window the command IS `claude /login`, so there is nothing to type and no
+            // agent liveness to check — the checks below exist only for the fallback path, where we are
+            // typing into a pane that belongs to a running agent.
+            const alreadyAtMenu = usingSigninWindow || classifyGate(pane) === "login-menu";
             if (!alreadyAtMenu) {
               if (agentGone(pane)) return reply(200, { ok: false, reason: "agent-not-live" });
               // A modal (bypass/trust/api-key) EATS keystrokes — typing here is the 2026-07-24
@@ -1057,6 +1150,9 @@ export class AgentServer {
               await new Promise((r) => setTimeout(r, 400));
               await tmuxRun(["send-keys", "-t", target, "Enter"]);
             }
+            // A freshly spawned window has not painted yet; the menu-walk polls, so this only avoids a
+            // pointless first look at an empty pane.
+            if (usingSigninWindow) await new Promise((r) => setTimeout(r, 800));
             const advanced = await driveLoginMenu({
               sessionName: target,
               uid: this.tmuxUid,
@@ -2281,6 +2377,45 @@ export class AgentServer {
   }
 
   /** tmux window index hosting an agent (primary by position, added by name). */
+  /** Index of a window by NAME, or null. Used to find the dedicated signin window, which
+   *  belongs to no agent and so is invisible to windowForAgent(). */
+  /** Retire the dedicated sign-in window once its login has landed. Best-effort by contract. */
+  private async closeSigninWindow(): Promise<void> {
+    const idx = this.windowIndexByName(AgentServer.SIGNIN_WINDOW);
+    if (idx == null) return;
+    const target = `${this.session.sessionName}:${idx}`;
+    const run = (args: string[]) =>
+      new Promise<void>((resolve) =>
+        execFile("tmux", args, { uid: this.tmuxUid, gid: this.tmuxGid }, () => resolve()),
+      );
+    // Let claude exit cleanly on its own prompt before the window goes.
+    await run(["send-keys", "-t", target, "Enter"]);
+    await new Promise((r) => setTimeout(r, 1500));
+    await run(["kill-window", "-t", target]);
+    this.log.info("signin_window_closed", { target });
+    await this.refreshWindows().catch(() => undefined);
+  }
+
+  /**
+   * Where THIS server believes an agent's credentials live.
+   *
+   * credentialsPathForAgent() returns a hard-coded /home/dev path. On a real pod that is right,
+   * which is why nobody noticed the server was ignoring its own configured `credential.path` —
+   * the two always agreed. They do not agree under test, and a test that silently reads the
+   * developer's REAL credential file is both non-hermetic and alarming.
+   *
+   * Prefer the configured path for the configured agent; fall back for every other agent.
+   */
+  private credPathFor(id: string): string {
+    return id === this.credential?.agent && this.credential?.path
+      ? this.credential.path
+      : credentialsPathForAgent(id);
+  }
+
+  private windowIndexByName(name: string): number | null {
+    return this.lastWindows.find((w) => w.name === name)?.index ?? null;
+  }
+
   private windowForAgent(id: string): number | null {
     if (id === this.credential?.agent) return this.agentWindowIndex;
     return this.lastWindows.find((w) => w.agent === id)?.index ?? null;
@@ -2294,12 +2429,48 @@ export class AgentServer {
     for (const id of this.agentsOnPod()) {
       const w = this.windowForAgent(id);
       if (w == null) continue;
-      const target = `${this.session.sessionName}:${w}`;
+      // A reconnect drives its login in the DEDICATED signin window, so that is where the sign-in
+      // URL is printed — reading the agent's own pane would find nothing and the cockpit would wait
+      // forever, which is the bug this whole path exists to fix. Falls back to the agent's window
+      // when no signin window is open (a first-boot login, or tmux refused to create one).
+      const signinW = this.windowIndexByName(AgentServer.SIGNIN_WINDOW);
+      const readW = signinW ?? w;
+      const target = `${this.session.sessionName}:${readW}`;
       // Signed in → the sign-in value is spent. Drop it so a stale OAuth link can
       // never be shown as if the agent still needed it.
-      if (existsSync(credentialsPathForAgent(id))) this.agentAuthValues.delete(id);
+      // Is the OWNER mid-reconnect on this agent? Then a credentials file existing means nothing:
+      // that is the NORMAL state for renewing a login that is valid but expiring, and precisely
+      // when the sign-in link must be surfaced. Window-limited so an abandoned attempt goes quiet.
+      const startedAt = this.reconnectInFlight.get(id);
+      const reconnecting =
+        startedAt != null && Date.now() - startedAt < AgentServer.RECONNECT_WINDOW_MS;
+      if (startedAt != null && !reconnecting) this.reconnectInFlight.delete(id);
+      // A NEW credential landing is the reconnect succeeding: stop surfacing the link immediately
+      // rather than letting the window run out, or a dead sign-in URL stays on screen for minutes
+      // after the owner has already signed in.
+      if (reconnecting) {
+        try {
+          const st = statSync(this.credPathFor(id));
+          if (st.mtimeMs > (startedAt as number)) {
+            this.reconnectInFlight.delete(id);
+            // …and CLOSE the sign-in window. claude ends a successful login on
+            // "Login successful. Press Enter to continue…" and waits for a keypress nobody is going to
+            // send, so the window sits there forever and the owner is left with a stray `signin` tab in
+            // their pod terminal (seen after Flow B on test:1, 2026-09-06).
+            //
+            // Send the Enter it is waiting for, then kill the window: it exists only to host a login, and
+            // that login is done. Best-effort — a window that will not close must never affect the
+            // reconnect, which has already succeeded by the time we get here.
+            void this.closeSigninWindow();
+            this.agentAuthValues.delete(id);
+          }
+        } catch {
+          // no credentials file yet — the reconnect is still in progress
+        }
+      }
+      if (existsSync(this.credPathFor(id)) && !reconnecting) this.agentAuthValues.delete(id);
       // AUTHED claude: capture its own RC session URL (the hand-off link).
-      if (id !== "codex" && existsSync(credentialsPathForAgent(id))) {
+      if (id !== "codex" && existsSync(this.credPathFor(id)) && !reconnecting) {
         if (!this.agentSessionUrls.has(id)) {
           try {
             const urls = await extractLinks(target, exec);
@@ -2312,7 +2483,8 @@ export class AgentServer {
         continue;
       }
       if (this.agentAuthValues.has(id)) continue; // sticky
-      if (existsSync(credentialsPathForAgent(id))) continue; // already signed in
+      // "Already signed in" is NOT a reason to skip when the owner is deliberately reconnecting.
+      if (existsSync(this.credPathFor(id)) && !reconnecting) continue;
       try {
         if (id === "codex") {
           const pane = stripAnsiText(await capturePane(target, exec));
@@ -2800,7 +2972,7 @@ export class AgentServer {
     for (const id of this.agentsOnPod()) {
       if (id === this.credential?.agent || id === "codex") continue; // primary has its own path; codex self-prints
       if (this.loginDriven.has(id)) continue;
-      if (existsSync(credentialsPathForAgent(id))) continue;
+      if (existsSync(this.credPathFor(id))) continue;
       const w = this.windowForAgent(id);
       if (w == null) continue;
       this.loginDriven.add(id);
@@ -2831,7 +3003,7 @@ export class AgentServer {
     if (!this.agentCommandFor) return;
     for (const id of this.agentsOnPod()) {
       if (id === this.credential?.agent || id === "codex") continue;
-      if (!existsSync(credentialsPathForAgent(id))) continue; // still signing in
+      if (!existsSync(this.credPathFor(id))) continue; // still signing in
       const w = this.windowForAgent(id);
       if (w == null) continue;
       const target = `${this.session.sessionName}:${w}`;
