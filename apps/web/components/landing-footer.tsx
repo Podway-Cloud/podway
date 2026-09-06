@@ -19,7 +19,7 @@ export default function LandingFooter({
         <Link href="/cookies">Cookies</Link>
         <a href="mailto:support@podway.cloud">Support</a>
       </nav>
-      <span className={styles.meta}>podway.cloud · © {new Date().getFullYear()}</span>
+      <span className={styles.meta}>podway.io · © {new Date().getFullYear()}</span>
     </footer>
   );
 }

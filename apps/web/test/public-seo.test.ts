@@ -24,6 +24,7 @@ const layoutSource = read("../app/layout.tsx");
 const homeSource = read("../app/page.tsx");
 const selfhostSource = read("../app/selfhost/page.tsx");
 const blogPostSource = read("../app/blog/[slug]/page.tsx");
+const landingFooterSource = read("../components/landing-footer.tsx");
 const previewSources = [
   read("../app/preview/landing/agent-computer/page.tsx"),
   read("../app/preview/landing/agent-home/page.tsx"),
@@ -52,6 +53,11 @@ describe("public search metadata", () => {
     for (const source of [homeSource, selfhostSource]) {
       expect(source).not.toContain("https://podway.cloud");
     }
+  });
+
+  it("uses the canonical brand domain in the public landing footer", () => {
+    expect(landingFooterSource).toContain("podway.io · ©");
+    expect(landingFooterSource).not.toContain("podway.cloud · ©");
   });
 
   it("uses the canonical origin in blog schema and the agent-readable docs index", async () => {

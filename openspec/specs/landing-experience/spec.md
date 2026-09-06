@@ -347,6 +347,11 @@ landings SHALL provide explicit Open Graph and Twitter images for link previews.
   supported bring-your-own-subscription model, use `https://podway.io/` as the canonical URL, and
   publish complete Open Graph, Twitter, Organization, and SoftwareApplication metadata
 
+#### Scenario: Public landing footer identifies the canonical brand domain
+- **WHEN** a visitor reaches the footer of a public landing page
+- **THEN** its visible brand-domain label SHALL read `podway.io`; operational email addresses MAY
+  continue using a separately configured mail domain
+
 #### Scenario: Preview metadata is rendered
 - **GIVEN** a crawler requests a semantic preview route
 - **WHEN** metadata is produced
