@@ -178,23 +178,26 @@ fi
 
 # ---- Loose-ends check: a DURABLE schedule, registered once per pod ------------------------------
 # >>> podway:loose-ends
-# The stop hook reads the SHAPE of a sentence. This reads STATE, and it is the half that catches the
-# failure with no text signature: work pushed and then walked away from. Registered here rather than
-# by hand so EVERY pod gets it, and via `podway schedule` so it survives restarts — a session-only
-# timer would die with the session that set it, which is the trap the runtime rules already warn about.
+# The stranded-work check is NOT a scheduled job any more (owner decision, 2026-09-06). It now runs
+# from the Stop hook off a cached result, so it costs nothing on a quiet pod.
 #
-# Idempotent by name: re-running init must not stack duplicate jobs.
-LOOSE_ENDS="${LOOSE_ENDS:-/opt/podway/hooks/loose-ends.py}"
-if [ -x "$LOOSE_ENDS" ] && command -v podway >/dev/null 2>&1; then
-  if ! su - "${SETTINGS_OWNER%%:*}" -c "podway schedule list 2>/dev/null" | grep -q "loose-ends"; then
-    su - "${SETTINGS_OWNER%%:*}" -c "podway schedule add --name loose-ends --at 09:15 --tz UTC \
-      --do \"Run: python3 $LOOSE_ENDS. It reports work this pod STRANDED — a pushed branch with no PR, \
-a stale PR, an uncommitted tree. If it exits 0 it prints nothing and there is nothing to say: stay \
-silent. If it lists items, FINISH THEM (open the PR, land or close the stale one, commit or discard \
-the tree) rather than reporting them — they are already yours. Mention it to the owner only if \
-something genuinely needs a decision.\"" >/dev/null 2>&1 \
-      && echo "init: registered the loose-ends schedule"
-  fi
+# It used to be `podway schedule add --name loose-ends --at 09:15`. That was wrong twice over:
+#   1. It woke the agent — a BILLED turn — every single day whether or not anything was stranded.
+#   2. Its instructions said "stay silent" when nothing was found and never mentioned
+#      `podway schedule done`, so a CLEAN run never closed and the dead-man alarm fired daily. The
+#      makore.app pod reported this and could not even discover what the job was for, because
+#      `podway schedule list` does not print a job's instructions.
+#
+# So: actively REMOVE the job from any pod that still carries it. This must keep running for a good
+# while — a pod only refreshes occasionally, and until it does it keeps alarming every morning.
+if command -v podway >/dev/null 2>&1; then
+  OWNER="${SETTINGS_OWNER%%:*}"
+  # `schedule list` prints: <state> <id> <name> <when…>; match the NAME column exactly.
+  STALE_IDS="$(su - "$OWNER" -c "podway schedule list 2>/dev/null" | awk '$3=="loose-ends"{print $2}')"
+  for jid in $STALE_IDS; do
+    su - "$OWNER" -c "podway schedule remove '$jid'" >/dev/null 2>&1 \
+      && echo "init: removed the retired loose-ends schedule ($jid)"
+  done
 fi
 # <<< podway:loose-ends
 # <<< podway:settings-refresh

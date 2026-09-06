@@ -121,7 +121,7 @@ use `127.0.0.1` and therefore do not open on a different device; see [Deployment
 ### Postgres reports too many clients
 
 Collect `docker compose logs web db`, restart the affected services, and report the logs in a
-[GitHub issue](https://github.com/podway-cloud/install/issues). This should not recur on current
+[GitHub issue](https://github.com/podway-cloud/podway/issues). This should not recur on current
 images.
 
 ### No space left on device

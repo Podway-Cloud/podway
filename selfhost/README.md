@@ -69,12 +69,12 @@ as an advanced recovery tool.
 <details>
 <summary><strong>Prefer to inspect the files and run Docker Compose yourself?</strong></summary>
 
-Review the public [`install.sh`](https://github.com/podway-cloud/install/blob/main/install.sh) and
-[`compose.yaml`](https://github.com/podway-cloud/install/blob/main/compose.yaml), then run:
+Review the public [`install.sh`](https://github.com/podway-cloud/podway/blob/main/selfhost/install.sh) and
+[`compose.yaml`](https://github.com/podway-cloud/podway/blob/main/selfhost/compose.yaml), then run:
 
 ```sh
 mkdir podway && cd podway
-curl -fsSL https://raw.githubusercontent.com/podway-cloud/install/main/compose.yaml -o compose.yaml
+curl -fsSL https://raw.githubusercontent.com/podway-cloud/podway/main/selfhost/compose.yaml -o compose.yaml
 docker compose up -d
 ```
 
@@ -119,5 +119,5 @@ installer—not the source distribution.
 ## Help and feedback
 
 This edition is being shaped with early users. Report reproducible bugs and installation problems
-in [GitHub Issues](https://github.com/podway-cloud/install/issues). For the managed version, visit
+in [GitHub Issues](https://github.com/podway-cloud/podway/issues). For the managed version, visit
 [podway.cloud](https://podway.cloud).

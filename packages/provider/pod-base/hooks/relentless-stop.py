@@ -17,8 +17,11 @@ Fails OPEN by design. A hook that crashes must never wedge a session, so any une
 error exits 0 and lets the stop through.
 """
 import json
+import os
 import re
+import subprocess
 import sys
+import time
 
 ALLOW = 0
 
@@ -40,6 +43,18 @@ def main() -> int:
         return ALLOW
 
     if not _ends_by_asking(last):
+        stranded = _stranded_note()
+        if stranded:
+            print(json.dumps({
+                "decision": "block",
+                "reason": (
+                    "This pod has work it STRANDED, which is yours to finish, not to report: "
+                    + stranded
+                    + ". Finish it now — open the PR, land or close the stale one, commit or "
+                    "discard the tree. Bring it to the owner only if something genuinely needs "
+                    "their decision. If it is already handled, say so in one line and continue."
+                ),
+            }))
         return ALLOW
 
     # SCOPED TO THIS TURN. The transcript LAGS for the final message, but tool calls made
@@ -71,6 +86,69 @@ def main() -> int:
         ),
     }))
     return ALLOW
+
+
+
+# ---- Stranded work -------------------------------------------------------------------------
+# The check above reads the SHAPE of a sentence. This reads STATE: a branch pushed with no PR, a
+# stale PR, an uncommitted tree — the failure with no text signature.
+#
+# It used to be a daily `podway schedule` job. That was wrong twice over: it woke the agent (a
+# BILLED turn) every day whether or not anything was stranded, and pods that received it could not
+# tell what the unfamiliar job was for. Owner dropped the schedule on 2026-09-06.
+#
+# loose-ends.py shells out to `gh` and takes ~7.5s here, far too slow for the hot path. So the hot
+# path only ever READS a cached result, and a stale cache is refreshed in the BACKGROUND for next
+# time. Cost at stop: one stat and a small read. Cost when quiet: nothing at all.
+CACHE = os.path.expanduser("~/.podway/loose-ends.json")
+LOOSE_ENDS = "/opt/podway/hooks/loose-ends.py"
+STALE_SECS = 4 * 60 * 60
+
+
+def _refresh_stranded_async() -> None:
+    """Kick the slow check off detached. Never blocks the stop, never raises."""
+    script = LOOSE_ENDS if os.path.exists(LOOSE_ENDS) else os.path.expanduser("~/.claude/hooks/loose-ends.py")
+    if not os.path.exists(script):
+        return
+    try:
+        os.makedirs(os.path.dirname(CACHE), exist_ok=True)
+        # Write via a temp file so a reader never sees a half-written cache. Do NOT gate the move
+        # on the exit code: loose-ends.py exits 1 precisely WHEN something is stranded, so `&&` would
+        # cache only the empty results — backwards, and it silently produced an always-empty cache
+        # until an end-to-end test caught it. Gate on the file being non-empty instead.
+        cmd = f'python3 {script} --json > {CACHE}.tmp 2>/dev/null; [ -s {CACHE}.tmp ] && mv {CACHE}.tmp {CACHE} || rm -f {CACHE}.tmp'
+        subprocess.Popen(["sh", "-c", cmd], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         stdin=subprocess.DEVNULL, start_new_session=True)
+    except Exception:
+        pass
+
+
+def _stranded_note() -> str:
+    """Cached findings, or '' — and refresh in the background when the cache is stale/missing."""
+    try:
+        age = time.time() - os.path.getmtime(CACHE)
+    except OSError:
+        _refresh_stranded_async()
+        return ""
+    if age > STALE_SECS:
+        _refresh_stranded_async()
+    try:
+        with open(CACHE, encoding="utf-8") as fh:
+            payload = json.load(fh)
+    except Exception:
+        return ""
+    if payload.get("reported"):     # say it once per refresh, not on every single stop
+        return ""
+    findings = payload.get("findings") or []   # loose-ends.py --json: {"stranded": N, "findings": [{kind, what, why}]}
+    if not findings:
+        return ""
+    try:                            # mark reported, best-effort
+        payload["reported"] = True
+        with open(CACHE, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+    except Exception:
+        pass
+    return "; ".join(str(f.get("what") or f.get("kind") or f) for f in findings[:4])
 
 
 def _ends_by_asking(text: str) -> bool:

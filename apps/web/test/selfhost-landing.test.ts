@@ -56,7 +56,7 @@ describe("self-host landing and homepage promotion", () => {
       "Manage it through the Claude app with your existing Pro or Max subscription.",
     );
     expect(landing.match(/https:\/\/github\.com\/podway-cloud\/podway/g)).toHaveLength(4);
-    expect(landing).not.toContain("https://github.com/Podway-Cloud/install");
+    expect(landing).not.toContain("https://github.com/Podway-Cloud/podway");
     expect(landing).toContain('const primaryHref = user ? "/dashboard" : "/selfhost/signin";');
     expect(landing).not.toContain('<Link href="/signin">Sign in</Link>');
     expect(landing).toContain("Request alpha access");

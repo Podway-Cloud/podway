@@ -8,7 +8,7 @@ set -eu
 
 PORT="${PODWAY_PORT:-8080}"
 DIR="${PODWAY_DIR:-podway}"
-COMPOSE_URL="${PODWAY_COMPOSE_URL:-https://raw.githubusercontent.com/podway-cloud/install/main/compose.yaml}"
+COMPOSE_URL="${PODWAY_COMPOSE_URL:-https://raw.githubusercontent.com/podway-cloud/podway/main/selfhost/compose.yaml}"
 
 say()  { printf '%s\n' "$*"; }
 die()  { printf '\n✗ %s\n' "$*" >&2; exit 1; }
@@ -266,6 +266,6 @@ cat <<EOF
      docker compose down -v           # stop AND erase all data
 
    Running this on a public server is still experimental — keep your dashboard
-   private. Full guide: https://github.com/Podway-Cloud/install/blob/main/docs/DEPLOYMENT.md
+   private. Full guide: https://github.com/Podway-Cloud/podway/blob/main/selfhost/docs/DEPLOYMENT.md
    (Advanced: set PODWAY_AUTH_PASSWORD before starting to skip the setup screen.)
 EOF

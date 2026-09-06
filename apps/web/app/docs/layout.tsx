@@ -28,7 +28,7 @@ export default function Layout({ children }: { children: ReactNode }) {
         tree={docsSource.pageTree}
         nav={{ title: <DocsWordmark />, url: "/docs" }}
         themeSwitch={{ enabled: false }}
-        githubUrl="https://github.com/Podway-Cloud/install"
+        githubUrl="https://github.com/Podway-Cloud/podway"
         links={[
           { text: "Product", url: "/", active: "none" },
           { text: "Dashboard", url: "/dashboard", type: "button" },

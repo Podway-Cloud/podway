@@ -2,15 +2,16 @@ import { sameDigest } from "@/lib/pod-image";
 
 /**
  * Self-host reads what an update contains from a STATIC release manifest published to the public
- * install repo — never from podway.cloud (release-versioning §4, decision 4). A self-host install is
+ * source mirror — never from podway.cloud (release-versioning §4, decision 4). A self-host install is
  * independent of the hosted product, so the fetch targets github's raw host and any failure degrades
  * to the from→to digest line the cockpit already shows.
  *
- * The publisher is `scripts/publish-install-mirror.sh` (it writes releases.json from the cloud
- * manifest via the admin API); this is the consumer half.
+ * The publisher is `scripts/update-selfhost-releases.sh` (it writes selfhost/releases.json from the
+ * cloud manifest via the admin API; the file is COMMITTED, and the OSS mirror carries it to the
+ * public repo on the next sync); this is the consumer half.
  */
 export const SELF_HOST_RELEASES_URL =
-  "https://raw.githubusercontent.com/podway-cloud/install/main/releases.json";
+  "https://raw.githubusercontent.com/podway-cloud/podway/main/selfhost/releases.json";
 
 export interface SelfHostRelease {
   version: string;

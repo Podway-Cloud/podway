@@ -182,7 +182,10 @@ container on it, REUSING the pod's persistent `/home/dev` volume so its work, ag
 and GitHub token survive. Because self-host has no cloud image manifest, the update SHALL be offered
 whenever the pod's recorded image digest differs from the host's currently-pulled pod-base digest.
 The UI SHALL describe what the update contains from a STATIC release manifest published to the public
-install repo (release-versioning §4): when a published release names the target digest, it SHALL show
+source mirror at `selfhost/releases.json` (release-versioning §4; served from GitHub raw, NOT from a
+Podway host — the separate `Podway-Cloud/install` repo was folded into the mirror on 2026-09-06 and
+the `podway.io/install.sh` one-liner now redirects to `selfhost/install.sh` in that mirror): when a
+published release names the target digest, it SHALL show
 that release's version and summary; otherwise, or when the manifest cannot be fetched, it SHALL fall
 back to the concrete from→to build digests. The manifest SHALL be fetched from the public artifact,
 never from the Podway cloud service, and update availability SHALL NOT depend on reaching it. A pod

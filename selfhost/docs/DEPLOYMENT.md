@@ -43,7 +43,7 @@ If you do not want to pipe an installer into a shell:
 
 ```sh
 mkdir podway && cd podway
-curl -fsSL https://raw.githubusercontent.com/podway-cloud/install/main/compose.yaml -o compose.yaml
+curl -fsSL https://raw.githubusercontent.com/podway-cloud/podway/main/selfhost/compose.yaml -o compose.yaml
 docker compose config
 docker compose up -d
 ```

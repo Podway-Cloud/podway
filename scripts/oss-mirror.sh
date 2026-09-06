@@ -30,10 +30,11 @@ EXCLUDES=(
   # internal agent/dev-workflow instructions (reference prod DB, the box, deploy procedures)
   "CLAUDE.md" ".claude"
   # internal release + infra tooling (mirror scripts, DB migration between hosts)
-  "scripts/migrate-db-neon-to-fly.sh" "scripts/publish-relay-mirror.sh" "scripts/publish-install-mirror.sh"
+  "scripts/migrate-db-neon-to-fly.sh" "scripts/publish-relay-mirror.sh"
   # PRIVATE workflows only — the deploy/build/mirror CI references managed infra. The public
   # lint/test workflow (.github/workflows/public-ci.yml) is NOT excluded — it ships to the mirror.
   ".github/workflows/ci.yml" ".github/workflows/selfhost-images.yml" ".github/workflows/oss-mirror.yml"
+  ".github/workflows/relay-mirror.yml"
   # never mirror agent-internal + env files
   ".git" ".env" ".env.local" ".env.production"
 )

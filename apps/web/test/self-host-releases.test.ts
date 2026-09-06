@@ -14,8 +14,8 @@ const REL = {
 };
 
 describe("self-host release manifest — consumer half (§4)", () => {
-  it("targets the public install repo, NOT podway.cloud (decision 4.4)", () => {
-    expect(SELF_HOST_RELEASES_URL).toContain("raw.githubusercontent.com/podway-cloud/install");
+  it("targets the public source mirror, NOT podway.cloud (decision 4.4)", () => {
+    expect(SELF_HOST_RELEASES_URL).toContain("raw.githubusercontent.com/podway-cloud/podway/main/selfhost");
     expect(SELF_HOST_RELEASES_URL).not.toContain("podway.cloud");
   });
 
