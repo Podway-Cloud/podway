@@ -1,0 +1,187 @@
+# podway self-host — the one-command install.
+#
+#   docker compose up -d           # PULLS prebuilt images, starts everything (~1-2 min)
+#   → open http://localhost:8080
+#
+# No local builds: images come from ghcr (override the registry/tag with PODWAY_APP_IMAGE /
+# PODWAY_POD_IMAGE). To build from source instead (devs, or an air-gapped host), add the build
+# overlay:  docker compose -f compose.yaml -f compose.build.yaml up -d --build
+#
+# What runs: Postgres (state) · web (dashboard) · serve (terminal gateway + provisioner) · proxy
+# (Caddy: ONE origin — /pods/* WebSockets → gateway, all else → web) · podbase (pulls the pod image
+# so first launch is instant) · migrate (one-shot schema). Pods are SIBLING containers on the host
+# daemon (web/serve mount /var/run/docker.sock) and join podway-pods so the control plane reaches
+# them by name.
+name: podway
+
+# The PODBAY_* fallbacks are the RENAME BRIDGE, not clutter: an existing install may have
+# PODBAY_APP_IMAGE/PODBAY_POD_IMAGE set in its .env from before the rename. Dropping them would
+# silently ignore that override and quietly pull a different image than the operator pinned — the
+# same failure mode as publishing only the new ghcr namespace. Honour the old name until the
+# transition window closes, then delete these.
+x-app-image: &app-image ${PODWAY_APP_IMAGE:-${PODBAY_APP_IMAGE:-ghcr.io/podway-cloud/pod-app:latest}}
+
+x-app-env: &podway-env
+  PODWAY_EDITION: oss
+  PODWAY_DB: pg
+  DATABASE_URL: postgres://postgres@db:5432/podway
+  PODWAY_LOCAL_PROVIDER: "1"
+  PODWAY_DEFAULT_PROVIDER: local
+  PODWAY_LOCAL_NETWORK: podway-pods
+  PODWAY_LOCAL_IMAGE: ${PODWAY_POD_IMAGE:-${PODBAY_POD_IMAGE:-ghcr.io/podway-cloud/pod-base:latest}}
+  PODWAY_ENVIRONMENTS_ROOT: /app/environments
+  # Reachability mode (self-host-public-previews): LocalProvider (in web + serve) reads these so a
+  # pod's preview URL is the front-door subdomain in ip/domain mode, not a host loopback. Default
+  # local ⇒ unchanged. The install wizard sets these (+ the proxy's 80/443 override) for a public host.
+  PODWAY_DEPLOY_MODE: ${PODWAY_DEPLOY_MODE:-local}
+  PODWAY_PUBLIC_BASE: ${PODWAY_PUBLIC_BASE:-}
+  PODWAY_DASHBOARD_HOST: ${PODWAY_DASHBOARD_HOST:-}
+  # Terminal WS goes to THIS page's origin (/pods/* → Caddy → serve). No baked URL.
+  PODWAY_GATEWAY_SAMEORIGIN: "1"
+  # Auth gate (self-host-auth-gate). BETTER_AUTH_SECRET signs the session cookie web sets + serve
+  # validates; start.sh generates+persists it on /data when unset (so both share one). The two
+  # PODWAY_AUTH_* vars are an OPTIONAL pre-seed for a public VPS (no first-run claim window) — leave
+  # them unset to use the first-run setup screen instead.
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:-}
+  PODWAY_AUTH_PASSWORD: ${PODWAY_AUTH_PASSWORD:-}
+  PODWAY_AUTH_EMAIL: ${PODWAY_AUTH_EMAIL:-}
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust # loopback-only exposure via the compose network
+      POSTGRES_DB: podway
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d podway"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  migrate:
+    image: *app-image
+    command: [node, packages/selfhost/migrate-pg.mjs]
+    environment:
+      DATABASE_URL: postgres://postgres@db:5432/podway
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    image: *app-image
+    # Next standalone server (output: "standalone"; `next start` refuses that config).
+    command: [node, apps/web/.next/standalone/apps/web/server.js]
+    environment:
+      <<: *podway-env
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - appdata:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [default, pods]
+    restart: unless-stopped
+
+  serve:
+    image: *app-image
+    command: [node, packages/selfhost/podway.mjs, serve]
+    environment:
+      <<: *podway-env
+      PODWAY_GATEWAY_HOST: 0.0.0.0 # Caddy dials serve:3001 across the compose network
+      PODWAY_GATEWAY_PORT: "3001"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - appdata:/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks: [default, pods]
+    restart: unless-stopped
+
+  # Pulls the pod-base image at `up` so the FIRST pod launch is instant (LocalProvider `docker run`s
+  # it on the HOST daemon). Runs `true` and exits — its only job is caching the image on the host.
+  podbase:
+    image: ${PODWAY_POD_IMAGE:-${PODBAY_POD_IMAGE:-ghcr.io/podway-cloud/pod-base:latest}}
+    command: ["true"]
+    restart: "no"
+
+  proxy:
+    image: caddy:2-alpine
+    # Ports are mode-driven. LOCAL (default): the dashboard on ${PODWAY_PORT:-8080}. PUBLIC (ip/domain):
+    # the install wizard writes a compose.override.yaml mapping 80:80 + 443:443 so Caddy can serve the
+    # dashboard + pod-preview subdomains with automatic HTTPS. Container listens per the rendered config.
+    ports:
+      - "${PODWAY_PORT:-8080}:${PODWAY_PROXY_PORT:-8080}"
+    # The Caddyfile is RENDERED at start from the deployment mode (self-host-public-previews): local
+    # keeps the single :8080 front door; ip/domain add per-pod preview subdomains (<id>.<base> →
+    # podway-<id>:3000) with on-demand TLS. Script is inline so the compose stays self-contained.
+    environment:
+      PODWAY_DEPLOY_MODE: ${PODWAY_DEPLOY_MODE:-local}
+      PODWAY_PUBLIC_BASE: ${PODWAY_PUBLIC_BASE:-}
+      PODWAY_DASHBOARD_HOST: ${PODWAY_DASHBOARD_HOST:-}
+    configs:
+      - source: caddy-render
+        target: /etc/caddy/render.sh
+    entrypoint: ["sh", "-c", "sh /etc/caddy/render.sh > /etc/caddy/Caddyfile && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"]
+    volumes:
+      - caddy-data:/data
+    # BOTH networks: `default` reaches web/serve; `pods` (podway-pods) reaches the pod containers
+    # (podway-<id>:3000) so ip/domain/proxy modes can route per-pod preview subdomains to them.
+    networks: [default, pods]
+    depends_on: [web, serve]
+    restart: unless-stopped
+
+# The front door, rendered by mode. `/pods/*` is shared: the terminal WebSocket (Upgrade) goes to the
+# serve daemon's gateway, the SAME path serves the full-page raw-terminal route from web on a plain GET
+# — split by the Upgrade header. Everything else → web. In ip/domain mode each pod also gets a preview
+# subdomain (<id>.<base>) proxied to its dev server, with Caddy provisioning HTTPS automatically and
+# an `ask` guard so only real pod/dashboard hostnames get certs.
+configs:
+  caddy-render:
+    # NB: `$$` escapes compose's own interpolation so these reach the SHELL verbatim and are
+    # evaluated at container start (reading the proxy's PODWAY_* environment), not at compose parse.
+    content: |
+      #!/bin/sh
+      MODE="$${PODWAY_DEPLOY_MODE:-local}"
+      BASE="$${PODWAY_PUBLIC_BASE:-}"
+      DASH="$${PODWAY_DASHBOARD_HOST:-}"
+      podsplit() {
+      	printf '\t@podsws {\n\t\tpath /pods/*\n\t\theader Connection *Upgrade*\n\t}\n'
+      	printf '\thandle @podsws {\n\t\treverse_proxy serve:3001\n\t}\n'
+      	printf '\thandle {\n\t\treverse_proxy web:3000\n\t}\n'
+      }
+      if [ "$$MODE" = "local" ] || [ -z "$$BASE" ]; then
+      	printf ':8080 {\n'; podsplit; printf '}\n'
+      elif [ "$$MODE" = "proxy" ]; then
+      	# Behind an EXISTING front proxy that terminates TLS and forwards by Host to :8080. Same
+      	# Host-based routing, but plain HTTP on 8080 (no cert handling here — the front proxy owns it).
+      	printf 'http://%s:8080 {\n' "$$DASH"; podsplit; printf '}\n\n'
+      	printf 'http://*.%s:8080 {\n' "$$BASE"
+      	printf '\t@pod header_regexp podid Host ^([a-z0-9][a-z0-9-]*)[.]\n'
+      	printf '\treverse_proxy @pod podway-{re.podid.1}:3000\n'
+      	printf '}\n\n'
+      	printf ':8080 {\n'; podsplit; printf '}\n'
+      else
+      	printf '{\n\ton_demand_tls {\n\t\task http://web:3000/api/selfhost/tls-check\n\t}\n}\n\n'
+      	printf '%s {\n' "$$DASH"; podsplit; printf '}\n\n'
+      	printf '*.%s {\n' "$$BASE"
+      	printf '\ttls {\n\t\ton_demand\n\t}\n'
+      	printf '\t@pod header_regexp podid Host ^([a-z0-9][a-z0-9-]*)[.]\n'
+      	printf '\treverse_proxy @pod podway-{re.podid.1}:3000\n'
+      	printf '}\n'
+      fi
+
+networks:
+  pods:
+    name: podway-pods
+
+volumes:
+  pgdata:
+  appdata:
+  caddy-data:

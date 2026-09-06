@@ -1,0 +1,13 @@
+-- Drop the `fly` column default on pods.provider.
+--
+-- The Fly provider was deleted on 2026-09-04: its Fly app and registry no longer exist, and no row
+-- has been provider='fly' since the Incus pivot. A default naming a provider that cannot be
+-- resolved is worse than no default — it mislabels a row silently instead of failing.
+--
+-- No single default is correct for both editions either: cloud runs `incus`, self-host runs
+-- `local`. Every insert path already supplies the value from the configured default provider, so
+-- dropping it changes nothing at runtime and turns a would-be silent mislabel into a clear error.
+--
+-- Backward-compatible and data-safe: existing rows keep their values; this alters no data, and old
+-- app code running against the new schema is unaffected because it already sets the column.
+ALTER TABLE "pods" ALTER COLUMN "provider" DROP DEFAULT;

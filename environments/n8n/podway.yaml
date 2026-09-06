@@ -1,0 +1,85 @@
+apiVersion: podway/v0
+name: n8n
+
+# APP (the "Apps" tab — docs/plans/app-catalog/apps-category-and-n8n-env.md): a self-hosted OSS app
+# Podway DEPLOYS and KEEPS UPDATED for the user. n8n is the flagship. The pod runs the app with
+# `docker compose` (Docker is baked into the cloud pod-base image); the agent is its always-on admin.
+kind: app
+
+metadata:
+  title: "n8n"
+  description: >-
+    Your own n8n — the workflow-automation platform — deployed on a private pod. Your AI admin keeps
+    it up to date and safe, backs it up, and rolls back failed updates if necessary.
+  author: podway
+  tags: [automation, workflows, self-host, oss, no-code]
+
+# ~/work is the app-management dir (compose + the maintenance engine), not a coding project.
+base:
+  devcontainer: .devcontainer/devcontainer.json
+
+agents: [claude-code, codex]
+shared: [universal]
+
+# First-party, trusted env: the agent runs docker compose + the maintenance engine unprompted.
+permissions:
+  mode: bypassPermissions
+
+# n8n reaches out to the services your workflows call, and pulls its own container images.
+network:
+  policy: full
+
+# An automation host should stay up so scheduled workflows and webhooks keep firing.
+lifecycle: always-on
+
+# n8n's editor is served on the pod's preview (:3000). Private by default — it's YOUR automation
+# console. n8n has its own login; the owner can still flip the preview public per pod if they want
+# to expose a webhook endpoint.
+preview: private
+
+# The encryption key + DB password are GENERATED per-pod at setup (see setup below) and written to
+# ~/work/.env — never committed, never a value the user must paste. No required secrets to launch.
+
+setup:
+  # One-time first-boot provisioning, run as `dev` in ~/work. Docker itself is already installed and
+  # running from the pod image (data-root on /home/dev, so container data survives an image update);
+  # `restart: unless-stopped` in compose.yaml then auto-starts the stack on every later boot with no
+  # boot hook. This step just generates per-pod secrets and brings the stack up the first time.
+  - >-
+    if [ ! -f .env ]; then
+    printf 'N8N_IMAGE=%s\nN8N_ENCRYPTION_KEY=%s\nDB_PASSWORD=%s\n'
+    "docker.n8n.io/n8nio/n8n:latest" "$(openssl rand -hex 32)" "$(openssl rand -hex 24)" > .env;
+    chmod 600 .env; fi
+  - chmod +x bin/app-admin.sh
+  - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
+
+kickoff: |
+  You are the always-on ADMIN for this person's own n8n instance. n8n is deployed on THIS pod with
+  `docker compose` and served on the pod's preview (port 3000). Your job: keep it running, keep its
+  data safe, and keep it up to date WITHOUT ever breaking their workflows.
+
+  What is already true when you start (the env's setup ran at first boot):
+  - Docker is installed from the pod image; its data-root is on /home/dev, so all n8n data (Postgres
+    + the n8n volume) survives a pod restart AND an image update.
+  - The stack is defined in ~/work/compose.yaml (n8n + Postgres), with `restart: unless-stopped` so it
+    comes back on every boot on its own. Secrets live in ~/work/.env — NEVER commit or echo them; the
+    N8N_ENCRYPTION_KEY especially must never change or every stored credential becomes undecryptable.
+  - The maintenance engine is ~/work/bin/app-admin.sh. Always run it with `APP_ADMIN_DIR=~/work`.
+
+  First turn:
+  1. Confirm health: `APP_ADMIN_DIR=~/work bin/app-admin.sh status` and open the preview. If n8n is
+     up, tell the owner their n8n is live and give them the preview link.
+  2. Offer, don't assume: back up now? add a starter workflow? Keep it to 1-2 sharp questions.
+
+  Ongoing duties:
+  - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot` (DB + volume +
+    key + image tag). Offer a scheduled backup via `podway schedule`.
+  - UPGRADES are the whole promise. NEVER just `docker compose pull`. Use
+    `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <tag>` — it snapshots, pulls, health-checks,
+    and AUTO-ROLLS-BACK code AND data if the new version is unhealthy. Only apply an upgrade you have
+    classed as SAFE; for a RISKY one (a major bump / breaking-change note), snapshot, explain the risk,
+    and get the owner's go-ahead first.
+  - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
+
+  END EVERY TURN ORIENTED: one line — "n8n: <up/updating> · data: <backed-up when> · next: <thing>".
+  Lead; only pause at real forks (a risky upgrade, deleting data, exposing a webhook publicly).

@@ -1,0 +1,17 @@
+{
+  "name": "@podway/selfhost",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "OSS/self-host entrypoint \u2014 `podway up` boots one pod locally via Docker (spike)",
+  "bin": {
+    "podway": "./podway.mjs"
+  },
+  "dependencies": {
+    "@podway/control-plane": "workspace:*",
+    "@podway/provider": "workspace:*",
+    "@podway/gateway": "workspace:*",
+    "@podway/db": "workspace:*",
+    "@podway/auth": "workspace:*"
+  }
+}

@@ -1,0 +1,318 @@
+.landing {
+  --page: #0b0f11;
+  --panel: #141a1d;
+  --panel-strong: #1a2226;
+  --line: #2b363b;
+  --text: #f4f7f7;
+  --muted: #aeb9bd;
+  --blue: #4d82ff;
+  --blue-soft: #9ab6ff;
+  --green: #73d9a6;
+  --yellow: #f0c56a;
+  --section-title-size: 34px;
+  min-height: 100vh;
+  overflow: hidden;
+  background: var(--page);
+  color: var(--text);
+}
+
+.shell { width: min(1180px, calc(100% - 48px)); margin: 0 auto; }
+.header { display: flex; min-height: 74px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.brand { display: inline-flex; align-items: center; gap: 9px; color: var(--text); text-decoration: none; }
+.brandMark { width: 29px; height: 29px; }
+.wordmark { color: var(--blue); font-size: 19px; font-weight: 750; letter-spacing: 0; }
+.wordmark span { color: var(--blue-soft); }
+.nav { display: flex; align-items: center; gap: 25px; }
+.nav a { color: var(--lp-muted); font-size: 14px; text-decoration: none; }
+.nav a:hover { color: var(--text); }
+
+.hero {
+  display: grid;
+  min-height: 620px;
+  grid-template-columns: minmax(0, .82fr) minmax(520px, 1.18fr);
+  align-items: center;
+  gap: 50px;
+  padding: 60px 0 64px;
+}
+.heroCopy { min-width: 0; }
+.eyebrow { color: var(--blue-soft); font-family: var(--font-mono); font-size: 12px; font-weight: 750; text-transform: uppercase; }
+.heroCopy h1 {
+  max-width: 14.5ch;
+  margin: 14px 0 0;
+  font-size: clamp(42px, 3.7vw, 52px);
+  font-weight: 730;
+  line-height: 1.01;
+  letter-spacing: 0;
+}
+.noWrap { white-space: nowrap; }
+.heroText { max-width: 49ch; margin-top: 21px; color: var(--lp-muted); font-size: 18px; line-height: 1.6; }
+.heroActions { display: flex; align-items: center; gap: 14px; margin-top: 28px; }
+.primaryCta,
+.secondaryCta {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.primaryCta { background: var(--blue); color: white; }
+.primaryCta:hover { background: #6a97ff; }
+.secondaryCta { border: 1px solid var(--line); color: var(--text); }
+.secondaryCta svg { width: 16px; height: 16px; margin-left: 7px; }
+/* Leading icon (e.g. the GitHub mark) mirrors the trailing spacing. */
+.secondaryCta svg:first-child { margin-left: 0; margin-right: 7px; }
+.secondaryCta:hover { border-color: #536268; background: var(--panel); }
+.subscriptionLine { display: grid; width: fit-content; max-width: 100%; grid-template-columns: 16px minmax(0, auto); align-items: center; gap: 8px 12px; margin-top: 19px; }
+.subscriptionLine svg { width: 16px; color: var(--green); }
+.subscriptionCopy { display: grid; gap: 2px; }
+.subscriptionCopy strong { color: #c7d0d3; font-size: 13px; font-weight: 600; line-height: 1.35; }
+
+.heroVisual { min-width: 0; margin: 0; }
+.dashboardFrame {
+  overflow: hidden;
+  border: 1px solid #36444b;
+  border-radius: 12px;
+  background: #10161a;
+  box-shadow: 0 34px 90px rgba(0, 0, 0, .42), 0 0 70px rgba(77, 130, 255, .12);
+}
+.dashboardBar { display: flex; min-height: 34px; align-items: center; gap: 6px; border-bottom: 1px solid var(--line); padding: 0 11px; }
+.dashboardBar i { width: 7px; height: 7px; border-radius: 50%; background: #536168; }
+.dashboardBar i:first-child { background: #d67474; }
+.dashboardBar i:nth-child(2) { background: var(--yellow); }
+.dashboardBar i:nth-child(3) { background: var(--green); }
+.dashboardBar span { margin-left: 5px; color: #7f8d92; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; }
+.dashboardImage { display: block; width: 100%; height: auto; }
+.heroVisual figcaption { display: flex; align-items: baseline; justify-content: space-between; gap: 18px; padding: 15px 3px 0; }
+.heroVisual figcaption strong { color: #dfe5e7; font-size: 13px; }
+.heroVisual figcaption span { color: #8c999e; font-size: 12px; line-height: 1.45; text-align: right; }
+
+.continuity { position: relative; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 30px 0 24px; }
+.continuity .sectionHeading { margin-bottom: 18px; }
+.continuityVisual { width: min(770px, 100%); margin: 0 auto; }
+.continuityArtwork { position: relative; aspect-ratio: 1825 / 560; overflow: hidden; }
+.continuityArtwork > img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 18%; mix-blend-mode: screen; }
+.continuitySteps { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 2px; }
+.continuitySteps span { display: flex; align-items: center; gap: 7px; padding: 5px 3px; color: #8f9ca1; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.continuitySteps span:nth-child(2) { justify-content: center; color: #c7d5f8; }
+.continuitySteps span:last-child { justify-content: flex-end; }
+.continuitySteps strong { color: var(--blue-soft); font-size: 12px; }
+.simulated { margin-top: 10px; color: #7e8b90; font-size: 11px; text-align: right; }
+
+.sectionHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 42px; margin-bottom: 34px; }
+.sectionHeading h2,
+.podNetworkHeading h3,
+.trust h2,
+.finalCta h2 { max-width: 19ch; margin-top: 10px; font-size: var(--section-title-size); line-height: 1.12; letter-spacing: 0; }
+.sectionHeading > p { max-width: 46ch; margin-top: 29px; color: var(--lp-muted); font-size: 17px; line-height: 1.65; }
+.reasonsBand { border-bottom: 1px solid var(--line); background: #101518; padding: 80px 0 86px; }
+.reasons { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
+.reasons article { padding: 27px 28px 0 0; }
+.reasons article + article { border-left: 1px solid var(--line); padding-left: 28px; }
+.reasons svg { width: 24px; color: var(--yellow); }
+.reasons article:nth-child(2) svg { color: #71c9e6; }
+.reasons article:nth-child(3) svg { color: var(--green); }
+.reasons h3 { margin-top: 22px; font-size: 19px; }
+.reasons p { margin-top: 10px; color: var(--lp-muted); font-size: 14px; line-height: 1.65; }
+.podNetwork { margin: 52px 0 0; }
+.podNetworkHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 42px; border-top: 1px solid var(--line); padding-top: 26px; }
+.podNetworkHeading > div { max-width: 480px; }
+.networkIndex { color: var(--blue-soft); font-family: var(--font-mono); font-size: 10px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.podNetworkHeading h3 { margin-top: 9px; }
+.podNetworkHeading > p { max-width: 52ch; margin-top: 29px; color: var(--lp-muted); font-size: 14px; line-height: 1.65; }
+.podNetworkCanvas { position: relative; display: grid; min-height: 520px; grid-template-columns: minmax(250px, 310px) minmax(150px, 1fr) minmax(250px, 310px); grid-template-rows: 1fr 1fr; margin-top: 24px; }
+.networkConnections { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.networkConnections > path { fill: none; stroke: #35434a; stroke-width: 1.4; vector-effect: non-scaling-stroke; }
+.networkPacket { fill: currentColor; filter: drop-shadow(0 0 7px currentColor); }
+.networkPacketBlue { color: var(--blue); }
+.networkPacketGreen { color: var(--green); }
+.networkPacketYellow { color: var(--yellow); }
+.mobileNetworkRail { display: none; }
+.podNode { position: relative; z-index: 1; width: 100%; min-height: 170px; border: 1px solid #303c42; border-radius: 10px; background: linear-gradient(145deg, rgba(22, 29, 32, .96), rgba(14, 19, 22, .98)); padding: 18px 19px 16px; box-shadow: 0 20px 50px rgba(0, 0, 0, .18); }
+.podNoderesearch,
+.podNodedevelopment { align-self: start; }
+.podNodeautomation,
+.podNodeproduction { align-self: end; }
+.podNoderesearch,
+.podNodeautomation { grid-column: 1; }
+.podNodedevelopment,
+.podNodeproduction { grid-column: 3; }
+.podNoderesearch,
+.podNodedevelopment { grid-row: 1; }
+.podNodeautomation,
+.podNodeproduction { grid-row: 2; }
+.podNodeTopline { display: grid; grid-template-columns: 25px 1fr auto; align-items: center; gap: 8px; color: #718087; font-family: var(--font-mono); font-size: 9px; letter-spacing: .05em; text-transform: uppercase; }
+.podNodeTopline i { display: inline-flex; align-items: center; gap: 6px; color: #a6b3b7; font-style: normal; }
+.podNodeTopline i::before { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px rgba(115, 217, 166, .55); content: ""; }
+.podNodeIcon { display: grid; width: 25px; height: 25px; place-items: center; border: 1px solid #37454b; border-radius: 6px; background: #11171a; color: var(--blue-soft); }
+.podNodeIcon svg { width: 13px; height: 13px; }
+.podNode h4 { margin-top: 17px; font-size: 17px; }
+.podNode p { margin-top: 7px; color: #9ba8ad; font-size: 12px; line-height: 1.55; }
+.podNodeTags { display: flex; gap: 6px; margin-top: 14px; }
+.podNodeTags span { border: 1px solid #2c383d; border-radius: 999px; padding: 4px 8px; color: #77868c; font-family: var(--font-mono); font-size: 8px; letter-spacing: .04em; text-transform: uppercase; }
+.messageRelay { position: relative; z-index: 2; display: grid; width: min(210px, calc(100% - 24px)); overflow: hidden; grid-column: 2; grid-row: 1 / 3; align-self: center; justify-self: center; border: 1px solid #40505a; border-radius: 10px; background: #10161a; padding: 18px; box-shadow: 0 0 55px rgba(77, 130, 255, .14); text-align: left; }
+.messageRelayBrand { display: flex; align-items: center; justify-content: center; gap: 9px; }
+.messageRelayBrand img { width: 32px; height: 32px; }
+.messageRelayBrand span { color: var(--blue-soft); font-family: var(--font-mono); font-size: 9px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.messageRelayCopy { margin-top: 15px; text-align: center; }
+.messageRelayCopy strong { display: block; color: #edf2f3; font-size: 16px; line-height: 1.25; }
+.messageRelayRoute { display: none; }
+
+@keyframes mobileMessageRoute {
+  from { top: 8%; }
+  to { top: 92%; }
+}
+
+.trustBand { border-bottom: 1px solid var(--line); background: #101518; padding: 84px 0; }
+.trust { display: grid; grid-template-columns: .8fr 1.2fr; gap: 72px; align-items: start; }
+.trustGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.trustGrid article { min-height: 190px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 22px; }
+.trustGrid svg { width: 21px; height: 21px; color: var(--green); }
+.trustGrid article:nth-child(2) svg { color: #71c9e6; }
+.trustGrid article:nth-child(3) svg { color: var(--yellow); }
+.trustGrid h3 { margin-top: 25px; font-size: 17px; line-height: 1.3; }
+.trustGrid p { margin-top: 9px; color: var(--lp-muted); font-size: 13px; line-height: 1.6; }
+.finalCta { padding: 100px 0 104px; text-align: center; }
+.finalCta h2 { max-width: 16ch; margin-right: auto; margin-left: auto; }
+.finalCta .primaryCta { margin-top: 26px; }
+.footer { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); color: #718087; font-size: 12px; padding: 28px 0 36px; }
+
+.primaryCta:focus-visible,
+.secondaryCta:focus-visible,
+.nav a:focus-visible,
+.brand:focus-visible { outline: 2px solid var(--blue-soft); outline-offset: 3px; }
+
+/* ---- without/with comparison ------------------------------------------------------------- */
+/* A table, deliberately: this IS tabular data (capability x two options), so a real <table> gives
+   screen readers the row/column relationship that a grid of divs throws away. */
+/* `balance` stops the heading orphaning its last word on a line of its own — it read as
+   "Without a pod, and with / one." at both desktop and phone width. */
+.compareBand { padding-top: 8px; }
+.compareBand h2 { text-wrap: balance; }
+.srOnly {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.compare { width: 100%; margin-top: 26px; border-collapse: collapse; font-size: 14px; }
+.compare th, .compare td { padding: 13px 16px; text-align: left; vertical-align: top; }
+.compare thead th { padding-bottom: 9px; color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; }
+.compare tbody tr { border-top: 1px solid var(--line); }
+/* The row label carries the question; the two cells answer it. Keeping it a <th scope="row"> means
+   a screen reader announces "You close the lid — With a pod — Claude keeps working". */
+.compare tbody th { width: 26%; color: var(--text); font-weight: 600; }
+.compare tbody td { color: var(--muted); }
+/* The pod column is the answer the page is arguing for, so it gets the emphasis — brighter text and
+   a tinted rail. The "before" column stays muted; it is context, not a competitor being attacked. */
+.compare tbody td:last-child { color: var(--text); background: rgba(77, 130, 255, .06); box-shadow: inset 2px 0 0 var(--blue); }
+.compare thead th:last-child { color: var(--blue-soft); }
+.compareUs { font-weight: 750; }
+
+@media (max-width: 1050px) {
+  .hero { min-height: 0; grid-template-columns: 1fr; }
+  .heroCopy { max-width: 760px; }
+  .heroVisual { width: 100%; max-width: 900px; }
+}
+
+@media (max-width: 900px) {
+  .heroCopy h1 { font-size: 46px; }
+  .trust { gap: 42px; }
+  .podNetwork { margin-top: 38px; }
+  .podNetworkHeading { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .podNetworkHeading > p { margin-top: 0; }
+  .podNetworkCanvas { min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto auto auto; gap: 24px 28px; }
+  .networkConnections { display: none; }
+  .mobileNetworkRail { position: absolute; z-index: 0; display: block; inset: 0; background: linear-gradient(#35434a, #35434a) center / 1px 100% no-repeat; pointer-events: none; }
+  .mobileNetworkRail i { position: absolute; top: 8%; left: 50%; width: 8px; height: 8px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 9px rgba(77, 130, 255, .9); transform: translate(-50%, -50%); animation: mobileMessageRoute 5.2s ease-in-out infinite; }
+  .podNode { width: 100%; min-height: 0; }
+  .podNoderesearch,
+  .podNodeautomation { grid-column: 1; }
+  .podNodedevelopment,
+  .podNodeproduction { grid-column: 2; }
+  .podNoderesearch,
+  .podNodedevelopment { grid-row: 1; }
+  .podNodeautomation,
+  .podNodeproduction { grid-row: 3; }
+  .messageRelay { width: 100%; min-height: 0; grid-column: 1 / 3; grid-row: 2; padding: 18px; }
+  .messageRelayBrand img { width: 36px; height: 36px; }
+  .messageRelayCopy { margin-top: 14px; }
+  .messageRelayCopy strong { font-size: 18px; }
+  .messageRelayRoute { display: grid; grid-template-columns: auto minmax(70px, 1fr) auto; align-items: center; gap: 9px; margin-top: 16px; border-top: 1px solid var(--line); padding-top: 13px; }
+  .messageRelayRoute span { color: var(--lp-muted); font-family: var(--font-mono); font-size: 9px; letter-spacing: .03em; text-transform: uppercase; }
+  .messageRelayRoute i { display: flex; align-items: center; gap: 7px; color: var(--blue-soft); font-family: var(--font-mono); font-size: 8px; font-style: normal; letter-spacing: .03em; text-transform: uppercase; }
+  .messageRelayRoute i::before,
+  .messageRelayRoute i::after { height: 1px; flex: 1; background: var(--blue); opacity: .55; content: ""; }
+}
+
+@media (max-width: 700px) {
+  /* Stack: a 3-column comparison cannot stay legible at phone width, and horizontal scroll on a
+     landing page reads as broken. Each row becomes a small card with its two answers labelled. */
+  .compare, .compare tbody, .compare tbody tr, .compare tbody th, .compare tbody td { display: block; width: auto; }
+  .compare thead { display: none; }
+  .compare tbody tr { margin-top: 14px; padding-top: 12px; }
+  .compare tbody th { padding: 0 0 8px; font-size: 15px; }
+  .compare tbody td { padding: 7px 0 7px 12px; }
+  .compare tbody td::before { display: block; margin-bottom: 2px; color: var(--muted); font-size: 10.5px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; content: "On your laptop"; }
+  .compare tbody td:last-child { background: none; box-shadow: inset 2px 0 0 var(--blue); }
+  .compare tbody td:last-child::before { color: var(--blue-soft); content: "With a pod"; }
+
+  .landing { --section-title-size: 31px; }
+  .shell { width: min(100% - 30px, 1180px); }
+  .header { min-height: 64px; }
+  .nav a:not(:last-child) { display: none; }
+  .hero { gap: 34px; padding: 42px 0 46px; }
+  .heroCopy h1 { font-size: 40px; }
+  .heroText { font-size: 17px; }
+  .heroActions { align-items: stretch; flex-direction: column; }
+  .primaryCta,
+  .secondaryCta { width: 100%; }
+  .continuitySteps span { align-items: flex-start; flex-direction: column; gap: 3px; padding: 5px 2px; text-align: center; }
+  .continuitySteps span,
+  .continuitySteps span:nth-child(2),
+  .continuitySteps span:last-child { justify-content: flex-start; }
+  .sectionHeading { align-items: flex-start; flex-direction: column; gap: 17px; }
+  .sectionHeading > p { margin-top: 0; }
+  .reasonsBand { padding: 66px 0 70px; }
+  .reasons { grid-template-columns: 1fr; }
+  .reasons article { padding: 24px 0; }
+  .reasons article + article { border-top: 1px solid var(--line); border-left: 0; padding-left: 0; }
+  .trustBand { padding: 68px 0; }
+  .trust { grid-template-columns: 1fr; gap: 32px; }
+  .trustGrid { grid-template-columns: 1fr; }
+  .trustGrid article { min-height: 0; }
+  .finalCta { padding: 80px 0 84px; }
+}
+
+@media (max-width: 500px) {
+  .header { min-height: 56px; }
+  .hero { gap: 26px; padding: 24px 0 36px; }
+  .heroCopy h1 { margin-top: 10px; font-size: 32px; line-height: 1.04; }
+  .heroText { margin-top: 14px; font-size: 15.5px; line-height: 1.48; }
+  .heroActions { margin-top: 20px; }
+  .subscriptionLine { grid-template-columns: 16px minmax(0, 1fr); margin-top: 13px; }
+  .heroVisual figcaption { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .heroVisual figcaption span { text-align: left; }
+  .podNetworkCanvas { grid-template-columns: 1fr; }
+  .podNode,
+  .podNoderesearch,
+  .podNodedevelopment,
+  .podNodeautomation,
+  .podNodeproduction,
+  .messageRelay { grid-column: 1; }
+  .podNoderesearch { grid-row: 1; }
+  .podNodedevelopment { grid-row: 2; }
+  .messageRelay { grid-row: 3; }
+  .podNodeautomation { grid-row: 4; }
+  .podNodeproduction { grid-row: 5; }
+  .footer { align-items: flex-start; flex-direction: column; gap: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing *,
+  .landing *::before,
+  .landing *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+  .networkPacket { display: none; }
+  .mobileNetworkRail i { display: none; }
+}
