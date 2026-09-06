@@ -16,7 +16,7 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/dashboard/", "/admin/", "/api/", "/preview/", "/dev-harness/", "/new", "/pending", "/pods/"],
       },
     ],
-    sitemap: "https://podway.cloud/sitemap.xml",
-    host: "https://podway.cloud",
+    sitemap: "https://podway.io/sitemap.xml",
+    host: "https://podway.io",
   };
 }

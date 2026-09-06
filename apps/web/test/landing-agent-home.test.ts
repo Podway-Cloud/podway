@@ -39,6 +39,6 @@ describe("agent-home landing preview", () => {
   it("keeps the forced preview out of search indexes", () => {
     expect(metadata.title).toBe("Landing preview: agent home");
     expect(metadata.robots).toEqual({ index: false, follow: false });
-    expect(metadata.alternates).toEqual({ canonical: "https://podway.cloud/" });
+    expect(metadata.alternates).toEqual({ canonical: "https://podway.io/" });
   });
 });

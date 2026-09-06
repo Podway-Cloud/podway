@@ -1,5 +1,5 @@
 import http from "node:http";
-import { existsSync, appendFileSync, statSync, readFileSync, writeFileSync, rmSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, copyFileSync, chmodSync, appendFileSync, statSync, readFileSync, writeFileSync, rmSync, mkdirSync, readdirSync } from "node:fs";
 import { execFile, execFileSync } from "node:child_process";
 import { OomWatcher } from "./oom-watcher.js";
 import { parseOomKillCount } from "./oom-cgroup.js";
@@ -411,6 +411,53 @@ export class AgentServer {
    * rather than allowed to spawn a competing process (overlapping restarts spawned ~6 procs all
    * crash-looping on the port; afisha-crawler, 2026-08-26). */
   private readonly startupInFlight = new Set<string>();
+
+  /**
+   * Snapshot the credentials file before a reconnect, and put it back if the flow DESTROYS it.
+   *
+   * A failed OAuth exchange makes claude delete ~/.claude/.credentials.json outright. Observed on
+   * test:1 (2026-09-06): a reconnect against a login with 27 days still on it ended with no
+   * credentials file at all, the agent restarted on a fresh session, and everything in the old
+   * session was gone — while the owner saw only "Getting Claude's sign-in link..." spinning.
+   *
+   * The restore rule is deliberately narrow: put the snapshot back ONLY when the file is ABSENT. A
+   * successful login always leaves a file, so this can never overwrite a freshly minted credential,
+   * which is the one thing a guard like this must never do. A delete-then-write during a normal
+   * login is covered by re-checking over a grace window instead of restoring on first sight.
+   */
+  private guardCredentialsThroughLogin(agent: string): void {
+    const src = credentialsPathForAgent(agent);
+    const snap = `${src}.prelogin`;
+    try {
+      if (!existsSync(src)) return;
+      copyFileSync(src, snap);
+      chmodSync(snap, 0o600);
+    } catch (e) {
+      this.log.warn("relogin_snapshot_failed", { agent, err: String(e) });
+      return;
+    }
+
+    // Detached: the reconnect must not wait on this, and the restore must still happen long after
+    // the caller has its answer.
+    for (const delay of [30_000, 60_000, 120_000]) {
+      const t = setTimeout(() => {
+        try {
+          if (existsSync(src)) return;   // a login (or a retry) wrote one — never touch it
+          copyFileSync(snap, src);
+          chmodSync(src, 0o600);
+          this.log.warn("relogin_credentials_restored", {
+            agent,
+            afterMs: delay,
+            note: "the login flow deleted the credentials file; restored the pre-login copy",
+          });
+        } catch (e) {
+          this.log.error("relogin_restore_failed", { agent, err: String(e) });
+        }
+      }, delay);
+      if (typeof t.unref === "function") t.unref();
+    }
+  }
+
 
   constructor(options: AgentServerOptions & { logger?: Logger }) {
     this.log = options.logger ?? createLogger("pod-agent");
@@ -991,6 +1038,9 @@ export class AgentServer {
             // TUI, a claude build without the command — we answer ok:false and the caller respawns.
             // The timeout stays well inside control-plane's curl -m 30 so it gets a real answer
             // rather than a hang it has to interpret.
+            // Snapshot the credentials BEFORE anything touches the login. A failed exchange deletes them
+            // outright, and that is how a valid 27-day login was lost on test:1 (2026-09-06).
+            this.guardCredentialsThroughLogin(agent);
             const alreadyAtMenu = classifyGate(pane) === "login-menu";
             if (!alreadyAtMenu) {
               if (agentGone(pane)) return reply(200, { ok: false, reason: "agent-not-live" });

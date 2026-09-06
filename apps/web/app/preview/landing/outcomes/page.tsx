@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Landing preview: outcomes",
   robots: { index: false, follow: false },
-  alternates: { canonical: "https://podway.cloud/" },
+  alternates: { canonical: "https://podway.io/" },
 };
 
 export default async function OutcomesPreview() {

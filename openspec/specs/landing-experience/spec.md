@@ -55,7 +55,7 @@ last-good state. This contract is the implementation target for the self-hosted 
 - **GIVEN** an administrator has promoted the self-host landing to `/`
 - **WHEN** a crawler or visitor opens `/`
 - **THEN** the root metadata and rendered body SHALL both describe the self-host experience while the
-  canonical URL remains `https://podway.cloud/`
+  canonical URL remains `https://podway.io/`
 
 #### Scenario: Visitor evaluates operational trust
 - **WHEN** a visitor finishes the supported-app catalog
@@ -334,13 +334,18 @@ text, and a reduced-motion experience that disables typing and autoplay.
 ### Requirement: Landing metadata
 The canonical landing page SHALL publish one stable, truthful metadata description independent of
 random experiment assignment. Forced-preview routes SHALL not compete with the canonical landing
-page in search indexes.
+page in search indexes. Public discovery URLs, canonical URLs, and structured-data identifiers SHALL
+use `https://podway.io`; the retired application origin SHALL NOT be published as the canonical site.
+Organization and software-application structured data SHALL be scoped to the public acquisition and
+self-host landings rather than inherited by authenticated or internal application routes. Both
+landings SHALL provide explicit Open Graph and Twitter images for link previews.
 
 #### Scenario: Canonical landing metadata is rendered
 - **GIVEN** a crawler or link preview requests `/`
 - **WHEN** title, description, and canonical metadata are produced
 - **THEN** they SHALL identify Podway as an always-on cloud workspace for coding agents, mention the
-  supported bring-your-own-subscription model, and use `/` as the canonical URL
+  supported bring-your-own-subscription model, use `https://podway.io/` as the canonical URL, and
+  publish complete Open Graph, Twitter, Organization, and SoftwareApplication metadata
 
 #### Scenario: Preview metadata is rendered
 - **GIVEN** a crawler requests a semantic preview route

@@ -27,6 +27,36 @@ agent on a BYO API key" below).
 - **THEN** the pod's first tmux session runs the CLI login (`claude /login` /
   `codex login`) so the user can sign in
 
+#### Scenario: The login menu-walk stops at the sign-in URL
+
+- **WHEN** the automated `/login` menu-walk finds the pane showing the sign-in URL or the
+  paste-code prompt
+- **THEN** it SHALL send NO further keystrokes and SHALL report success, because that state is
+  terminal for the machine: the menu has been walked and the flow is waiting on a HUMAN
+- **AND** it SHALL read the pane BEFORE typing rather than typing and inspecting afterwards, so a
+  slow render can never place a keystroke on the paste-code prompt
+
+#### Scenario: A stray keystroke must never cost a valid login
+
+- **WHEN** an empty or invalid code reaches the paste-code prompt
+- **THEN** the CLI rejects it, retries with a NEW code challenge, and the sign-in link the owner has
+  already opened stops matching the one the CLI awaits, so the exchange fails — and the agent
+  DELETES its credentials file, destroying a login that was still valid and ending the live session
+- **AND** the reconnect flow SHALL therefore treat typing into that prompt as destructive, never as
+  a harmless retry (observed end-to-end on a test pod, 2026-09-06: a valid login with 27 days
+
+#### Scenario: A reconnect never costs a login it failed to replace
+
+- **WHEN** a reconnect drives the login flow on a pod that already holds a credentials file
+- **THEN** that file SHALL be snapshotted BEFORE anything is typed, and SHALL be restored if the
+  flow leaves no credentials file at all — a failed OAuth exchange deletes it outright, which turned
+  a valid login with 27 days remaining into a signed-out pod and a lost session (test pod,
+  2026-09-06)
+- **AND** the restore SHALL apply ONLY when no credentials file is present, since a successful login
+  always writes one, so the guard can never overwrite a freshly minted credential
+- **AND** the check SHALL be repeated over a grace window rather than acting on first sight, so a
+  normal delete-then-write during a successful login is not mistaken for destruction
+
 #### Scenario: Already-authenticated pod skips login
 
 - **WHEN** a subscription-mode pod boots and a credentials file already exists on its

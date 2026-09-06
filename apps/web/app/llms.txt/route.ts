@@ -7,7 +7,7 @@ export function GET() {
     .getPages()
     .map(
       (page) =>
-        `- [${page.data.title}](https://podway.cloud${page.url}): ${page.data.description ?? "Podway documentation."}`,
+        `- [${page.data.title}](https://podway.io${page.url}): ${page.data.description ?? "Podway documentation."}`,
     )
     .join("\n");
 

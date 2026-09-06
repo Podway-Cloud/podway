@@ -60,9 +60,14 @@ function articleJsonLd(post: BlogPost) {
     description: post.description,
     datePublished: post.date,
     dateModified: post.date,
-    url: `https://podway.cloud/blog/${post.slug}`,
-    author: { "@type": "Organization", name: "Podway" },
-    publisher: { "@type": "Organization", name: "Podway", url: "https://podway.cloud" },
+    url: `https://podway.io/blog/${post.slug}`,
+    author: { "@id": "https://podway.io/#organization" },
+    publisher: {
+      "@type": "Organization",
+      "@id": "https://podway.io/#organization",
+      name: "Podway",
+      url: "https://podway.io/",
+    },
     keywords: post.tags.join(", "),
   };
 }
@@ -76,7 +81,9 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd(post)) }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(articleJsonLd(post)).replace(/</g, "\\u003c"),
+        }}
       />
       <main className="mx-auto max-w-3xl px-4 py-12">
         <Link href="/blog" className="text-[13px] font-medium text-[var(--accent-light)] hover:underline">

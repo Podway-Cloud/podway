@@ -3,7 +3,7 @@ import { getAllPosts } from "@/lib/blog";
 import { docsSource } from "@/lib/docs-source";
 import { editionOss } from "@/lib/session";
 
-const BASE = "https://podway.cloud";
+const BASE = "https://podway.io";
 
 /** Public, indexable routes only — auth-gated (/dashboard, /new, /pending, /pods) and internal
  * (/api, /admin, /preview, /dev-harness) routes are excluded here and disallowed in robots.ts. */

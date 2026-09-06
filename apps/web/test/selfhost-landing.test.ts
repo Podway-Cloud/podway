@@ -25,9 +25,20 @@ const controls = readFileSync(
 
 describe("self-host landing and homepage promotion", () => {
   it("keeps the self-host page stable and separate from acquisition measurement", () => {
-    expect(selfhostLandingMetadata("https://podway.cloud/selfhost").alternates?.canonical).toBe(
-      "https://podway.cloud/selfhost",
-    );
+    const metadata = selfhostLandingMetadata("https://podway.io/selfhost");
+    expect(metadata.alternates?.canonical).toBe("https://podway.io/selfhost");
+    expect(metadata.openGraph?.url).toBe("https://podway.io/selfhost");
+    expect(metadata.openGraph?.images).toEqual([
+      {
+        url: "/opengraph-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Podway",
+      },
+    ]);
+    expect(metadata.twitter?.images).toEqual([
+      { url: "/twitter-image.png", alt: "Podway" },
+    ]);
     expect(route).toContain('export const dynamic = "force-dynamic"');
     expect(route).toContain("if (editionOss()) redirect(\"/dashboard\")");
     expect(route).toContain("<SelfhostLanding");
@@ -42,7 +53,7 @@ describe("self-host landing and homepage promotion", () => {
     expect(root).toContain("isSelfhostHomepageEnabled");
     expect(root).toContain("<SelfhostLanding");
     expect(root).toContain("export async function generateMetadata");
-    expect(root).toContain('selfhostLandingMetadata("https://podway.cloud/")');
+    expect(root).toContain('selfhostLandingMetadata("https://podway.io/")');
     expect(controls).toContain("Show on homepage");
     expect(controls).toContain("Keep only at /selfhost");
     expect(controls).toContain("clearLandingHomepageOverride");

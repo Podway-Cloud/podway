@@ -16,7 +16,10 @@ import {
   getExperimentRuntimeSafe,
   isSelfhostHomepageEnabled,
 } from "@/lib/landing-experiment-store";
-import { selfhostLandingMetadata } from "@/lib/selfhost-landing-metadata";
+import {
+  selfhostLandingMetadata,
+  selfhostLandingStructuredData,
+} from "@/lib/selfhost-landing-metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -27,24 +30,56 @@ const landingDescription =
 const acquisitionMetadata: Metadata = {
   title: landingTitle,
   description: landingDescription,
-  alternates: { canonical: "https://podway.cloud/" },
+  alternates: { canonical: "https://podway.io/" },
   openGraph: {
     title: landingTitle,
     description: landingDescription,
-    url: "https://podway.cloud",
+    url: "https://podway.io/",
     siteName: "Podway",
     type: "website",
+    images: [
+      {
+        url: "/opengraph-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Podway",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: landingTitle,
     description: landingDescription,
+    images: [{ url: "/twitter-image.png", alt: "Podway" }],
   },
+};
+
+const acquisitionJsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://podway.io/#organization",
+      name: "Podway",
+      url: "https://podway.io/",
+      description: "Always-on cloud workspaces for coding agents.",
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://podway.io/#software-application",
+      name: "Podway",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "Web",
+      url: "https://podway.io/",
+      description: landingDescription,
+      publisher: { "@id": "https://podway.io/#organization" },
+    },
+  ],
 };
 
 export async function generateMetadata(): Promise<Metadata> {
   return (await isSelfhostHomepageEnabled())
-    ? selfhostLandingMetadata("https://podway.cloud/")
+    ? selfhostLandingMetadata("https://podway.io/")
     : acquisitionMetadata;
 }
 
@@ -70,7 +105,20 @@ export default async function Home() {
     assignedVariant(),
     getCurrentUser(),
   ]);
-  if (selfhostHomepage) return <SelfhostLanding user={user} />;
+  if (selfhostHomepage) {
+    const jsonLd = selfhostLandingStructuredData("https://podway.io/");
+    return (
+      <>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+          }}
+        />
+        <SelfhostLanding user={user} />
+      </>
+    );
+  }
   const landing = variant === "agent-home"
     ? <AgentHomeLanding user={user} />
     : variant === "agent-computer"
@@ -78,6 +126,12 @@ export default async function Home() {
       : <OutcomesLanding user={user} />;
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(acquisitionJsonLd).replace(/</g, "\\u003c"),
+        }}
+      />
       <LandingExperimentExposure />
       {landing}
     </>

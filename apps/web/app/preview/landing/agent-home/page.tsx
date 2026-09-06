@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: "Landing preview: agent home",
   description: "A focused Podway landing concept: a home your coding agent knows how to use.",
   robots: { index: false, follow: false },
-  alternates: { canonical: "https://podway.cloud/" },
+  alternates: { canonical: "https://podway.io/" },
 };
 
 export default async function AgentHomePreview() {

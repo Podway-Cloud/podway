@@ -43,33 +43,6 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Structured data: who we are (Organization) + what we are (SoftwareApplication), for rich
-  // results. Sitewide because both describe the product, not one page. Copy stays truthful.
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Organization",
-        "@id": "https://podway.cloud/#org",
-        name: "Podway",
-        url: "https://podway.io",
-        description: "Always-on cloud workspaces for coding agents.",
-      },
-      {
-        "@type": "SoftwareApplication",
-        name: "Podway",
-        applicationCategory: "DeveloperApplication",
-        operatingSystem: "Web",
-        url: "https://podway.io",
-        description:
-          "Give Claude Code a persistent cloud workspace with your project, tools, services, and automation, available from the official Claude apps.",
-        publisher: { "@id": "https://podway.cloud/#org" },
-      },
-    ],
-  };
-
-  // A self-host (OSS) install is a private single-tenant box, not the podway.cloud product, so it must
-  // not emit podway.cloud marketing structured data, cookie consent, or analytics.
   const oss = editionOss();
   return (
     // suppressHydrationWarning: next-themes sets data-theme on <html> before React
@@ -77,12 +50,6 @@ export default function RootLayout({
     // expected mismatch warning (it does NOT hide real ones on descendants).
     <html lang="en" className={inter.variable} suppressHydrationWarning>
       <body>
-        {!oss && (
-          <script
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-          />
-        )}
         {/* React Query lives at the ROOT so EVERY route tree that renders a react-query component has
             a client, not just /dashboard. The cockpit at /pods/[slug] has no layout of its own and
             inherits only this root, so scoping the provider to the dashboard layout crashed the cockpit

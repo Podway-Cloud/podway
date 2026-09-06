@@ -177,6 +177,20 @@ export async function driveLoginMenu(opts: LoginMenuOptions): Promise<boolean> {
       }));
   const pane = () => tmux(["capture-pane", "-p", "-t", opts.sessionName]);
 
+  /**
+   * The pane has moved PAST the menu to the sign-in URL / paste-code prompt.
+   *
+   * Typing anything here is destructive, and the whole chain was observed end-to-end on test:1
+   * (2026-09-06): a stray Enter submits an EMPTY code -> "OAuth error: Invalid code" -> the CLI
+   * retries with a FRESH code_challenge -> the link the owner already opened no longer matches the
+   * one the CLI now waits on -> the exchange fails with 400 -> claude DELETES
+   * ~/.claude/.credentials.json. That destroys a VALID login (27 days left) and the live session
+   * with it, while the owner sees only "Getting Claude's sign-in link..." spinning.
+   *
+   * So this state is terminal for the menu-walk: the machine's job is done and a human's has begun.
+   */
+  const PASTE_PROMPT_RE = /Paste code here|code_challenge=|oauth\/authorize/i;
+
   // 1) Wait for the login menu to render — dismissing an API-key prompt first if
   // one appears (accept the highlighted "No (recommended)" with Enter).
   const deadline = Date.now() + waitTimeoutMs;
@@ -191,6 +205,12 @@ export async function driveLoginMenu(opts: LoginMenuOptions): Promise<boolean> {
     }
     // v2.1.x shows a theme picker BEFORE the login menu — accept the highlighted default so claude
     // proceeds to "Select login method". Without this, `claude /login` never prints the sign-in URL.
+    // Already at the sign-in URL: the menu was walked (or never rendered) and the CLI is now
+    // waiting on the HUMAN. Treat as success and stop typing — see PASTE_PROMPT_RE.
+    if (PASTE_PROMPT_RE.test(p)) {
+      log.info("login_reached_paste_prompt", { phase: "menu-wait" });
+      return true;
+    }
     if (!dismissedTheme && THEME_PROMPT_RE.test(p)) {
       log.info("login_dismiss_theme_prompt", {});
       await tmux(["send-keys", "-t", opts.sessionName, "Enter"]);
@@ -215,6 +235,19 @@ export async function driveLoginMenu(opts: LoginMenuOptions): Promise<boolean> {
   // 2) Accept the highlighted subscription option; confirm the menu goes away.
   const confirmDeadline = Date.now() + confirmMs;
   for (let attempt = 0; ; attempt++) {
+    // CHECK BEFORE TYPING. This loop used to send Enter first and inspect afterwards, so a slow
+    // render meant attempt 1 fired a SECOND Enter into a pane that had already advanced to the
+    // paste-code prompt — submitting an empty code and starting the destructive chain described
+    // on PASTE_PROMPT_RE. Reading first costs one poll and removes the failure mode entirely.
+    const before = await pane();
+    if (PASTE_PROMPT_RE.test(before)) {
+      log.info("login_reached_paste_prompt", { phase: "confirm", attempt });
+      return true;
+    }
+    if (attempt > 0 && !LOGIN_MENU_RE.test(before)) {
+      log.info("login_menu_advanced", { attempt });
+      return true;
+    }
     await tmux(["send-keys", "-t", opts.sessionName, "Enter"]);
     await sleep(1000);
     if (!LOGIN_MENU_RE.test(await pane())) {

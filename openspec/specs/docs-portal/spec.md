@@ -10,7 +10,7 @@ capabilities around the outcomes a person can ask the agent to deliver.
 
 ### Requirement: Documentation is part of the public product site
 
-The documentation SHALL be served by the existing web application at `podway.cloud/docs`, share the
+The documentation SHALL be served by the existing web application at `podway.io/docs`, share the
 Podway brand and public navigation, and remain readable without authentication. Public documentation
 pages SHALL be included in the site map and carry page-specific title, description, canonical, and
 Open Graph metadata.
@@ -85,7 +85,7 @@ exists everywhere.
 ### Requirement: Documentation is discoverable by agents
 
 The web application SHALL expose `/llms.txt` as a plain-text index of public documentation pages,
-with an accurate short product description and absolute links.
+with an accurate short product description and absolute `https://podway.io` links.
 
 #### Scenario: An automated client reads the docs index
 

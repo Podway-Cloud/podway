@@ -160,6 +160,56 @@ describe("greeter", () => {
     expect(calls.some((c) => c[0] === "send-keys" && c.includes("Enter"))).toBe(true);
   });
 
+  it("driveLoginMenu sends NO further Enter once the paste-code prompt is up", async () => {
+    // The regression that destroyed a real login on test:1 (2026-09-06). The confirm loop used to
+    // send Enter FIRST and inspect afterwards, so a slow render let a SECOND Enter land on the
+    // paste-code prompt. That submits an EMPTY code: claude answers "OAuth error: Invalid code",
+    // retries with a FRESH code_challenge, the link the owner already opened stops matching, the
+    // exchange fails 400 — and claude DELETES ~/.claude/.credentials.json, taking a valid login
+    // (27 days left) and the live session with it.
+    //
+    // The assertion is the COUNT, not merely success: exactly one Enter, the subscription accept.
+    const menu = "Login\\nSelect login method:\\n1. Claude account with subscription";
+    const paste = "Paste code here if prompted >\\ncode_challenge=abc123";
+    let enters = 0;
+    // Deliberately SLOW: the pane still reports the menu for one poll after the Enter — the exact
+    // timing that used to trigger the second press.
+    let capturesAfterEnter = 0;
+    const tmux = async (args: string[]): Promise<string> => {
+      if (args[0] === "capture-pane") {
+        if (enters === 0) return menu;
+        capturesAfterEnter++;
+        return capturesAfterEnter <= 1 ? menu : paste;
+      }
+      if (args[0] === "send-keys" && args[args.length - 1] === "Enter") enters++;
+      return "";
+    };
+    const ok = await driveLoginMenu({
+      sessionName: "main", tmux, sleep: () => Promise.resolve(),
+      pollMs: 1, waitTimeoutMs: 300, confirmMs: 250,
+    });
+    expect(ok).toBe(true);
+    expect(enters).toBe(1);
+  });
+
+  it("driveLoginMenu types nothing at all when the paste prompt is ALREADY showing", async () => {
+    // A reconnect can arrive with the sign-in URL already on screen (an earlier attempt, or the agent
+    // got there itself). The machine's job is done and a human's has begun; typing is purely
+    // destructive here.
+    let enters = 0;
+    const tmux = async (args: string[]): Promise<string> => {
+      if (args[0] === "capture-pane") return "Paste code here if prompted >";
+      if (args[0] === "send-keys" && args[args.length - 1] === "Enter") enters++;
+      return "";
+    };
+    const ok = await driveLoginMenu({
+      sessionName: "main", tmux, sleep: () => Promise.resolve(),
+      pollMs: 1, waitTimeoutMs: 100, confirmMs: 100,
+    });
+    expect(ok).toBe(true);
+    expect(enters).toBe(0);
+  });
+
   it("driveLoginMenu dismisses an API-key prompt (accept 'No'), then advances the login menu", async () => {
     // Screens: the API-key prompt shows first (env injected an app key), then the
     // login-method menu after we press Enter to decline it.
