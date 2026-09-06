@@ -4,6 +4,9 @@ import {
   ArrowUpRight,
   Boxes,
   Eye,
+  FlaskConical,
+  MonitorSmartphone,
+  Server,
   Globe2,
   KeyRound,
   ShieldCheck,
@@ -142,47 +145,42 @@ export default async function AgentComputerLanding({
             <p className={styles.eyebrow}>What changes</p>
             <h2>Without a pod, and with one.</h2>
           </div>
-          <p>Claude Code is the same in both columns. What changes is where it lives.</p>
+          <p>Claude Code is the same either way. What changes is where it lives.</p>
         </div>
-        <table className={styles.compare}>
-          <thead>
-            <tr>
-              <th scope="col"><span className={styles.srOnly}>Capability</span></th>
-              <th scope="col">On your laptop</th>
-              <th scope="col"><span className={styles.compareUs}>With a pod</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <th scope="row">Close your laptop</th>
-              <td>The work stops with it.</td>
-              <td>Claude keeps working. Your pod runs 24/7.</td>
-            </tr>
-            <tr>
-              <th scope="row">Switch devices</th>
-              <td>Your session stays on that machine.</td>
-              <td>Continue the same session from desktop, phone, or web.</td>
-            </tr>
-            <tr>
-              <th scope="row">Keep your stack running</th>
-              <td>Servers, databases, workers, and scheduled jobs stop when your laptop does.</td>
-              <td>Your entire development environment stays up while you&rsquo;re away.</td>
-            </tr>
-            <tr>
-              <th scope="row">Test the real app</th>
-              <td>Your laptop must stay on while Claude runs and checks the app.</td>
-              <td>Claude can open the running app and click through it&mdash;even while you&rsquo;re away.</td>
-            </tr>
-            <tr>
-              <th scope="row">Protect your personal environment</th>
-              <td>Claude works on your everyday computer.</td>
-              <td>
-                Claude works in an isolated computer, away from your personal files, browser
-                sessions, and local network.
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        {/* Four before/after cards, not a 3-column table (owner call, 2026-09-06: crowded on
+            desktop, and on a phone it repeated its two column labels eight times). Each card names
+            ONE difference and states both sides once. Icons are chosen to mean the row — ShieldCheck
+            is deliberately the same icon the security section below uses. */}
+        <div className={styles.changeGrid}>
+        <article className={styles.changeCard}>
+          <h3><MonitorSmartphone aria-hidden />Switch devices</h3>
+          <dl>
+            <dt>Laptop</dt><dd>Your session stays on that machine.</dd>
+            <dt>Pod</dt><dd>Continue the same session from desktop, phone, or web.</dd>
+          </dl>
+        </article>
+        <article className={styles.changeCard}>
+          <h3><Server aria-hidden />Keep your stack running</h3>
+          <dl>
+            <dt>Laptop</dt><dd>Servers, databases, workers, and scheduled jobs stop when your laptop does.</dd>
+            <dt>Pod</dt><dd>Your entire development environment is always up and accessible.</dd>
+          </dl>
+        </article>
+        <article className={styles.changeCard}>
+          <h3><FlaskConical aria-hidden />Test the real app</h3>
+          <dl>
+            <dt>Laptop</dt><dd>Your builds, tests, and Claude agent drain your laptop resources.</dd>
+            <dt>Pod</dt><dd>Claude can run builds and tests on a real app safely, even while you&rsquo;re away.</dd>
+          </dl>
+        </article>
+        <article className={styles.changeCard}>
+          <h3><ShieldCheck aria-hidden />Protect your personal environment</h3>
+          <dl>
+            <dt>Laptop</dt><dd>Claude works on your everyday computer.</dd>
+            <dt>Pod</dt><dd>Claude works in an isolated computer, away from your personal files, browser sessions, and local network.</dd>
+          </dl>
+        </article>
+        </div>
       </section>
 
       <section className={styles.reasonsBand} id="why">
