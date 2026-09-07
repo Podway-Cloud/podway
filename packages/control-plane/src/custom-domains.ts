@@ -1,4 +1,4 @@
-import { eq, and, type Database } from "@podway/db";
+import { eq, and, inArray, type Database } from "@podway/db";
 import { customDomains } from "@podway/db";
 import { normalizeHostname, recordTypeFor } from "@podway/shared";
 import { randomBytes } from "node:crypto";
@@ -230,6 +230,50 @@ export class CustomDomainService {
    * issued yet, so a visitor would get a TLS error rather than a page — and a `disabled` or
    * `error` one has been switched off or never worked. Returns the pod id (which is its slug).
    */
+  /**
+   * Advance every domain that is still waiting, without anyone watching.
+   *
+   * Without this a domain is only ever moved forward by the owner LOOKING at it — the wizard's poll
+   * or the re-check button. Close the tab while Let's Encrypt is still issuing (it took ~6 minutes
+   * on the live test) and the domain sits on "Verifying" indefinitely, even though its certificate
+   * arrived minutes later. The owner's only recourse is to guess that reopening the page fixes it.
+   *
+   * `pending`/`error` get a DNS re-check (their records may have propagated since); `verifying` gets
+   * a certificate check. `active` and `disabled` are left alone — nothing here should un-publish a
+   * working domain.
+   *
+   * Best-effort per domain: one failure must not stop the sweep, because the failing domain is the
+   * one most likely to be broken and the others are innocent.
+   */
+  async pollPending(opts: { limit?: number } = {}): Promise<{ checked: number; nowActive: string[] }> {
+    const rows = await this.db
+      .select()
+      .from(customDomains)
+      .where(inArray(customDomains.status, ["pending", "verifying", "error"]));
+    const slice = rows.slice(0, opts.limit ?? 50);
+    const nowActive: string[] = [];
+    for (const row of slice) {
+      try {
+        const before = toRecord(row);
+        if (before.status === "verifying") {
+          const after = await this.refreshCert(before.id);
+          if (after?.status === "active") nowActive.push(after.hostname);
+        } else {
+          const v = await this.verify(before.id);
+          // DNS just went green — ask about the certificate in the same pass rather than making the
+          // owner wait a whole extra cycle for a state we can already check.
+          if (v?.status === "verifying") {
+            const after = await this.refreshCert(before.id);
+            if (after?.status === "active") nowActive.push(after.hostname);
+          }
+        }
+      } catch {
+        // deliberately swallowed — see the doc comment
+      }
+    }
+    return { checked: slice.length, nowActive };
+  }
+
   async activePodFor(rawHostname: string): Promise<string | null> {
     const hostname = normalizeHostname(rawHostname);
     if (!hostname) return null;

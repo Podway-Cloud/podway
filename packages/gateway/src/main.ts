@@ -2,7 +2,7 @@ import path from "node:path";
 import type { IncomingMessage } from "node:http";
 import { createAuth, getSessionUserId, notifyOps, type AuthEnv } from "@podway/auth";
 import { verifyBridgeToken, PREVIEW_SESSION_COOKIE, BRIDGE_TOKEN_PARAM } from "@podway/auth/bridge-token";
-import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService } from "@podway/control-plane";
+import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService, FlyCertIssuer } from "@podway/control-plane";
 import { RelayRegistry } from "./relay-registry.js";
 import {
   IncusProvider,
@@ -37,12 +37,20 @@ async function main(): Promise<void> {
   // Postgres URL, so EVERY query failed ("NeonDbError: fetch failed") — terminal
   // WS rejected with 500 and the reconcile sweep died, while web looked fine.
   const db = createAppDb();
-  // Routing lookups only — the gateway never issues certificates, so it gets the default no-op
-  // issuer. Cert issuance belongs to the web app, which is where an owner's action starts it.
-  const customDomains = new CustomDomainService(db, {
-    cnameTarget: process.env.PODWAY_DOMAIN_CNAME_TARGET ?? "",
-    anycastIp: process.env.PODWAY_DOMAIN_ANYCAST_IP ?? "",
-  });
+  // Routing lookups AND the background poller live here. The poller must be able to ask Fly about
+  // certs, so unlike a pure routing lookup it gets a real issuer — falling back to the no-op without
+  // FLY_API_TOKEN so a misconfigured deploy still cannot report a domain live.
+  const customDomains = new CustomDomainService(
+    db,
+    {
+      cnameTarget: process.env.PODWAY_DOMAIN_CNAME_TARGET ?? "",
+      anycastIp: process.env.PODWAY_DOMAIN_ANYCAST_IP ?? "",
+    },
+    undefined,
+    process.env.FLY_API_TOKEN
+      ? new FlyCertIssuer(process.env.PODWAY_DOMAIN_EDGE_APP ?? "podway-gateway", process.env.FLY_API_TOKEN)
+      : undefined,
+  );
   const fetchMemory = new FetchMemory(db);
   const agentMessages = new AgentMessages(db);
   const relays = new RelayRegistry();
@@ -187,6 +195,30 @@ async function main(): Promise<void> {
     };
     setInterval(() => void sweep(), sweepMs).unref();
     console.log(`podway-gateway reconcile sweep every ${sweepMs}ms`);
+  }
+
+  // Custom-domain poller. Without it a domain only advances while the owner is LOOKING at it (the
+  // wizard poll / re-check button), so closing the tab while Let's Encrypt is still issuing (~6 min
+  // on the live test) leaves it on "Verifying" forever. Runs only where the edge is configured, and
+  // only in the gateway — the process guaranteed up whether or not a dashboard is open.
+  const domainPollMs = Number(process.env.PODWAY_DOMAIN_POLL_MS ?? 60_000);
+  if (domainPollMs > 0 && process.env.PODWAY_DOMAIN_CNAME_TARGET && process.env.PODWAY_DOMAIN_ANYCAST_IP) {
+    let polling = false;
+    setInterval(() => {
+      if (polling) return;             // skip, never stack a slow sweep behind itself
+      polling = true;
+      void (async () => {
+        try {
+          const r = await customDomains.pollPending();
+          if (r.nowActive.length) console.log(`custom_domain_active ${r.nowActive.join(",")}`);
+        } catch (e) {
+          console.error("custom_domain_poll_failed", e);
+        } finally {
+          polling = false;
+        }
+      })();
+    }, domainPollMs).unref();
+    console.log(`podway-gateway custom-domain poll every ${domainPollMs}ms`);
   }
 
   // Daily WARNINGS digest (§7): criticals page immediately (onIncident above);

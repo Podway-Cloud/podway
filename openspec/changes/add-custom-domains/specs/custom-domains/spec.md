@@ -138,3 +138,14 @@ the pod's privacy setting — the owner makes that choice explicitly.
 - **WHEN** a request arrives on the gateway's own host or the preview root
 - **THEN** it SHALL be handled as before, with no custom-domain lookup
 
+### Requirement: A waiting domain advances without the owner watching
+
+Domains not yet live SHALL be advanced by a background sweep, not only by the owner opening the
+wizard or pressing re-check — certificate issuance takes minutes, longer than anyone watches a page.
+The sweep SHALL skip `active`/`disabled` domains (never un-publish a working site), be bounded per
+run, and one domain's failure SHALL NOT stop the others.
+
+#### Scenario: The certificate lands after the tab closes
+- **WHEN** a `verifying` domain's certificate is later issued
+- **THEN** the next sweep SHALL mark it live with no owner action
+

@@ -210,3 +210,82 @@ describe("routing lookup — only a LIVE domain serves", () => {
     expect(await svc.activePodFor("")).toBeNull();
   });
 });
+
+describe("the poller advances domains with nobody watching", () => {
+  let db: Database;
+  let close: () => Promise<void>;
+  beforeEach(async () => ({ db, close } = await createTestDb()));
+  afterEach(async () => close && (await close()));
+
+  async function seed(host: string, f: ReturnType<typeof fakeIssuer>) {
+    const probe = new CustomDomainService(db, EDGE);
+    const added = await probe.add("o1", "pod1", host);
+    if (!added.ok) throw new Error(added.error);
+    return {
+      svc: new CustomDomainService(db, EDGE, goodDns(added.domain.verifyToken), f.issuer),
+      id: added.domain.id,
+    };
+  }
+
+  it("takes a domain all the way from pending to LIVE without any owner action", async () => {
+    const f = fakeIssuer("issued");
+    const { svc } = await seed("app.acme.com", f);
+    const r = await svc.pollPending();
+    expect(r.checked).toBe(1);
+    expect(r.nowActive).toEqual(["app.acme.com"]);
+    expect(await svc.activePodFor("app.acme.com")).toBe("pod1");
+  });
+
+  it("this is the exact bug: the cert lands AFTER the owner closes the tab", async () => {
+    const f = fakeIssuer("pending");
+    const { svc, id } = await seed("app.acme.com", f);
+    await svc.verify(id); // the owner's last look — DNS is fine, cert is not ready
+    expect((await svc.get(id))?.status).toBe("verifying");
+
+    await svc.pollPending();
+    expect((await svc.get(id))?.status).toBe("verifying"); // still not ready, still honest
+
+    f.set("issued"); // Let's Encrypt finishes; nobody is watching
+    const r = await svc.pollPending();
+    expect(r.nowActive).toEqual(["app.acme.com"]);
+    expect((await svc.get(id))?.status).toBe("active");
+  });
+
+  it("NEVER touches an active or disabled domain — a sweep must not un-publish a working site", async () => {
+    const f = fakeIssuer("issued");
+    const { svc, id } = await seed("app.acme.com", f);
+    await svc.pollPending();
+    expect((await svc.get(id))?.status).toBe("active");
+
+    // the edge now reports nonsense; an active domain must not be dragged backwards by a sweep
+    f.set("none");
+    const r = await svc.pollPending();
+    expect(r.checked).toBe(0); // active is not even looked at
+    expect((await svc.get(id))?.status).toBe("active");
+  });
+
+  it("one broken domain does not stop the others — the broken one is the likely one", async () => {
+    const good = fakeIssuer("issued");
+    await seed("a.acme.com", good);
+    await seed("b.acme.com", good);
+    const probe = new CustomDomainService(db, EDGE);
+    const rows = await probe.listForPod("pod1");
+    const svc = new CustomDomainService(db, EDGE, goodDns(rows[0]!.verifyToken), {
+      issue: async (h) => {
+        if (h === "a.acme.com") throw new Error("fly refused");
+      },
+      state: async (h) => (h === "a.acme.com" ? (() => { throw new Error("boom"); })() : "issued"),
+      revoke: async () => {},
+    });
+    const r = await svc.pollPending();
+    expect(r.checked).toBe(2); // both were attempted despite the first throwing
+  });
+
+  it("is bounded, so a large backlog cannot make one sweep run forever", async () => {
+    const f = fakeIssuer("pending");
+    for (let i = 0; i < 6; i++) await seed(`h${i}.acme.com`, f);
+    const { svc } = await seed("last.acme.com", f);
+    const r = await svc.pollPending({ limit: 3 });
+    expect(r.checked).toBe(3);
+  });
+});
