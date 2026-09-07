@@ -222,6 +222,24 @@ export class CustomDomainService {
     return this.get(id);
   }
 
+  /**
+   * UNSCOPED routing lookup: which pod does this hostname serve? Used by the gateway on an
+   * inbound request, so the caller is anonymous by construction.
+   *
+   * Only an **active** domain resolves. A `verifying` one must not serve: its certificate is not
+   * issued yet, so a visitor would get a TLS error rather than a page — and a `disabled` or
+   * `error` one has been switched off or never worked. Returns the pod id (which is its slug).
+   */
+  async activePodFor(rawHostname: string): Promise<string | null> {
+    const hostname = normalizeHostname(rawHostname);
+    if (!hostname) return null;
+    const rows = await this.db
+      .select()
+      .from(customDomains)
+      .where(and(eq(customDomains.hostname, hostname), eq(customDomains.status, "active")));
+    return rows[0]?.podId ?? null;
+  }
+
   /** The exact DNS records to show for a domain: a CNAME (or A record for apex) + the TXT challenge. */
   dnsRecordsFor(domain: CustomDomainRecord): DnsRecord[] {
     const recs: DnsRecord[] =

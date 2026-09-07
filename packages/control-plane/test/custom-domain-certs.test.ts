@@ -157,3 +157,56 @@ describe("FlyCertIssuer reads Fly's human-facing status honestly", () => {
     expect(await issuerWith(null).state("a.com")).toBe("none");
   });
 });
+
+describe("routing lookup — only a LIVE domain serves", () => {
+  let db: Database;
+  let close: () => Promise<void>;
+  beforeEach(async () => ({ db, close } = await createTestDb()));
+  afterEach(async () => close && (await close()));
+
+  async function domainInState(f: ReturnType<typeof fakeIssuer>, host = "app.acme.com") {
+    const probe = new CustomDomainService(db, EDGE);
+    const added = await probe.add("o1", "pod-abc", host);
+    if (!added.ok) throw new Error(added.error);
+    const svc = new CustomDomainService(db, EDGE, goodDns(added.domain.verifyToken), f.issuer);
+    return { svc, id: added.domain.id };
+  }
+
+  it("a PENDING domain does not resolve — nothing has been verified", async () => {
+    const { svc } = await domainInState(fakeIssuer());
+    expect(await svc.activePodFor("app.acme.com")).toBeNull();
+  });
+
+  it("a VERIFYING domain does not resolve — the cert isn't issued, so a visitor would get a TLS error", async () => {
+    const f = fakeIssuer("pending");
+    const { svc, id } = await domainInState(f);
+    await svc.verify(id);
+    await svc.refreshCert(id);
+    expect(await svc.activePodFor("app.acme.com")).toBeNull();
+  });
+
+  it("an ACTIVE domain resolves to its pod", async () => {
+    const f = fakeIssuer("issued");
+    const { svc, id } = await domainInState(f);
+    await svc.verify(id);
+    await svc.refreshCert(id);
+    expect(await svc.activePodFor("app.acme.com")).toBe("pod-abc");
+  });
+
+  it("matches case-insensitively and ignores stray whitespace, like a real Host header", async () => {
+    const f = fakeIssuer("issued");
+    const { svc, id } = await domainInState(f);
+    await svc.verify(id);
+    await svc.refreshCert(id);
+    expect(await svc.activePodFor("  APP.Acme.COM ")).toBe("pod-abc");
+  });
+
+  it("an unknown hostname resolves to nothing", async () => {
+    const f = fakeIssuer("issued");
+    const { svc, id } = await domainInState(f);
+    await svc.verify(id);
+    await svc.refreshCert(id);
+    expect(await svc.activePodFor("someone-elses-site.com")).toBeNull();
+    expect(await svc.activePodFor("")).toBeNull();
+  });
+});

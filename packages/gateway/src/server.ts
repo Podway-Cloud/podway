@@ -183,6 +183,20 @@ export class GatewayServer {
     this.http = http.createServer((req, res) => {
       const slug = this.previewSlug(req);
       if (slug) return void this.handlePreviewHttp(slug, req, res);
+      // A custom domain serves the same pod app as a preview, so it reuses the same handler.
+      // Checked AFTER /healthz-style known routes would be cheap, but it must come first: a
+      // customer's site at acme.com/healthz has to serve THEIR page, not our health JSON.
+      if (this.config.resolveCustomHost && !this.isOwnHost(req)) {
+        return void this.customHostSlug(req).then((s) => {
+          if (s) return this.handlePreviewHttp(s, req, res, { customHost: true });
+          return this.httpFallback(req, res);
+        });
+      }
+      return void this.httpFallback(req, res);
+    });
+    // Everything that is NOT a pod app: healthz, admin endpoints, relay. Only ever reached on
+    // OUR hosts — a customer's domain is resolved to their pod before this runs.
+    this.httpFallback = (req: http.IncomingMessage, res: http.ServerResponse) => {
       if (req.url === "/healthz") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ready: true }));
@@ -251,7 +265,7 @@ export class GatewayServer {
       }
       res.writeHead(404);
       res.end();
-    });
+    };
     this.http.on("upgrade", (req, socket, head) => void this.onUpgrade(req, socket as Socket, head));
   }
 
@@ -264,6 +278,12 @@ export class GatewayServer {
       // Preview host (e.g. Next.js HMR WebSocket) → raw tunnel to the app port.
       const previewSlug = this.previewSlug(req);
       if (previewSlug) return await this.handlePreviewUpgrade(previewSlug, req, socket, head);
+      // Same for a custom domain — an app's HMR/websocket must work on the owner's own hostname
+      // too, or the site half-loads and nothing says why.
+      if (this.config.resolveCustomHost && !this.isOwnHost(req)) {
+        const customSlug = await this.customHostSlug(req);
+        if (customSlug) return await this.handlePreviewUpgrade(customSlug, req, socket, head);
+      }
 
       // The owner's relay, connecting OUTBOUND from their machine. No inbound port,
       // no tunnel, no third party — which is the whole reason it is shaped this way.
@@ -752,6 +772,48 @@ export class GatewayServer {
     return /^[a-z0-9][a-z0-9-]*$/.test(slug) ? slug : null;
   }
 
+  /**
+   * The slug for a CUSTOM hostname, else null. Consulted only after previewSlug() has declined, so
+   * a normal preview/terminal/healthz request never pays for it.
+   *
+   * Cached briefly and NEGATIVELY too: without a negative cache, any stranger pointing DNS at us —
+   * or a crawler hitting a stale hostname — turns every request into a database read. The TTL is
+   * short so a domain that has just gone active starts serving within seconds.
+   */
+  private httpFallback!: (req: http.IncomingMessage, res: http.ServerResponse) => void;
+
+  private customHostCache = new Map<string, { slug: string | null; at: number }>();
+
+  /** Our own hosts — the gateway's and the preview root. Never resolved as a customer domain, so
+   * /healthz and the admin endpoints keep working and never cost a database read. */
+  private isOwnHost(req: http.IncomingMessage): boolean {
+    const host = (req.headers.host ?? "").split(":")[0].toLowerCase();
+    if (!host) return true; // no Host header: not a browser hitting a customer domain
+    const base = this.config.previewBase?.toLowerCase();
+    if (base && (host === base || host.endsWith("." + base))) return true;
+    const own = (process.env.PODWAY_GATEWAY_HOST ?? "").toLowerCase();
+    if (own && host === own) return true;
+    return host === "localhost" || host.endsWith(".fly.dev") || host.endsWith(".internal");
+  }
+
+  private async customHostSlug(req: http.IncomingMessage): Promise<string | null> {
+    const resolve = this.config.resolveCustomHost;
+    if (!resolve || !this.config.resolvePreviewOrigin) return null;
+    const host = (req.headers.host ?? "").split(":")[0].toLowerCase();
+    if (!host || !host.includes(".")) return null;
+    // Never treat one of OUR OWN hosts as a customer domain.
+    const base = this.config.previewBase?.toLowerCase();
+    if (base && (host === base || host.endsWith("." + base))) return null;
+
+    const TTL = 30_000;
+    const hit = this.customHostCache.get(host);
+    if (hit && Date.now() - hit.at < TTL) return hit.slug;
+    const slug = await resolve(host).catch(() => null);
+    if (this.customHostCache.size > 5_000) this.customHostCache.clear(); // bounded; a stranger must not grow it forever
+    this.customHostCache.set(host, { slug, at: Date.now() });
+    return slug;
+  }
+
   /** Resolve slug → pod + decide access. Returns the pod, OR a PreviewError describing the failure —
    * the caller renders it (an HTTP page via sendPreviewError, or a socket reject for a WS upgrade).
    * The status mapping is uniform across every preview entry point. */
@@ -908,6 +970,7 @@ export class GatewayServer {
     slug: string,
     req: http.IncomingMessage,
     res: http.ServerResponse,
+    opts: { customHost?: boolean } = {},
   ): Promise<void> {
     // Cross-domain preview handshake (domain split): the app on podway.io redirects a signed-in owner
     // here with `?t=<bridge token>`. We verify it (preview purpose + this pod), drop a HOST-ONLY
@@ -917,6 +980,20 @@ export class GatewayServer {
     try {
       const acc = await this.resolvePreviewAccess(slug, req);
       if ("error" in acc) {
+        // A CUSTOM domain never shows a Podway sign-in page. Two reasons: a visitor typing
+        // acme.com has no idea what Podway is, and bouncing them to our login would leak that
+        // the site is hosted here. An owner-only pod simply does not serve on its own domain
+        // until the owner makes the preview public — an explicit choice, made by them, rather
+        // than attaching a domain silently flipping a privacy setting (owner call, 2026-09-07).
+        if (opts.customHost && acc.error.code === 401) {
+          this.log.info("custom_host_not_public", { slug });
+          this.sendPreviewError(req, res, {
+            code: 404,
+            title: "No site here",
+            message: "There's nothing published at this address.",
+          }, slug);
+          return;
+        }
         this.sendPreviewError(req, res, acc.error, slug);
         return;
       }

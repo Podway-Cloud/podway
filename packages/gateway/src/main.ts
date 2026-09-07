@@ -2,7 +2,7 @@ import path from "node:path";
 import type { IncomingMessage } from "node:http";
 import { createAuth, getSessionUserId, notifyOps, type AuthEnv } from "@podway/auth";
 import { verifyBridgeToken, PREVIEW_SESSION_COOKIE, BRIDGE_TOKEN_PARAM } from "@podway/auth/bridge-token";
-import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService } from "@podway/control-plane";
+import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, CustomDomainService } from "@podway/control-plane";
 import { RelayRegistry } from "./relay-registry.js";
 import {
   IncusProvider,
@@ -36,6 +36,12 @@ async function main(): Promise<void> {
   // Postgres URL, so EVERY query failed ("NeonDbError: fetch failed") — terminal
   // WS rejected with 500 and the reconcile sweep died, while web looked fine.
   const db = createAppDb();
+  // Routing lookups only — the gateway never issues certificates, so it gets the default no-op
+  // issuer. Cert issuance belongs to the web app, which is where an owner's action starts it.
+  const customDomains = new CustomDomainService(db, {
+    cnameTarget: process.env.PODWAY_DOMAIN_CNAME_TARGET ?? "",
+    anycastIp: process.env.PODWAY_DOMAIN_ANYCAST_IP ?? "",
+  });
   const fetchMemory = new FetchMemory(db);
   const agentMessages = new AgentMessages(db);
   const relays = new RelayRegistry();
@@ -116,6 +122,12 @@ async function main(): Promise<void> {
     },
     // Preview URLs: served on `<slug>.<PODWAY_PREVIEW_BASE>` when configured.
     previewBase: process.env.PODWAY_PREVIEW_BASE || undefined,
+    // Custom domains (cloud only). Left UNSET unless the edge is provisioned, so an unconfigured
+    // deploy — and self-host, which has no custom domains — never does the lookup at all.
+    resolveCustomHost:
+      process.env.PODWAY_DOMAIN_CNAME_TARGET && process.env.PODWAY_DOMAIN_ANYCAST_IP
+        ? async (hostname: string) => customDomains.activePodFor(hostname)
+        : undefined,
     previewPort: Number(process.env.PODWAY_PREVIEW_PORT ?? 3000),
     resolvePreviewOrigin: async (podId) =>
       (await control.providerForPod(podId)).podAddress(

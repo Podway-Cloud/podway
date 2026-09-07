@@ -106,3 +106,35 @@ it independently, so a bookmarked URL or a hand-made request cannot create an un
 - **WHEN** both values are set
 - **THEN** the row, the wizard, and the actions SHALL all become available
 
+### Requirement: Only a live domain routes, and it never shows a Podway sign-in page
+
+The gateway MUST resolve an inbound `Host` to a pod ONLY for a domain in the `active` state. A
+domain that has verified DNS but has no certificate yet MUST NOT serve — a visitor would get a TLS
+error rather than a page, which is worse than the address simply not resolving.
+
+The gateway's OWN hosts (its hostname and the preview root) MUST never be resolved as customer
+domains, so health and admin endpoints keep working and cost no lookup. Lookups MUST be cached
+including NEGATIVE results, so a stranger pointing DNS at us cannot turn every request into a
+database read.
+
+When the pod's preview is owner-only, a custom domain MUST return a plain not-found and MUST NOT
+redirect to a Podway sign-in page: a visitor typing the owner's domain has no relationship with
+Podway, and redirecting would disclose where the site is hosted. Attaching a domain MUST NOT change
+the pod's privacy setting — the owner makes that choice explicitly.
+
+#### Scenario: A domain whose certificate has not been issued
+
+- **WHEN** a request arrives for a hostname whose domain is `pending` or `verifying`
+- **THEN** the gateway SHALL NOT route it to a pod
+
+#### Scenario: A live domain on an owner-only pod
+
+- **WHEN** a visitor requests an `active` custom domain whose pod's preview is owner-only
+- **THEN** the response SHALL be a plain not-found, NOT a sign-in redirect, and the pod's privacy
+  setting SHALL be unchanged
+
+#### Scenario: The gateway's own hostname
+
+- **WHEN** a request arrives on the gateway's own host or the preview root
+- **THEN** it SHALL be handled as before, with no custom-domain lookup
+

@@ -70,6 +70,16 @@ export interface GatewayConfig {
    * (local/dev) → previews disabled, terminal-only.
    */
   previewBase?: string;
+  /**
+   * Resolve a CUSTOM hostname (an owner's own domain, e.g. `app.acme.com`) to the pod slug it is
+   * attached to, or null. Only `active` domains resolve — a domain whose certificate has not been
+   * issued must not serve, or a visitor gets a TLS error instead of a page.
+   *
+   * A narrow port rather than widening `control`, so self-host (which has no custom domains) simply
+   * leaves it unset and every custom-hostname request falls through to the normal 404. Consulted
+   * ONLY for a host we do not otherwise recognise, so it costs nothing on the hot paths.
+   */
+  resolveCustomHost?: (hostname: string) => Promise<string | null>;
   /** Pod app port the preview proxies to (default 3000). */
   previewPort?: number;
   /** The main app origin (e.g. "https://podway.cloud"). When set, an
