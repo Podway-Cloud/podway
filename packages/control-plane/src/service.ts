@@ -2242,6 +2242,45 @@ export class PodService {
         since: rec.updatingSince,
         stage: rec.updateStage,
       });
+      // Before declaring failure, ASK whether it actually failed.
+      //
+      // The row still holds the PRE-update digest — only the update's final write changes it — so a
+      // provider now reporting a DIFFERENT image means the recreate genuinely completed and all that
+      // was lost is the bookkeeping (a dropped DB connection, a restart mid-flight). Calling that a
+      // failure is how "podway ops" was updated THREE times and told its owner it failed three times,
+      // every attempt succeeding, while asserting "recovered on its prior image" — false each time:
+      // it was on the NEW image (2026-09-07).
+      //
+      // Deliberately NOT solved in reconcile(). There a disagreement is ambiguous — the provider can
+      // legitimately lag a just-finished update, and adopting its value would clobber a correctly
+      // updated row. service.test.ts "does not overwrite an existing digest" exists to prevent exactly
+      // that, and it caught this mistake when I tried it there first. HERE it is unambiguous, because
+      // we know an update was in flight and what the row held before it began.
+      try {
+        const live = await this.providerFor(rec.provider).getPod(rec.id);
+        if (live.imageDigest && live.imageDigest !== rec.imageDigest) {
+          this.log.info("update_hung_but_image_moved", {
+            podId: rec.id,
+            was: (rec.imageDigest ?? "none").slice(0, 12),
+            now: live.imageDigest.slice(0, 12),
+          });
+          await this.store
+            .update(rec.id, {
+              imageDigest: live.imageDigest,
+              status: live.status,
+              updatingSince: null,
+              updateStage: null,
+              maintenanceKind: null,
+            })
+            .catch(() => undefined);
+          await this.emit(rec, "updated", { to: live.imageDigest }).catch(() => undefined);
+          stuck.push(rec.id);
+          continue;
+        }
+      } catch (e) {
+        // Unreachable provider — fall through to the existing recover-and-fail path.
+        this.log.warn("update_hung_live_check_failed", { podId: rec.id, err: String(e) });
+      }
       // Bring the stranded (stopped) pod back up on its EXISTING image — the update failed, so we
       // recover the pod rather than retry. Best-effort: a wake failure must not stop us clearing the
       // flags, or the cockpit stays wedged on "Updating".

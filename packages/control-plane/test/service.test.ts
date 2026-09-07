@@ -334,6 +334,36 @@ describe("reconcileStuckUpdates — a hung image update is recovered, not left s
     const stuck = await svc.reconcileStuckUpdates();
     expect(stuck).not.toContain(rec.id);
   });
+
+  // The update SUCCEEDED and only the bookkeeping was lost. "podway ops" was updated three times
+  // this way and told its owner it failed three times: the row kept the pre-update digest, the
+  // watchdog fired, and the failure message asserted "recovered on its prior image" while the pod
+  // was on the NEW one (owner report, 2026-09-07).
+  it("records SUCCESS when the provider shows the pod already moved to a new image", async () => {
+    const rec = await svc.launchPod("u", "nextjs-starter");
+    await svc.provisionPending();
+    const old = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    // The row holds the PRE-update digest; the provider reports the pod on a different image.
+    await store.update(rec.id, {
+      status: "running",
+      updatingSince: old,
+      updateStage: "booting",
+      imageDigest: "sha256:before-the-update",
+    });
+
+    const stuck = await svc.reconcileStuckUpdates();
+
+    expect(stuck).toContain(rec.id);
+    const after = await store.get(rec.id);
+    // Adopted the image the pod is ACTUALLY on, and cleared the in-flight flags.
+    expect(after?.imageDigest).toBe("sha256:test");
+    expect(after?.updatingSince).toBeNull();
+    expect(after?.updateStage).toBeNull();
+    // And it is recorded as an update, not a failure.
+    const events = await store.listEvents(rec.id);
+    expect(events.map((e) => e.type)).toContain("updated");
+    expect(events.map((e) => e.type)).not.toContain("update_failed");
+  });
 });
 
 describe("ownership isolation (4.2)", () => {
