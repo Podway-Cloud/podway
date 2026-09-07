@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { LayoutGrid, Boxes, SquarePlus, Settings, UserCheck, Users, ArrowLeft, Menu, HardDrive, Sparkles, ChartNoAxesCombined, Globe, Radio, TriangleAlert } from "lucide-react";
 import UserMenu from "@/components/user-menu";
 import { cn } from "@/lib/utils";
+import { useAppHeight } from "@/lib/use-app-height";
 
 /**
  * Icons live here (a client component) and are referenced by name, because a
@@ -50,6 +51,10 @@ export default function DashboardShell({
 }) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
+
+  // Keeps the shell matched to the real viewport — see use-app-height for why dvh alone is not
+  // enough on iOS after a bfcache restore.
+  useAppHeight();
 
   useEffect(() => {
     if (userId) {
@@ -108,7 +113,7 @@ export default function DashboardShell({
   return (
     // bg-background/text-foreground so the whole dashboard re-themes (the <body> keeps the legacy
     // --bg for the landing). Identical to the body in podway, so no visual change there.
-    <div className="flex h-dvh bg-background text-foreground">
+    <div className="flex h-[var(--app-h,100dvh)] bg-background text-foreground">
       {/* Mobile top bar */}
       <header className="fixed inset-x-0 top-0 z-30 flex h-[60px] items-center gap-3 border-b border-border bg-card px-3 md:hidden">
         <button

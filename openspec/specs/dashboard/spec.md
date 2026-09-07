@@ -2140,3 +2140,31 @@ The guidance for continuing a Codex session in the ChatGPT app SHALL be defined 
 - **WHEN** the owner opens the Codex "(i)" info modal OR reaches step 2 of the pairing wizard
 - **THEN** both SHALL render the same "Continue this Codex session" mobile + desktop guidance from a single shared source, referring to the ChatGPT app and naming the pod where "[pod name]" appears
 
+### Requirement: The app shell's height follows the real viewport, not a cached one
+
+The dashboard shell pins itself to the viewport and scrolls a single inner pane. Its height SHALL be
+driven by a measured value that is refreshed when the viewport can have changed — including on
+`pageshow` (the back/forward-cache restore) and on returning to a backgrounded tab — with a viewport
+unit only as the first-paint fallback.
+
+`dvh` alone is not sufficient: iOS Safari does not reliably recompute it after a bfcache restore, so
+the shell keeps the height it had when the browser chrome was in a different state. A shell taller
+than the viewport puts the top of the scroller above the fold, so the page cannot be scrolled to its
+own heading, and leaves dead space below the last row — reported by the owner 2026-09-07, cured only
+by a reload.
+
+The measurement SHALL come from the window's inner height rather than the visual viewport, because
+the visual viewport shrinks when the on-screen keyboard opens and would collapse the shell while the
+owner is typing.
+
+#### Scenario: Returning to a page left open in the background
+
+- **WHEN** the page is restored after the viewport height has changed
+- **THEN** the shell SHALL match the current viewport, so the top of the content is reachable and no
+  dead space appears below it
+
+#### Scenario: The on-screen keyboard opens
+
+- **WHEN** a text field is focused and the keyboard covers part of the screen
+- **THEN** the shell's height SHALL NOT collapse to the reduced visual viewport
+
