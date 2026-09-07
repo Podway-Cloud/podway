@@ -283,6 +283,12 @@ COPY packages/provider/pod-base/runtime-rules.md /opt/podway/runtime-rules.md
 # Stop hook: the only part of `relentless` that does not depend on the agent remembering it.
 COPY packages/provider/pod-base/hooks/relentless-stop.py /opt/podway/hooks/relentless-stop.py
 RUN chmod +x /opt/podway/hooks/relentless-stop.py
+# SessionStart hook: the piece that was MISSING. The Stop hook enforces relentless at the moment of
+# stopping, but nothing kept the skill's posture in context across a compaction/resume — so a long
+# session silently reverted to "answer then stop" (observed live 2026-09-07). This re-injects the
+# relentless core on every startup/resume/compact, gated on the same `hold` flag.
+COPY packages/provider/pod-base/hooks/relentless-sessionstart.py /opt/podway/hooks/relentless-sessionstart.py
+RUN chmod +x /opt/podway/hooks/relentless-sessionstart.py
 # Loose-ends check: the OTHER half of relentless, and the one the stop hook structurally cannot do.
 # The hook reads the shape of a sentence; this reads STATE — a pushed branch with no PR, a stale PR,
 # an uncommitted tree. The worst real failure (three branches pushed and never turned into PRs,

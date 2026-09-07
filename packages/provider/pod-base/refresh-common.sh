@@ -176,6 +176,44 @@ PY
 fi
 # <<< podway:stop-hook
 
+# ---- SessionStart hook: keep the relentless posture across compaction/resume -------------------
+# >>> podway:sessionstart-hook
+# The Stop hook enforces relentless at the moment of stopping. But a long session that COMPACTS or
+# RESUMES loses the skill's instructions from live context — the "invoke the skill at start" line
+# survives only as summary text — and the agent silently reverts to "answer then stop" (observed
+# live 2026-09-07). This hook re-injects the relentless core on every start/resume/compact, gated
+# on the same `hold` flag, so the posture cannot be dropped by a compaction again.
+SESSIONSTART_HOOK="${SESSIONSTART_HOOK:-/opt/podway/hooks/relentless-sessionstart.py}"
+if [ -f "$SESSIONSTART_HOOK" ]; then
+  python3 - "$SETTINGS_JSON" "$SESSIONSTART_HOOK" <<'PY2' || true
+import json, os, sys
+SETTINGS, HOOK = sys.argv[1], sys.argv[2]
+try:
+    cur = json.load(open(SETTINGS)) if os.path.exists(SETTINGS) else {}
+except Exception:
+    sys.exit(0)
+entry = {"hooks": [{"type": "command", "command": HOOK}]}
+hooks = cur.setdefault("hooks", {})
+ss = hooks.get("SessionStart") or []
+DEAD = "/opt/podbay/hooks/"       # same rename-corpse guard as the Stop hook
+pruned = [g for g in ss if DEAD not in json.dumps(g)]
+dropped = len(ss) - len(pruned)
+if any(HOOK in json.dumps(g) for g in pruned):
+    if dropped:
+        hooks["SessionStart"] = pruned
+        os.makedirs(os.path.dirname(SETTINGS) or ".", exist_ok=True)
+        json.dump(cur, open(SETTINGS, "w"), indent=2)
+        print(f"init: removed {dropped} dead SessionStart hook(s)")
+    sys.exit(0)
+hooks["SessionStart"] = pruned + [entry]   # append: never drop the user's own hooks
+os.makedirs(os.path.dirname(SETTINGS) or ".", exist_ok=True)
+json.dump(cur, open(SETTINGS, "w"), indent=2)
+print("init: registered the relentless SessionStart hook")
+PY2
+  chown "$SETTINGS_OWNER" "$SETTINGS_JSON" 2>/dev/null || true
+fi
+# <<< podway:sessionstart-hook
+
 # ---- Loose-ends check: a DURABLE schedule, registered once per pod ------------------------------
 # >>> podway:loose-ends
 # The stranded-work check is NOT a scheduled job any more (owner decision, 2026-09-06). It now runs
