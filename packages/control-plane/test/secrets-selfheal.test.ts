@@ -110,6 +110,36 @@ describe("the in-pod secrets file self-heals, whatever the pod's status did", ()
     expect(calls.probes).toBe(0);
   });
 
+  it("a FAILED restore is logged, not swallowed into silence", async () => {
+    // The property that actually matters. Swallowing is correct here — one pod's failure must not
+    // stall a fleet sweep — but the failure vanishing is what made three outages invisible on
+    // 2026-09-07. Same control flow, but it reaches the log.
+    const lines: { event: string; detail?: Record<string, unknown> }[] = [];
+    const s = new PodService(provider, store, {
+      environmentsRoot: root,
+      secretVault: vault,
+      logger: {
+        debug: () => {},
+        info: (event: string, detail?: Record<string, unknown>) => lines.push({ event, detail }),
+        warn: (event: string, detail?: Record<string, unknown>) => lines.push({ event, detail }),
+        error: (event: string, detail?: Record<string, unknown>) => lines.push({ event, detail }),
+      } as never,
+    });
+    const rec = await s.launchPod("u1", "plain", { size: "s", slotCap: Infinity });
+    await s.provisionPending();
+    await store.update(rec.id, { status: "running" as never, sessionUrl: "wss://mock/session" });
+    provider.forceStatus(rec.id, "running");
+    await s.setSecret("u1", rec.id, "APIFY_API_TOKEN", "tok-1");
+
+    fileMissing(true);
+    provider.injectSecrets = (async () => {
+      throw new Error("incus push refused");
+    }) as typeof provider.injectSecrets;
+
+    await s.reconcile(rec.id); // must NOT throw — the sweep keeps going
+    expect(lines.some((l) => l.event === "best_effort_failed" || l.event === "secret_inject_failed")).toBe(true);
+  });
+
   it("is throttled — a busy reconcile loop does not exec once per tick", async () => {
     const { s, id } = await podWithSecrets();
     const calls = fileMissing(true);

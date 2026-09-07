@@ -1249,7 +1249,7 @@ export class PodService {
         (p.status === "running" && p.sessionUrl === null),
     );
     if (transient.length === 0) return this.sortForDisplay(pods);
-    await Promise.all(transient.map((p) => this.reconcile(p.id).catch(() => undefined)));
+    await Promise.all(transient.map((p) => this.bestEffort("reconcile", p.id, () => this.reconcile(p.id))));
     return this.sortForDisplay(await this.store.listByOwner(ownerId));
   }
 
@@ -1668,7 +1668,10 @@ export class PodService {
       // that missed a push would otherwise carry a silently partial plan.
       // Single-sourced with the control socket via FetchMemory.fleetPlan.
       const plan = await this.fetchMemory.fleetPlan(rec.ownerId, 500).catch(() => ({ domains: {} }));
-      await prov.pushFetchPlan(rec.id, plan).catch(() => undefined);
+      // Captured first: the optional method is narrowed by the guard above, and that narrowing
+      // does not survive into a closure.
+      const push = prov.pushFetchPlan.bind(prov);
+      await this.bestEffort("push_fetch_plan", rec.id, () => push(rec.id, plan));
     }
   }
 
@@ -2814,7 +2817,9 @@ export class PodService {
     // syncs the vault to the pod's secrets-load.sh so the RESTARTED agent's fresh `bash -lc` actually
     // sees PODWAY_AGENT_CLAUDE_OAUTH_TOKEN (without this the restart boots on an absent token).
     await this.config.secretVault.set(id, CLAUDE_OAUTH_TOKEN_SECRET, token);
-    await this.pushSecrets(id).catch(() => undefined);
+    // A failure here leaves the pod WITHOUT the agent token that was just set — the same shape
+    // as the secrets outage, so it must not vanish.
+    await this.bestEffort("push_secrets_after_agent_auth", id, () => this.pushSecrets(id));
     await this.store.update(id, { agentAuth: "setup-token" });
     await prov.patchPodSpec?.(id, { agentAuth: "setup-token" }).catch(() => undefined);
     // Relocate the subscription credential so the 1-year token ACTUALLY takes effect: `claude` prefers
@@ -4004,6 +4009,25 @@ export class PodService {
     await this.emit(rec, "secrets_restored", { keys: keys.length }).catch(() => undefined);
   }
 
+  /**
+   * Run a best-effort REPAIR and swallow its failure — but never silently.
+   *
+   * Swallowing is usually right on these paths: one pod's failure must not stall a fleet sweep, and
+   * a failed repair must not break the user action that triggered it. What is NOT right is the
+   * failure vanishing. Three separate outages on 2026-09-07 were invisible for exactly this reason
+   * — approval email that never sent, a pod running with no secrets, and the re-push that was
+   * supposed to fix it — each behind a bare `.catch(() => undefined)`.
+   *
+   * So: same control flow, but the failure reaches the log with the pod it belongs to.
+   */
+  private async bestEffort(what: string, podId: string, run: () => Promise<unknown>): Promise<void> {
+    try {
+      await run();
+    } catch (e) {
+      this.log.warn("best_effort_failed", { what, podId, error: (e as Error)?.message ?? String(e) });
+    }
+  }
+
   private async pushSecrets(podId: string): Promise<void> {
     if (!this.config.secretVault) return;
     const secrets = await this.config.secretVault.retrieveAll(podId);
@@ -4095,12 +4119,12 @@ export class PodService {
     // than the instant they happen — the pod's live state always shows them
     // immediately via /healthz.
     if (status === "running") {
-      await this.ingestRepairs(record, prov).catch(() => undefined);
+      await this.bestEffort("ingest_repairs", record.id, () => this.ingestRepairs(record, prov));
       await this.exchangeFetchMemory(record, prov).catch(() => undefined);
       await this.exchangeMessages(record, prov).catch(() => undefined);
       // Auto-sync the config layer if the env drifted from what this pod last received — the
       // reconcile hook that replaces the manual "Sync config" button (best-effort; see the method).
-      await this.reconcileConfigDrift(record, prov).catch(() => undefined);
+      await this.bestEffort("reconcile_config_drift", record.id, () => this.reconcileConfigDrift(record, prov));
       // SELF-HEAL the in-pod secrets file. This used to hang off `status !== record.status`, i.e.
       // only on a status TRANSITION — but an image update takes a pod running → running, so the
       // condition was false exactly when the file had just been destroyed by the recreate. The pod
@@ -4109,7 +4133,7 @@ export class PodService {
       // Checking the FILE instead of inferring from status is the whole point: it is true or false,
       // where a status transition was only ever a guess about it. Throttled, and skipped entirely
       // for pods with no secrets, so it costs nothing on the common path.
-      await this.reinjectSecretsIfMissing(record, prov).catch(() => undefined);
+      await this.bestEffort("reinject_secrets", record.id, () => this.reinjectSecretsIfMissing(record, prov));
     }
 
     if (status !== record.status) {
