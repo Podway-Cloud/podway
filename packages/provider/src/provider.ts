@@ -91,6 +91,12 @@ export interface SandboxProvider {
        * verbatim on-pod value — otherwise a dashboard rename was FROZEN and the greeter re-applied the
        * stale name as the Claude-app session title on every fresh session (owner report 2026-08-30). */
       name?: string | null;
+      /** The pod's CURRENT auth mode (DB `pods.agentAuth`), merged into the preserved pod-spec.
+       * Same reasoning as `name`: the spec is otherwise preserved VERBATIM, so a spec that
+       * disagrees with the DB disagrees FOREVER. t3tt carried "subscription" while the DB said
+       * "setup-token", so claude took the subscription boot path and parked on a /login screen
+       * with a perfectly valid token already in its secrets.env (owner report 2026-09-07). */
+      agentAuth?: string | null;
     },
   ): Promise<PodInfo>;
   /** Write the pod's app secrets to /etc/podway/secrets.env (0600, dev-owned) on

@@ -105,6 +105,7 @@ export function refreshSpecPermissions(
   specJson: string,
   permissions: unknown,
   name?: string | null,
+  agentAuth?: string | null,
 ): string {
   try {
     const spec = JSON.parse(specJson) as unknown;
@@ -122,6 +123,25 @@ export function refreshSpecPermissions(
       // pass it (e.g. live config-refresh) ⇒ leave podName untouched; `null` ⇒ cleared name, fall to slug.
       if (name !== undefined && JSON.stringify(s.podName ?? null) !== JSON.stringify(name ?? null)) {
         s.podName = name ?? null;
+        changed = true;
+      }
+      // Refresh agentAuth from the pod record too. The spec is otherwise preserved VERBATIM, so a
+      // spec that disagrees with the DB disagrees FOREVER — every update carries the wrong value
+      // forward. t3tt sat on "subscription" while the DB (and the dashboard) said "setup-token":
+      // claude therefore took the subscription boot path, found no credentials file, and parked on
+      // a /login screen — with a perfectly good CLAUDE_CODE_OAUTH_TOKEN sitting in its secrets.env
+      // the whole time (owner report, 2026-09-07).
+      //
+      // The divergence starts when enableT3's `patchPodSpec(... agentAuth ...)` fails: it is
+      // best-effort and swallowed, so a pod unreachable at that instant keeps the old value and
+      // nothing ever retries. Refreshing it here is the reconciliation that was missing — the same
+      // reasoning as podName above, which was added after a dashboard rename kept reverting.
+      if (
+        agentAuth !== undefined &&
+        agentAuth !== null &&
+        s.agentAuth !== agentAuth
+      ) {
+        s.agentAuth = agentAuth;
         changed = true;
       }
       if (healCockpitUrl(s)) changed = true;
@@ -544,6 +564,8 @@ export class IncusProvider implements SandboxProvider {
       claudeFiles?: { guest_path: string; raw_value: string }[];
       permissions?: unknown;
       name?: string | null;
+      /** DB `pods.agentAuth`. Refreshed into the preserved spec — see refreshSpecPermissions. */
+      agentAuth?: string | null;
     },
   ): Promise<PodInfo> {
     const stage = (s: string) => { try { onStage?.(s); } catch { /* progress is best-effort */ } };
@@ -616,7 +638,12 @@ export class IncusProvider implements SandboxProvider {
         // created with — a preset fix (or a new security deny) never reached it on update
         // (git-push prompt lingered on pre-2026-08-01 pods). Everything else in the spec
         // is preserved. See refreshSpecPermissions.
-        const specToPush = refreshSpecPermissions(preservedSpec, opts?.permissions, opts?.name);
+        const specToPush = refreshSpecPermissions(
+          preservedSpec,
+          opts?.permissions,
+          opts?.name,
+          opts?.agentAuth,
+        );
         await this.incus.pushFile(id, "/etc/podway/pod-spec.json", Buffer.from(specToPush, "utf8"));
         // Deliver the CURRENT env .claude layer with the update. The recreate wiped
         // /etc/podway/claude (ephemeral rootfs) and the home volume still carries

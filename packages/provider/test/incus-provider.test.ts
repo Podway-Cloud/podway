@@ -469,6 +469,31 @@ describe("refreshSpecPermissions", () => {
     expect(refreshSpecPermissions("{not json", fresh)).toBe("{not json");
   });
 
+  // agentAuth: the drift that survived EVERY update, because the spec is preserved verbatim.
+  //
+  // t3tt carried "subscription" while the DB and the dashboard both said "setup-token". Claude
+  // therefore took the subscription boot path, found no credentials file, and parked on a /login
+  // screen — with a perfectly valid CLAUDE_CODE_OAUTH_TOKEN already sitting in its secrets.env.
+  // Every update faithfully carried the wrong value forward (owner report, 2026-09-07).
+  it("refreshes a DRIFTED agentAuth from the pod record", () => {
+    const drifted = JSON.stringify({ slug: "t3tt", agentAuth: "subscription", other: { keep: 1 } });
+    const out = JSON.parse(refreshSpecPermissions(drifted, undefined, undefined, "setup-token"));
+    expect(out.agentAuth).toBe("setup-token");
+    expect(out.other).toEqual({ keep: 1 }); // nothing else disturbed
+  });
+
+  it("leaves agentAuth alone when the caller passes none", () => {
+    // A live config-refresh passes no agentAuth; it must never blank the pod's mode.
+    const spec = JSON.stringify({ agentAuth: "setup-token" });
+    expect(JSON.parse(refreshSpecPermissions(spec, undefined, undefined, undefined)).agentAuth).toBe("setup-token");
+    expect(JSON.parse(refreshSpecPermissions(spec, undefined, undefined, null)).agentAuth).toBe("setup-token");
+  });
+
+  it("is a no-op when the spec already agrees", () => {
+    const spec = JSON.stringify({ agentAuth: "setup-token" });
+    expect(refreshSpecPermissions(spec, undefined, undefined, "setup-token")).toBe(spec);
+  });
+
   // A dashboard rename updates the DB but the on-pod spec is preserved verbatim across an update, so
   // the greeter re-applied the STALE podName as the Claude-app session title on every fresh session —
   // reverting the user's rename after each update (owner report 2026-08-30). Refresh it from the DB.

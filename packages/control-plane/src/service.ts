@@ -3480,7 +3480,9 @@ export class PodService {
       },
       // Pass the CURRENT display name so updateImage refreshes the preserved spec's podName from the
       // DB — otherwise a dashboard rename is frozen on-pod and the Claude-app session reverts (2026-08-30).
-      { claudeFiles, permissions, name: rec.name ?? null },
+      // agentAuth travels with the update for the same reason `name` does: the pod-spec is preserved
+      // verbatim across a recreate, so the DB is the only thing that can correct a drifted value.
+      { claudeFiles, permissions, name: rec.name ?? null, agentAuth: rec.agentAuth ?? null },
     );
     const to = info.imageDigest ?? image.split("@")[1] ?? null;
     // The recreate just delivered this env's current layer — record its hash so the drift sweep
