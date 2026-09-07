@@ -57,3 +57,5 @@ export {
   type RelayConnectionRow,
   type RelayTrafficRow,
 } from "./relay-service.js";
+export * from "./custom-domains.js";
+export * from "./cert-issuer.js";

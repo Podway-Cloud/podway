@@ -651,3 +651,33 @@ export const relayTokens = pgTable(
   },
   (t) => [index("relay_tokens_owner_idx").on(t.ownerId)],
 );
+
+/**
+ * Custom domains (add-custom-domains): an owner maps a hostname to one of their pods, proves they own
+ * it (TXT challenge) + points DNS at us (CNAME, or an A record for apex), and we serve it over HTTPS
+ * with an auto-managed cert. Cloud-only feature (the surface self-gates on !editionOss); the table is
+ * additive + harmless on self-host.
+ */
+export const customDomains = pgTable(
+  "custom_domains",
+  {
+    id: text("id").primaryKey(),
+    podId: text("pod_id").notNull(),
+    ownerId: text("owner_id").notNull(),
+    hostname: text("hostname").notNull(),
+    /** "cname" (subdomain, default) or "a" (apex). */
+    recordType: text("record_type").notNull().default("cname"),
+    /** pending → verifying → active → error; plus disabled. */
+    status: text("status").notNull().default("pending"),
+    /** The TXT ownership challenge value. */
+    verifyToken: text("verify_token").notNull(),
+    verifiedAt: timestamp("verified_at"),
+    /** none / issued / renewing / failed. */
+    certStatus: text("cert_status").notNull().default("none"),
+    certNotAfter: timestamp("cert_not_after"),
+    error: text("error"),
+    lastCheckedAt: timestamp("last_checked_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("custom_domains_hostname_idx").on(t.hostname)],
+);

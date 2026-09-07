@@ -24,3 +24,4 @@ export {
   type VerifyInput,
   type VerifyResult,
 } from "./fetch-verify.js";
+export * from "./custom-domain.js";

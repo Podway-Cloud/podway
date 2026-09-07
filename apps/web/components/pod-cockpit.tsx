@@ -49,6 +49,7 @@ import ProvisionStages from "@/components/provision-stages";
 import WizardProgress from "@/components/wizard-progress";
 import SecretsPanel from "@/components/secrets-panel";
 import GithubConnect from "@/components/github-connect";
+import CustomDomainRow from "@/components/custom-domain-row";
 import { RelayInfoDialog } from "@/components/relay-info-dialog";
 import { RelayStatus } from "@/components/relay-status";
 import type { MyRelayLive } from "@/lib/relay-actions";
@@ -234,6 +235,8 @@ export interface PodCockpitProps {
   /** Self-host edition: the relay is a cloud-only concept (routes egress through podway.cloud) —
    * hide it, and any other cloud-only cockpit surfaces. */
   oss?: boolean;
+  /** The custom-domain TLS edge is provisioned; without it the domain row stays hidden. */
+  customDomainsAvailable?: boolean;
   /** Whether the T3 Code harness is enabled (agent-harness-toggle). Gates the T3 panel, the T3
    * wizard routes, and the ?enableT3 auto-enable. Default true. */
   t3Enabled?: boolean;
@@ -270,6 +273,7 @@ export default function PodCockpit(props: PodCockpitProps) {
     maintenance,
     imageDigest,
     currentVersion,
+    customDomainsAvailable = false,
     ossReleaseVersion,
     ossReleaseSummary,
     updateAvailable,
@@ -1758,6 +1762,10 @@ export default function PodCockpit(props: PodCockpitProps) {
               </Button>
             </SettingRow>
           )}
+
+          {/* Custom domain (add-custom-domains) — directly under Preview: podway URL, then your own
+              domain. Cloud-only; the row self-hides on self-host. */}
+          <CustomDomainRow slug={slug} oss={oss} provisioned={customDomainsAvailable} />
 
           {/* Fleet-updates (C): exclude a pod from the bulk "update idle pods" button. Cloud-only —
               self-host updates are a host-level compose pull, not a per-pod action. A pod running a

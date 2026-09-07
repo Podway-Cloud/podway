@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { customDomainsProvisioned } from "@/lib/custom-domain-config";
 import { requireApprovedUser } from "@/lib/access";
 import { getPodService, localPreviewUrl, hostCapacity, latestPodImageDigest } from "@/lib/pod-service";
 import { myRelayLive } from "@/lib/relay-actions";
@@ -325,6 +326,7 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
         activityEvents={activityEvents}
         relay={relay}
         oss={editionOss()}
+        customDomainsAvailable={customDomainsProvisioned()}
         t3Enabled={harnessEnabled("t3")}
         cpus={pod.cpus}
         memoryMb={pod.memoryMb}

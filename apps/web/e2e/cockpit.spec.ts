@@ -54,7 +54,11 @@ test.describe("cockpit", () => {
     await login(page, "approved");
     const slug = await launchPod(page);
     await page.goto(`/dashboard/pods/${slug}`);
-    await expect(page.getByRole("tab", { name: /admin/i })).toBeVisible();
+    // 25s, not the 5s default: this is the FIRST thing asserted after landing on the cockpit, so
+    // it waits out a cold compile of the pod route. Every other assertion in this file already
+    // allows 25s; these three did not, which made them the flakiest lines in the suite — they flake
+    // on `main` too, verified 2026-09-07 by running this spec against main with the branch stashed.
+    await expect(page.getByRole("tab", { name: /admin/i })).toBeVisible({ timeout: 25_000 });
     // Green is invisible: the strip's PRESENCE is the signal.
     await expect(page.locator("[role=status]")).toHaveCount(0);
   });
@@ -67,7 +71,7 @@ test.describe("cockpit", () => {
 
     // Healthy first: the strip's ABSENCE is the happy path, so prove it starts absent.
     await page.goto(`/dashboard/pods/${slug}`);
-    await expect(page.getByRole("tab", { name: /admin/i })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /admin/i })).toBeVisible({ timeout: 25_000 });
     await expect(page.locator("[role=status]")).toHaveCount(0);
 
     await scriptPodHealth(slug, {
@@ -114,7 +118,7 @@ test.describe("cockpit", () => {
     // leave the dashboard ribbon ("reconnect soon in the Control tab") with no action to point to.
     await scriptPodHealth(slug, { expiresAt: Date.now() + 3 * 24 * 60 * 60 * 1000 });
     await page.goto(`/dashboard/pods/${slug}`);
-    await expect(page.getByRole("tab", { name: /admin/i })).toBeVisible();
+    await expect(page.getByRole("tab", { name: /admin/i })).toBeVisible({ timeout: 25_000 });
 
     const reconnect = page.getByRole("button", { name: /reconnect claude/i });
     await expect(reconnect).toBeVisible({ timeout: 25_000 });
