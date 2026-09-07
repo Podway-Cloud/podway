@@ -1485,6 +1485,32 @@ it.
 - **WHEN** subsequent polls run
 - **THEN** it SHALL be reported unknown without paying the probe timeout, until the backoff elapses
 
+
+### Requirement: The live-signals sweep records what it actually cost
+
+The control plane SHALL record the duration of each dashboard sweep, along with how many pods it
+held, how many it probed, and how many the circuit breaker skipped, and SHALL expose a summary
+(p50/p95/max plus recent samples) on an admin-authenticated read.
+
+This exists because the sweep's cost was optimised against a synthetic bench with a mock provider.
+That models the mechanism but not real contention on the host, so a claim about production could
+not be supported by anything measured. Without this, the only available check is asking the owner
+whether the dashboard feels faster.
+
+The record SHALL be bounded, and only slow sweeps SHALL be logged — at the client's fast poll a log
+line per sweep would bury the signal it exists to surface, and unbounded history would make the
+instrumentation itself a leak.
+
+#### Scenario: Measuring a real fleet update
+
+- **WHEN** an operator reads the timing summary during a fleet update
+- **THEN** it SHALL report real sweep durations, with the probe and breaker counts for each
+
+#### Scenario: A long-running process
+
+- **WHEN** many sweeps have run
+- **THEN** the retained history SHALL stay bounded
+
 ### Requirement: Switching cockpit tabs keeps you oriented
 
 Cockpit tab panels differ in height by hundreds of pixels, and the dashboard's scroll container

@@ -113,6 +113,23 @@ const BREAKER_BASE_MS = 30_000;
 const BREAKER_MAX_MS = 5 * 60_000;
 /** Probe budget for the dashboard sweep — see the 30s control-plane default it overrides. */
 const DASHBOARD_PROBE_MS = 3_000;
+
+/** One dashboard sweep's real cost. `probed` counts pods actually asked; `breakered` counts pods
+ *  skipped by the circuit breaker — the gap between them is what the breaker is saving. */
+export interface SweepTiming {
+  at: number;
+  ms: number;
+  pods: number;
+  probed: number;
+  breakered: number;
+}
+export interface SweepTimingSummary {
+  count: number;
+  p50: number;
+  p95: number;
+  max: number;
+  recent: SweepTiming[];
+}
 /** Idle-by-inactivity floor for a pod whose agent status is UNKNOWN (null — Claude not reporting). We
  * can't confirm it's idle live, so require a much longer demonstrated inactivity than the normal dwell
  * before auto-updating it — a conservative "clearly abandoned" bar (owner decision, 2026-08-26). */
@@ -3023,7 +3040,41 @@ export class PodService {
     return gather;
   }
 
+  /**
+   * Rolling record of what the dashboard sweep actually COSTS in production.
+   *
+   * Everything measured about the 2026-09-07 stall fix was synthetic — a bench with a mock
+   * provider, which models the mechanism but not real incusd contention. This is the missing
+   * evidence: it records the true sweep durations so the next fleet update produces a real
+   * before/after instead of asking the owner whether it feels faster.
+   *
+   * Deliberately tiny and in-memory: a bounded ring of recent sweeps, no storage, no new
+   * dependency. It costs one timestamp per sweep and must never itself become a reason the
+   * dashboard is slow.
+   */
+  private sweepTimings: SweepTiming[] = [];
+
+  /** The last N sweeps, worst-first, for the admin surface. Read-only. */
+  liveSignalsTimings(): SweepTimingSummary {
+    const xs = this.sweepTimings.map((t) => t.ms).sort((a, b) => a - b);
+    const at = (q: number) => (xs.length ? xs[Math.min(xs.length - 1, Math.floor(xs.length * q))]! : 0);
+    return { count: xs.length, p50: at(0.5), p95: at(0.95), max: xs.length ? xs[xs.length - 1]! : 0, recent: this.sweepTimings.slice(-20) };
+  }
+
+  private recordSweep(t: { ms: number; pods: number; probed: number; breakered: number }): void {
+    this.sweepTimings.push({ at: Date.now(), ...t });
+    if (this.sweepTimings.length > 200) this.sweepTimings.splice(0, this.sweepTimings.length - 200);
+    // Log only the SLOW ones. A line per sweep at a 3s poll would be pure noise and would bury the
+    // signal it exists to surface.
+    if (t.ms >= 2_000) {
+      this.log.warn("live_signals_slow_sweep", t);
+    }
+  }
+
   private async gatherLiveSignals(ownerId: string): Promise<PodLiveSignals[]> {
+    const sweepStartedAt = Date.now();
+    let probed = 0;
+    let breakered = 0;
 
     const owned = (await this.store.list()).filter((p) => p.ownerId === ownerId);
     const base = (p: (typeof owned)[number]) => ({
@@ -3082,12 +3133,14 @@ export class PodService {
           // elapsed. Report it silent without spending a lane on another timeout.
           const breaker = this.liveProbeBreaker.get(p.id);
           if (breaker && breaker.fails >= BREAKER_TRIP && Date.now() < breaker.retryAt) {
+            breakered++;
             return unreachableRow();
           }
           try {
             const prov = this.providerFor(p.provider);
             // A SHORT budget: this is a user-facing poll, not a background sweep. A probe that
             // cannot answer in 3s reports the pod unknown rather than holding a lane for 30.
+            probed++;
             const h = await prov.podHealth(p.id, { timeoutMs: DASHBOARD_PROBE_MS });
             this.liveProbeBreaker.delete(p.id); // answered — closed, from the FIRST success
             const critical = h.issues.find((x) => x.severity === "critical" && !x.agent) ?? null;
@@ -3138,6 +3191,7 @@ export class PodService {
     );
     const rows = results.filter(Boolean);
     this.liveSignalsCache.set(ownerId, { at: Date.now(), rows });
+    this.recordSweep({ ms: Date.now() - sweepStartedAt, pods: owned.length, probed, breakered });
     return rows;
   }
 

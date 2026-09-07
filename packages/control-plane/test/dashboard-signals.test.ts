@@ -328,6 +328,48 @@ describe("ownerLiveSignals (dashboard card sweep)", () => {
 
   // A pod being recreated is the SLOWEST thing to probe and the least informative: its card
   // already says `updating`. Probing it spent a full timeout to learn what the row knew.
+  // The stall fix was measured on a BENCH with a mock provider. That models the mechanism, not real
+  // incusd contention — so nothing yet proves it on the box. These timings are that evidence.
+  it("records what each sweep actually cost, so prod can be measured instead of guessed", async () => {
+    const svc = new PodService(provider, store, { environmentsRoot: root });
+    await svc.launchPod("u1", "plain", { size: "s" });
+    await svc.launchPod("u1", "plain", { size: "s" });
+    await svc.provisionPending();
+
+    expect(svc.liveSignalsTimings().count).toBe(0); // nothing invented before a sweep runs
+    await svc.ownerLiveSignals("u1", { maxAgeMs: 0 });
+
+    const t = svc.liveSignalsTimings();
+    expect(t.count).toBe(1);
+    expect(t.recent[0]).toMatchObject({ pods: 2, probed: 2, breakered: 0 });
+    expect(t.recent[0]!.ms).toBeGreaterThanOrEqual(0);
+  });
+
+  it("counts the pods the BREAKER saved, which is the whole point of having one", async () => {
+    const svc = new PodService(provider, store, { environmentsRoot: root });
+    await svc.launchPod("u1", "plain", { size: "s" });
+    await svc.provisionPending();
+    provider.podHealth = async () => {
+      throw new Error("dead");
+    };
+    for (let i = 0; i < 5; i++) await svc.ownerLiveSignals("u1", { maxAgeMs: 0 });
+
+    const t = svc.liveSignalsTimings();
+    const probedTotal = t.recent.reduce((n, r) => n + r.probed, 0);
+    const savedTotal = t.recent.reduce((n, r) => n + r.breakered, 0);
+    expect(probedTotal).toBe(3); // tripped after 3
+    expect(savedTotal).toBe(2); // the remaining polls cost nothing
+  });
+
+  it("keeps a BOUNDED history — instrumentation must never become the leak", async () => {
+    const svc = new PodService(provider, store, { environmentsRoot: root });
+    await svc.launchPod("u1", "plain", { size: "s" });
+    await svc.provisionPending();
+    for (let i = 0; i < 260; i++) await svc.ownerLiveSignals("u1", { maxAgeMs: 0 });
+    expect(svc.liveSignalsTimings().count).toBeLessThanOrEqual(200);
+    expect(svc.liveSignalsTimings().recent.length).toBeLessThanOrEqual(20);
+  });
+
   it("a pod mid-update is not probed at all", async () => {
     const svc = new PodService(provider, store, { environmentsRoot: root });
     const quiet = await svc.launchPod("u1", "plain", { size: "s" });
