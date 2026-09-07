@@ -219,12 +219,26 @@ RUN pip3 install --break-system-packages --no-cache-dir 'playwright==1.61.0' \
 # Transparent egress allowlist proxy (enabled per-env by init.sh).
 COPY --from=egress-build /podway-egress /usr/local/bin/podway-egress
 
-# Node 22. NodeSource's setup can exit 0 without registering its repo (flaky
-# network) → apt silently installs Ubuntu's npm-less nodejs. Verify npm exists so
-# the build fails HERE with a clear message, not later at the CLI install.
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+# Node 24 (active LTS, maintenance to 2028-04-30). Moved off 22 on 2026-09-06: a v22 bug throws
+# once per aborted stream under a wave of client cancellations, leaks ~0.5 GB/min, and ends with the
+# server refusing connections while its listening socket stays OPEN — alive to any port-level health
+# check, serving nothing. That was a real outage on a production pod. v22 maintenance ends
+# 2027-04-30 regardless, so this move was coming anyway.
+#
+# Verified before the bump, in an isolated container, with a Node 22 CONTROL run in the same
+# container so "it's environmental" was a measurement rather than a hope: node-pty@1.1.0 compiles
+# and spawns a real PTY on v24.20.0; pnpm -r build and next build both exit 0; the pod-agent suite
+# fails the same 5 files on v22 and v24 (13 failing tests on 22, 12 on 24) — the bare container has
+# no tmux and no dev user, which this image does have.
+#
+# NodeSource's setup can exit 0 without registering its repo (flaky network) → apt silently installs
+# Ubuntu's npm-less nodejs. Verify npm exists so the build fails HERE, not later at the CLI install.
+# Assert the MAJOR too: a silent fallback to a different major is exactly the shape of failure that
+# looks like success, and the whole point of this change is which major we ship.
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
     && apt-get install -y nodejs && rm -rf /var/lib/apt/lists/* \
-    && command -v npm >/dev/null || { echo "FATAL: npm missing after node install"; exit 1; }
+    && { command -v npm >/dev/null || { echo "FATAL: npm missing after node install"; exit 1; }; } \
+    && case "$(node -v)" in v24.*) echo "node $(node -v) OK";; *) echo "FATAL: expected Node 24, got $(node -v)"; exit 1;; esac
 
 # Official CLIs (unmodified) + pnpm — baked in because `corepack enable` cannot
 # run as the unprivileged dev user (no write access to the node bin dir), which
