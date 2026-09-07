@@ -50,9 +50,6 @@ import WizardProgress from "@/components/wizard-progress";
 import SecretsPanel from "@/components/secrets-panel";
 import GithubConnect from "@/components/github-connect";
 import CustomDomainRow from "@/components/custom-domain-row";
-import { RelayInfoDialog } from "@/components/relay-info-dialog";
-import { RelayStatus } from "@/components/relay-status";
-import type { MyRelayLive } from "@/lib/relay-actions";
 import ConnectWalkthrough from "@/components/connect-walkthrough";
 import DeeplinkWalkthrough from "@/components/deeplink-walkthrough";
 import ClaudeSettingsDialog from "@/components/claude-settings-dialog";
@@ -210,6 +207,8 @@ export interface PodCockpitProps {
   lifecycle: string;
   lifecycleLocked: boolean;
   previewUrl: string | null;
+  /** The owner's own domain when it is LIVE — then it, not the preview URL, is the pod's address. */
+  customDomainUrl?: string | null;
   previewPublic: boolean;
   /** Fleet-updates (C): "off" = excluded from the bulk "update idle pods" button; "inherit" = included.
    * Cloud-only surface. */
@@ -227,9 +226,6 @@ export interface PodCockpitProps {
   walkthroughSeen: boolean;
   /** Full classified event stream for the Activity tab (newest first). */
   activityEvents: ActivityEvent[];
-  /** The OWNER's relay (their machine) — a relay serves all their pods. The INITIAL
-   * snapshot; the row's RelayStatus polls for updates from here. */
-  relay: MyRelayLive;
   gatewayUrl: string;
   initialStep: SetupStep;
   /** Self-host edition: the relay is a cloud-only concept (routes egress through podway.cloud) —
@@ -298,11 +294,11 @@ export default function PodCockpit(props: PodCockpitProps) {
     size,
     diskGb,
     previewUrl,
+    customDomainUrl = null,
     createdAt,
     lastActiveAt,
     walkthroughSeen,
     activityEvents,
-    relay,
     gatewayUrl,
     initialStep,
     oss = false,
@@ -335,11 +331,35 @@ export default function PodCockpit(props: PodCockpitProps) {
     ] ?? "metrics";
   /** The tab strip, so switching can keep it in view (see selectTab). */
   const tabsRef = useRef<HTMLDivElement>(null);
+  const tabsSentinelRef = useRef<HTMLDivElement>(null);
+  const [tabsStuck, setTabsStuck] = useState(false);
+  useEffect(() => {
+    const el = tabsSentinelRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    // CSS gives a sticky element no "am I stuck" signal, so a 1px sentinel just above it is the
+    // reliable way to know. rootMargin pulls the top edge down past the mobile header, so "out of
+    // view" means "behind the header" — exactly when the strip has taken over that space.
+    const io = new IntersectionObserver(([e]) => setTabsStuck(!e?.isIntersecting), {
+      rootMargin: "-61px 0px 0px 0px",
+      threshold: 0,
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   function selectTab(next: string) {
     setActiveTab(next);
     const sp = new URLSearchParams(searchParams.toString());
     sp.set("tab", next);
-    router.replace(`${pathname}?${sp.toString()}`, { scroll: false });
+    // history.replaceState, NOT router.replace. `router.replace` is a NAVIGATION: the App Router
+    // re-runs this page on the server — every await in page.tsx — and re-renders the whole tree, so
+    // switching a tab tore down and rebuilt the preview block (remounting its iframe) and could
+    // land you back at the top of the page. Owner report, 2026-09-07; an earlier attempt to fix the
+    // jumping treated it as a SCROLL problem and broke desktop, because the scroll was a symptom.
+    //
+    // The tab lives in `activeTab` state, and `?tab=` exists only so a refresh or a shared link
+    // lands on the right tab — that is a URL-bar concern, not a data concern, so a plain
+    // replaceState (supported by Next for exactly this) keeps the link shareable with no re-render.
+    window.history.replaceState(null, "", `${pathname}?${sp.toString()}`);
     // No auto-scroll on switch — the tab strip is now STICKY (see TabsList below), so it stays in
     // view regardless of scroll position or how much shorter the next panel is. The old approach
     // smooth-scrolled the strip to the top on every switch, which read as jumpy (owner, 2026-09-01);
@@ -1252,11 +1272,16 @@ export default function PodCockpit(props: PodCockpitProps) {
   }
 
   return (
-    // min-w-0 + overflow-x-clip: the PAGE must never scroll horizontally on mobile (owner req
-    // 2026-08-24). Any child wider than the viewport (a long URL/token, a wide row) is contained here
+    // min-w-0 + max-w-full: the PAGE must never scroll horizontally on mobile (owner req
+    // 2026-08-24). Any child wider than the viewport (a long URL/token, a wide row) is contained
     // rather than widening the page; internal scrollers (the tab strip) keep their own overflow-x-auto.
-    // overflow-x-clip (not hidden) clips without creating a scroll container or promoting overflow-y.
-    <div className="flex min-w-0 max-w-full flex-col gap-5 overflow-x-clip">
+    //
+    // The clip that used to live HERE has moved to the shell's scroller. The old comment claimed
+    // `overflow-x-clip` "clips without creating a scroll container" — MEASURED FALSE (2026-09-07):
+    // Chromium treats a clip container as the containing block for `position: sticky`, so the tab
+    // strip stuck to THIS div instead of the viewport and landed ~260px down the page, wedged under
+    // the heading. Clipping on the scroller itself contains the same overflow without trapping it.
+    <div className="flex min-w-0 max-w-full flex-col gap-5">
       {/* Header */}
       <header className="flex flex-col gap-2">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -1565,7 +1590,8 @@ export default function PodCockpit(props: PodCockpitProps) {
             <div data-tour="preview">
               <PreviewCard
                 slug={slug}
-                url={previewUrl}
+                url={customDomainUrl ?? previewUrl}
+                altUrl={customDomainUrl ? previewUrl : null}
                 isPublic={previewPublic}
                 running={status === "running"}
               />
@@ -1583,8 +1609,13 @@ export default function PodCockpit(props: PodCockpitProps) {
           pod that isn't up yet). */}
       {!onboarding && (
       <div ref={tabsRef} className="scroll-mt-4">
+      <div ref={tabsSentinelRef} aria-hidden className="h-px" />
       <Tabs value={activeTab} onValueChange={selectTab}>
-        <TabsList variant="line" className="sticky top-[60px] z-20 mb-4 max-w-full justify-start gap-5 overflow-x-auto overflow-y-clip overscroll-x-contain bg-background py-2 md:top-0 [-ms-overflow-style:none] [scrollbar-width:none] [touch-action:pan-x] [&::-webkit-scrollbar]:hidden">
+        <TabsList variant="line" className={cn("sticky top-[60px] z-20 mb-6 max-w-full justify-start gap-5 overflow-x-auto overflow-y-clip overscroll-x-contain bg-background py-2 md:top-0 [-ms-overflow-style:none] [scrollbar-width:none] [touch-action:pan-x] [&::-webkit-scrollbar]:hidden",
+          // A rule ABOVE the strip separates it from the preview block, and is DROPPED once the
+          // strip sticks — against scrolling content a floating line reads as a seam, not a
+          // separator (owner call, 2026-09-07).
+          !tabsStuck && "border-t border-border/60 pt-3")}>
           <TabsTrigger value="control" className="flex-none px-0" data-tour="tab-control">
             Control
             {/* The agent needs the owner — a dead sign-in, a gate it will not answer for itself.
@@ -1809,23 +1840,11 @@ export default function PodCockpit(props: PodCockpitProps) {
             </SettingRow>
           )}
 
-          {/* Relay is cloud-only (routes egress via podway.cloud); a self-host pod already
-              egresses from the owner's own network, so hide it in OSS. */}
-          {!oss && (
-            <SettingRow
-              label={
-                <span className="inline-flex items-center gap-1">
-                  Relay
-                  <RelayInfoDialog />
-                </span>
-              }
-              desc="Reach sites that block datacenters, through your own computer"
-            >
-              {/* One live component owns the whole right side — connected/not, tunnel
-                  health, usage — and polls so it stays current without a button. */}
-              <RelayStatus initial={relay} settingsHref="/dashboard/settings" />
-            </SettingRow>
-          )}
+          {/* The relay row lived here and has been REMOVED (owner call, 2026-09-07). The relay is
+              ONE account-level capability shared by every pod — the settings page says so in its own
+              comment — so a per-pod row implied per-pod relays, and the usage figures it showed were
+              account-wide totals rendered against a single pod. It lives in Dashboard Settings only.
+              components/relay-status.tsx is still used there. */}
 
           <GithubConnect slug={slug} />
             </CardContent>

@@ -2,7 +2,7 @@ import DashboardPage from "@/components/dashboard-page";
 import RelayConnectCard from "@/components/relay-connect-card";
 import { GithubAccountCard } from "@/components/github-account-card";
 import ThemeSwitcher from "@/components/theme-switcher";
-import { myRelayStatus } from "@/lib/relay-actions";
+import { myRelayLive } from "@/lib/relay-actions";
 import { editionOss } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,10 @@ export default async function SettingsPage() {
   // no part of — and a self-host pod already egresses from the owner's own network. So it's not a
   // thing in OSS; don't show it (nor mint a relay command that can't work).
   const oss = editionOss();
-  const relay = oss ? null : await myRelayStatus();
+  // myRelayLive, not myRelayStatus: this page is now the ONLY place the relay is shown (the per-pod
+  // row was removed 2026-09-07), so it must carry everything that row did — tunnel health and usage,
+  // not just connected/not. Removing a surface must not quietly delete the information it held.
+  const relay = oss ? null : await myRelayLive();
   return (
     <DashboardPage title="Settings">
       <div className="space-y-6">

@@ -345,7 +345,11 @@ export default function SecretsPanel({ slug }: { slug: string }) {
         </div>
       )}
 
-      <div className="rounded-xl border border-dashed border-border p-4">
+      {/* MOBILE: no box. A dashed card inside an already-framed tab panel is a second border that
+          eats horizontal padding on a narrow screen (owner call, 2026-09-07). The section still has
+          to read as separate from the variables below it, so it keeps a darker fill and a rule —
+          separation by SURFACE rather than by outline. The dashed card returns at sm+. */}
+      <div className="-mx-4 border-y border-border/60 bg-white/[0.02] px-4 py-4 sm:mx-0 sm:rounded-xl sm:border sm:border-dashed sm:border-border sm:bg-transparent sm:p-4">
         <p className="text-[13px] font-semibold">Add a variable</p>
         <p className="mt-0.5 text-[12px] text-muted-foreground">
           Or paste a whole <code className="rounded bg-muted px-1 py-0.5 text-[11px]">.env</code> (or
@@ -356,7 +360,7 @@ export default function SecretsPanel({ slug }: { slug: string }) {
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Input
             className="w-full font-mono text-sm sm:w-48"
-            placeholder="NAME"
+            placeholder="Name"
             value={newKey}
             disabled={pending}
             onChange={(e) => setNewKey(e.target.value.toUpperCase())}

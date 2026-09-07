@@ -155,18 +155,15 @@ test("VISUAL launch wizard — name required, secret persists, review size", asy
   await page.screenshot({ path: `${OUT}/wizard-review-size.png`, fullPage: true });
 });
 
-// The relay row's ⓘ — the owner's one explanation of what the relay does and its limits.
-test("VISUAL cockpit relay ⓘ explains the relay", async ({ page }) => {
+// The relay ⓘ — the owner's one explanation of what the relay does and its limits. It moved from
+// the per-pod row to Dashboard Settings when the relay was consolidated to one account-level
+// surface (2026-09-07); this test moved with it rather than being deleted, because the explanation
+// still has to exist SOMEWHERE.
+test("VISUAL settings relay ⓘ explains the relay", async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1100, height: 950 });
   await login(page, "approved");
-  const slug = await launchPod(page);
-  await page.goto(`/dashboard/pods/${slug}?tab=settings`);
-  const tour = page.getByTestId("connect-walkthrough");
-  if (await tour.isVisible().catch(() => false)) {
-    const done = tour.getByRole("button", { name: /^(done|next)$/i });
-    for (let i = 0; i < 7 && (await done.isVisible().catch(() => false)); i++) await done.click();
-  }
+  await page.goto(`/dashboard/settings`);
   await page.getByRole("button", { name: /what is the relay/i }).click();
   await page.getByText(/not an anonymous proxy/i).waitFor({ timeout: 15_000 });
   await page.screenshot({ path: `${OUT}/relay-info.png`, fullPage: true });

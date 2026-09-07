@@ -27,11 +27,14 @@ import { getPodAppListening } from "@/lib/actions";
 function PreviewCard({
   slug,
   url,
+  altUrl = null,
   isPublic,
   running,
 }: {
   slug: string;
   url: string;
+  /** The preview URL, shown quietly beneath when a custom domain has taken the primary slot. */
+  altUrl?: string | null;
   isPublic: boolean;
   running: boolean;
 }) {
@@ -118,10 +121,22 @@ function PreviewCard({
         )}
         <CopyCodeButton
           code={host}
-          title="Copy the preview URL"
+          title={altUrl ? "Copy the pod's address" : "Copy the preview URL"}
           className="order-last w-full px-2.5 py-1.5 text-[12.5px] font-normal sm:order-none sm:w-auto sm:min-w-0 sm:flex-1"
         />
       </div>
+
+      {/* When the owner's own domain is live it takes the primary slot above, but the preview URL
+          never goes away — it is the address that works regardless of anyone's DNS, so it stays
+          reachable rather than being replaced. */}
+      {altUrl && (
+        <p className="px-3.5 pb-1 text-[12px] text-muted-foreground">
+          Also at{" "}
+          <a className="underline underline-offset-2 hover:text-foreground" href={altUrl} target="_blank" rel="noopener">
+            {altUrl.replace(/^https?:\/\//, "")}
+          </a>
+        </p>
+      )}
 
       {/* All non-iframe states reserve the SAME height as the live frame (h-[220px]/sm:h-[280px]) so
           the preview block never grows when the app finishes loading — that growth used to shove the

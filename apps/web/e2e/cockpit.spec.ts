@@ -60,7 +60,35 @@ test.describe("cockpit", () => {
     // on `main` too, verified 2026-09-07 by running this spec against main with the branch stashed.
     await expect(page.getByRole("tab", { name: /admin/i })).toBeVisible({ timeout: 25_000 });
     // Green is invisible: the strip's PRESENCE is the signal.
-    await expect(page.locator("[role=status]")).toHaveCount(0);
+    await expect(page.getByTestId("health-strip")).toHaveCount(0);
+  });
+
+  test("switching tabs does NOT re-render the page — the preview block survives", async ({ page }) => {
+    // Owner report 2026-09-07: switching a tab "rerenders the whole preview block and sometimes the
+    // scroll position changes". Cause: selectTab called router.replace, which in the App Router is a
+    // NAVIGATION — the page re-runs on the server and the whole tree is rebuilt.
+    await login(page, "approved");
+    const slug = await launchPod(page);
+    await page.goto(`/dashboard/pods/${slug}`);
+    await expect(page.getByRole("tab", { name: /admin/i })).toBeVisible({ timeout: 25_000 });
+
+    // Tag the live preview node. A re-render replaces the DOM node, so the tag disappears with it —
+    // which is a far more direct assertion than watching for a flicker.
+    const preview = page.locator('[data-tour="preview"]');
+    await expect(preview).toHaveCount(1);
+    await preview.evaluate((el) => el.setAttribute("data-survived", "yes"));
+
+    // The DETERMINISTIC signal: history.replaceState updates the URL synchronously with the click,
+    // while a router navigation resolves later. Reading it with NO wait separates the two reliably —
+    // the node-survival check alone did not (it passed on a retry against the old code).
+    await page.getByRole("tab", { name: /settings/i }).click();
+    expect(new URL(page.url()).searchParams.get("tab")).toBe("settings");
+    await page.getByRole("tab", { name: /admin/i }).click();
+    expect(new URL(page.url()).searchParams.get("tab")).toBe("admin");
+
+    // ...and no re-render tore the preview out from under it.
+    await page.waitForTimeout(600);
+    await expect(page.locator('[data-tour="preview"][data-survived="yes"]')).toHaveCount(1);
   });
 
   test("an unhealthy pod SAYS so — the strip appears only when there is something to say", async ({
@@ -72,7 +100,7 @@ test.describe("cockpit", () => {
     // Healthy first: the strip's ABSENCE is the happy path, so prove it starts absent.
     await page.goto(`/dashboard/pods/${slug}`);
     await expect(page.getByRole("tab", { name: /admin/i })).toBeVisible({ timeout: 25_000 });
-    await expect(page.locator("[role=status]")).toHaveCount(0);
+    await expect(page.getByTestId("health-strip")).toHaveCount(0);
 
     await scriptPodHealth(slug, {
       issues: [
@@ -96,7 +124,7 @@ test.describe("cockpit", () => {
     });
 
     await page.reload();
-    const strip = page.locator("[role=status]");
+    const strip = page.getByTestId("health-strip");
     await expect(strip).toHaveCount(1, { timeout: 25_000 });
     await expect(strip).toContainText(/almost out of disk/i);
     await expect(strip, "an agent's problem must not be duplicated into the strip").not.toContainText(
@@ -106,7 +134,7 @@ test.describe("cockpit", () => {
     // …and it goes away again when the pod recovers.
     await scriptPodHealth(slug, null);
     await page.reload();
-    await expect(page.locator("[role=status]")).toHaveCount(0, { timeout: 25_000 });
+    await expect(page.getByTestId("health-strip")).toHaveCount(0, { timeout: 25_000 });
   });
 
   test("a signed-in-but-EXPIRING login offers a confirm-gated Reconnect in the Control tab", async ({

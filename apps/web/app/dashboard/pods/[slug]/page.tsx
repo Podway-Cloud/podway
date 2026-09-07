@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import { customDomainsProvisioned } from "@/lib/custom-domain-config";
+import { listCustomDomains } from "@/lib/custom-domain-actions";
 import { requireApprovedUser } from "@/lib/access";
 import { getPodService, localPreviewUrl, hostCapacity, latestPodImageDigest } from "@/lib/pod-service";
-import { myRelayLive } from "@/lib/relay-actions";
 import { imageState, sameDigest } from "@/lib/pod-image";
 import { fetchSelfHostRelease } from "@/lib/self-host-releases";
 import { getEnvironmentDetail } from "@/lib/environments";
@@ -127,7 +127,14 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
   // Cloud derives the preview from PODWAY_PREVIEW_BASE; self-host has none, so fall back to the
   // container's published :3000 (http://127.0.0.1:<port>) so the running dev server is openable.
   const previewUrl = previewBase ? `https://${pod.id}.${previewBase}` : await localPreviewUrl(pod.id);
-  const [envDetail, usage, adminActions, relay] = await Promise.all([
+  // Once an owner's own domain is LIVE it is the pod's real address, so the preview card leads with
+  // it and keeps the preview URL as the always-there fallback. Only an `active` domain counts: a
+  // domain still verifying has no certificate, so pointing anyone at it yields a TLS error.
+  const liveDomain = customDomainsProvisioned()
+    ? (await listCustomDomains(slug).catch(() => [])).find((d) => d.status === "active") ?? null
+    : null;
+  const customDomainUrl = liveDomain ? `https://${liveDomain.hostname}` : null;
+  const [envDetail, usage, adminActions] = await Promise.all([
     getEnvironmentDetail(pod.environmentName),
     // Usage is derived from this pod's event log (Stats tab). Null until the log
     // has anything — events only exist from their deploy forward, no backfill.
@@ -136,16 +143,6 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
     // update, roll back and repair their pod — and they had no way to know it was
     // us. Comfortable doing it ⇒ comfortable saying it.
     svc.podAdminActions(user.id, pod.id).catch(() => []),
-    // The owner's relay (their machine) — connected?, signed-in sites, tunnel health,
-    // usage — in one shape the cockpit then POLLS to stay near-realtime.
-    myRelayLive().catch(() => ({
-      connected: false,
-      loginDomains: [] as string[],
-      dropCount: 0,
-      lastDroppedAt: null,
-      health: null,
-      usage: null,
-    })),
   ]);
   // "Update available" without a live provider call: compare the digest recorded
   // on the row against the image we pin NOW — per provider, since a Fly OCI digest
@@ -315,6 +312,7 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
         lifecycle={pod.lifecycle}
         lifecycleLocked={envDetail?.lifecycle.locked ?? false}
         previewUrl={previewUrl}
+        customDomainUrl={customDomainUrl}
         previewPublic={pod.previewPublic}
         autoUpdate={pod.autoUpdate}
         sessionUrl={pod.sessionUrl}
@@ -324,7 +322,6 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
         lastActiveAt={pod.lastActiveAt}
         walkthroughSeen={walkthroughSeen}
         activityEvents={activityEvents}
-        relay={relay}
         oss={editionOss()}
         customDomainsAvailable={customDomainsProvisioned()}
         t3Enabled={harnessEnabled("t3")}

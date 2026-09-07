@@ -51,6 +51,10 @@ export default function HealthStrip({ slug, running }: { slug: string; running: 
   return (
     <div
       role="status"
+      // Identifies the STRIP specifically. `[role=status]` is not enough: tab-dot.tsx uses the
+      // same role, so a pod with agent issues renders several live regions and a count of
+      // `[role=status]` silently measures the wrong thing (it hard-failed CI 2026-09-07).
+      data-testid="health-strip"
       className={`flex flex-col gap-2 rounded-xl border px-4 py-3 ${
         critical ? "border-destructive/50 bg-destructive/[0.06]" : "border-warning/50 bg-warning/[0.06]"
       }`}

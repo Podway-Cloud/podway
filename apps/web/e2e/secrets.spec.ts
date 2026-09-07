@@ -23,7 +23,7 @@ test.describe("secrets tab", () => {
     await dismissWalkthrough(page);
     await expect(page.getByRole("heading", { name: "Secrets" })).toBeVisible();
 
-    await page.getByPlaceholder("NAME").fill("FOO_TEST");
+    await page.getByPlaceholder("Name").fill("FOO_TEST");
     await page.getByPlaceholder(/Enter value/i).fill("alpha");
     await page.getByRole("button", { name: /^Add$/ }).click();
 
@@ -48,7 +48,7 @@ test.describe("secrets tab", () => {
     await expect(page.getByRole("heading", { name: "Secrets" })).toBeVisible();
 
     // Store a value, then prove the owner can reveal it in the masked field.
-    await page.getByPlaceholder("NAME").fill("PEEK_TOKEN");
+    await page.getByPlaceholder("Name").fill("PEEK_TOKEN");
     await page.getByPlaceholder(/Enter value/i).fill("peekaboo-123");
     await page.getByRole("button", { name: /^Add$/ }).click();
 

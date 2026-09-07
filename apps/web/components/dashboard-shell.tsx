@@ -154,8 +154,14 @@ export default function DashboardShell({
       {/* Content is left-aligned (DashboardPage drops the mx-auto), with a comfortable gutter
           from the sidebar — 16px on a phone, 32px on desktop (owner wanted more air than the
           tight sidebar-rhythm value). */}
-      <main className="min-w-0 flex-1 overflow-y-auto px-4 pb-20 pt-[76px] sm:px-8 md:pt-7">
+      {/* The top padding lives on the INNER wrapper, not on this scrollport. A sticky child measures
+          its offset from the scrollport's CONTENT box, so padding-top here silently ADDS to every
+          sticky `top` inside — the cockpit tab strip asked for 60px and landed at 136px (measured
+          2026-09-07), leaving a 76px band where the page heading sat half-hidden behind it. */}
+      <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-8 md:pt-7">
+        <div className="pb-20 pt-[76px] md:pt-0">
         {children}
+        </div>
       </main>
     </div>
   );

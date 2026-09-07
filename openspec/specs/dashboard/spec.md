@@ -2167,4 +2167,84 @@ owner is typing.
 
 - **WHEN** a text field is focused and the keyboard covers part of the screen
 - **THEN** the shell's height SHALL NOT collapse to the reduced visual viewport
+### Requirement: The cockpit tab strip sticks directly below the header
+
+The tab strip SHALL stick flush beneath the mobile header, with a rule separating it from the block
+above that is REMOVED once it sticks, and clear space beneath it.
+
+Two things make this easy to get silently wrong, and both were shipped:
+
+- A sticky child measures its offset from the scrollport's CONTENT box, so top padding on the
+  scroll container ADDS to every sticky offset inside it. The strip asked for 60px and stuck at
+  136px, leaving a band in which the page heading sat half-hidden behind it. Padding intended to
+  clear a fixed header therefore MUST NOT live on the scrollport itself.
+- `overflow: clip` on an ancestor makes that ancestor the containing block for a sticky descendant,
+  so horizontal-overflow guards MUST NOT be placed on an ancestor of a sticky element. The page's
+  no-horizontal-scroll guarantee belongs on the scroll container.
+
+#### Scenario: The same page on desktop
+
+- **WHEN** the strip sticks on a viewport with no fixed header
+- **THEN** it SHALL keep the page's normal top spacing rather than sitting flush against the edge —
+  a mobile-only correction MUST NOT change the desktop resting position
+
+#### Scenario: Scrolling a long cockpit tab on mobile
+
+- **WHEN** the owner scrolls a tab whose content is taller than the viewport
+- **THEN** the strip SHALL come to rest immediately below the header, with no band of content
+  trapped between them
+
+#### Scenario: The strip is stuck
+
+- **WHEN** the strip is stuck
+- **THEN** the rule above it SHALL NOT be drawn, so it does not read as a seam over moving content
+
+### Requirement: Switching a cockpit tab does not re-render the page
+
+Selecting a tab SHALL update `?tab=` in the address bar without performing a navigation. The tab is
+client state; the query parameter exists only so a refresh or a shared link opens on the right tab.
+
+A router navigation re-runs the page on the server and rebuilds the whole tree, which tore down and
+remounted the preview block — including its iframe — on every tab switch, and could return the
+reader to the top of the page. An earlier attempt treated the jumping as a SCROLL problem and had to
+be rolled back because it broke desktop; the scroll was a symptom of the re-render, not the cause.
+
+#### Scenario: Switching tabs with the preview open
+
+- **WHEN** the owner switches cockpit tabs
+- **THEN** the preview block SHALL NOT be re-created, and the scroll position SHALL be preserved
+
+#### Scenario: Sharing or refreshing a cockpit link
+
+- **WHEN** a cockpit URL carrying `?tab=` is opened or refreshed
+- **THEN** it SHALL open on that tab
+
+### Requirement: The relay is presented once, at the account level
+
+The relay is a single owner-level capability shared by all of an owner's pods, and SHALL be
+presented in the owner's settings rather than on an individual pod. In particular, relay usage
+figures are account-wide totals and MUST NOT be rendered against one pod, where they read as that
+pod's traffic.
+
+The owner's settings SHALL carry EVERYTHING the per-pod surface carried — connection state, the
+signed-in domains, tunnel health, and traffic. Consolidating a surface must not delete the
+information it held: moving the relay to one place while showing less there is a regression wearing
+the clothes of a cleanup.
+
+#### Scenario: Viewing a pod's settings
+
+- **WHEN** the owner opens a pod's settings
+- **THEN** relay state and usage SHALL NOT appear there
+
+### Requirement: A live custom domain is the pod's address
+
+When a pod has an `active` custom domain, the preview surface SHALL lead with that domain, and SHALL
+continue to offer the preview URL as a secondary address — the preview URL works regardless of the
+owner's DNS and must remain reachable. A domain that is not yet active MUST NOT be promoted, because
+it has no certificate and would present a TLS error rather than a page.
+
+#### Scenario: A pod with a live custom domain
+
+- **WHEN** the owner opens the cockpit
+- **THEN** the primary address shown SHALL be the custom domain, with the preview URL still offered
 
