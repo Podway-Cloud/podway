@@ -203,7 +203,11 @@ export function AgenticBehaviorDialog({
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
-          <Button variant="outline" size="sm" onClick={save} disabled={saving}>
+          {/* DEFAULT (blue), matching claude-settings-dialog's Save — the sibling this dialog already
+              borrowed its Toggle from. A dialog's primary confirm is blue across the app; `outline`
+              is for a row-level mutating action (Update, Add agent, Reconnect). ui-patterns.md only
+              described the row case, so following it literally made this the odd one out. */}
+          <Button size="sm" onClick={save} disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </Button>
         </DialogFooter>
