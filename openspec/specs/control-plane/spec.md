@@ -547,3 +547,31 @@ SHALL leave state unchanged rather than starting a duplicate.
 
 - **WHEN** the same add request is made twice
 - **THEN** the second SHALL be a no-op rather than spawning a second instance of that agent
+
+### Requirement: The pod's secrets file self-heals from the vault
+
+The vault is the source of truth and the in-pod secrets file is a materialisation of it. The control
+plane SHALL verify that file exists on a running pod that has secrets, and restore it when it does
+not — regardless of what the pod's status has or has not done.
+
+Restoration MUST NOT be conditioned on a status TRANSITION. An image update recreates the instance
+from a fresh root filesystem, destroying the file, and takes the pod running → running — so a
+transition-gated restore is skipped at precisely the moment it is needed. A pod then runs
+indefinitely with no secrets: its scheduled work fails, and it reports to its owner that the secrets
+are gone when they are safe in the vault (observed 2026-09-07).
+
+A failed restoration MUST be logged as an error and MUST NOT be swallowed, and a restoration MUST be
+recorded on the pod's timeline — a pod that has been running without its secrets has been failing
+silently, and that is owner-visible history. The check SHALL be throttled and SHALL be skipped
+entirely for pods that have no secrets.
+
+#### Scenario: An image update destroys the file
+
+- **WHEN** a running pod with secrets is recreated and its secrets file is absent
+- **THEN** the next reconcile SHALL restore it from the vault and record the restoration
+
+#### Scenario: A healthy pod
+
+- **WHEN** the file is present, or the pod has no secrets at all
+- **THEN** nothing SHALL be pushed, and a pod with no secrets SHALL NOT be probed
+

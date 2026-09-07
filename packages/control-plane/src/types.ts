@@ -38,6 +38,10 @@ export type PodEventType =
   // Live config-refresh: pod-base content (skills/rules/settings) pushed + re-applied to a
   // RUNNING pod without a recreate. meta: { refreshed, files, note? }.
   | "config_refreshed"
+  // The pod's /etc/podway/secrets.env was found MISSING and restored from the vault. Worth an
+  // event, not just a log line: a pod that has been running without its secrets has been failing
+  // silently, and the owner deserves that on the timeline (2026-09-07). meta: { keys }.
+  | "secrets_restored"
   | "admin_action"
   // The owner revealed a stored secret value in the cockpit. meta: { key }. Audited
   // because it is the one path that returns a plaintext secret to a browser.

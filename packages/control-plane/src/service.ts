@@ -3688,7 +3688,15 @@ export class PodService {
     // them up). Best-effort; a later reconcile/wake also re-injects.
     if (info.status === "running" && this.config.secretVault) {
       const keys = await this.config.secretVault.listKeys(id).catch(() => [] as string[]);
-      if (keys.length > 0) await this.pushSecrets(id).catch(() => undefined);
+      if (keys.length > 0) {
+        // NOT swallowed. This failing means the pod comes back WITHOUT its secrets, and until
+        // 2026-09-07 that was invisible: the ops pod ran for hours with no APIFY/TELEGRAM keys,
+        // its jobs failed, and it told its owner the secrets were "gone" — they were safe in the
+        // vault the whole time. A pod running without its secrets must never look healthy.
+        await this.pushSecrets(id).catch((e) => {
+          this.log.error("secret_reinject_after_update_failed", { podId: id, error: String(e) });
+        });
+      }
     }
     // from→to is the rollback target and the failure detector (docs P2.5).
     await this.emit(rec, "updated", { from, to });
@@ -3960,6 +3968,42 @@ export class PodService {
 
   /** Push the pod's current secret set to the running pod as env vars (system op).
    * Best-effort: a failure leaves the DB as source of truth for the next wake. */
+  /** Per-pod throttle for the secrets-file check — one cheap exec, not one per reconcile tick. */
+  private readonly secretsCheckedAt = new Map<string, number>();
+
+  /**
+   * Ensure the pod's `/etc/podway/secrets.env` actually exists, and restore it from the vault when
+   * it does not.
+   *
+   * The vault is the source of truth and the in-pod file is a MATERIALISATION of it, so the only
+   * honest question is "is the file there?". The previous design asked "did the status just
+   * change?" — a proxy that silently stopped matching the moment a recreate left the pod in the
+   * same status it started in.
+   */
+  private async reinjectSecretsIfMissing(
+    rec: PodRecord,
+    prov: SandboxProvider,
+  ): Promise<void> {
+    if (!this.config.secretVault || rec.status !== "running") return;
+    const CHECK_EVERY_MS = 10 * 60_000;
+    const last = this.secretsCheckedAt.get(rec.id) ?? 0;
+    if (Date.now() - last < CHECK_EVERY_MS) return;
+    this.secretsCheckedAt.set(rec.id, Date.now());
+
+    const keys = await this.config.secretVault.listKeys(rec.id).catch(() => [] as string[]);
+    if (keys.length === 0) return; // nothing to restore; no exec for this pod at all
+
+    const probe = await prov
+      .exec(rec.id, ["test", "-s", "/etc/podway/secrets.env"])
+      .catch(() => null);
+    if (!probe) return; // couldn't ask — say nothing rather than guess
+    if (probe.exitCode === 0) return; // present and non-empty
+
+    this.log.error("secrets_file_missing_restoring", { podId: rec.id, keys: keys.length });
+    await this.pushSecrets(rec.id);
+    await this.emit(rec, "secrets_restored", { keys: keys.length }).catch(() => undefined);
+  }
+
   private async pushSecrets(podId: string): Promise<void> {
     if (!this.config.secretVault) return;
     const secrets = await this.config.secretVault.retrieveAll(podId);
@@ -4057,12 +4101,22 @@ export class PodService {
       // Auto-sync the config layer if the env drifted from what this pod last received — the
       // reconcile hook that replaces the manual "Sync config" button (best-effort; see the method).
       await this.reconcileConfigDrift(record, prov).catch(() => undefined);
+      // SELF-HEAL the in-pod secrets file. This used to hang off `status !== record.status`, i.e.
+      // only on a status TRANSITION — but an image update takes a pod running → running, so the
+      // condition was false exactly when the file had just been destroyed by the recreate. The pod
+      // then ran indefinitely with no secrets and nothing noticed (owner report, 2026-09-07).
+      //
+      // Checking the FILE instead of inferring from status is the whole point: it is true or false,
+      // where a status transition was only ever a guess about it. Throttled, and skipped entirely
+      // for pods with no secrets, so it costs nothing on the common path.
+      await this.reinjectSecretsIfMissing(record, prov).catch(() => undefined);
     }
 
     if (status !== record.status) {
-      // First time the pod is reachable (wake/boot): re-inject its secrets, since
-      // the in-pod file is ephemeral and the DB is the source of truth. Only when
-      // the pod actually has secrets set, so pod-free-of-secrets pays no exec.
+      // On a real TRANSITION (wake/boot) push unconditionally: a secret set while the pod slept has
+      // never reached it, so the file can exist and still be stale — a existence check would miss
+      // that. This is kept ALONGSIDE the self-heal above, not replaced by it; deleting it broke
+      // "re-injects on wake for a pod whose secret was set while asleep", which was right to fail.
       if (status === "running" && this.config.secretVault) {
         const keys = await this.config.secretVault.listKeys(id).catch(() => [] as string[]);
         if (keys.length > 0) await this.pushSecrets(id);
