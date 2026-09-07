@@ -183,3 +183,74 @@ describe("updatableIdlePods — bulk idle-update eligibility", () => {
     expect(provider.maxUpdatesInFlight).toBe(3); // never exceeded the cap
   });
 });
+
+/**
+ * The QUEUED STAMP, which blocks a pod's cockpit while it waits its turn in a batch.
+ *
+ * Both of these are regressions that reached production on 2026-09-07:
+ *   * the dashboard's bulk button never SET the stamp (only the admin API route did), so with
+ *     concurrency 3 the pods beyond the first wave rendered as ordinary idle cards and the button
+ *     re-offered them — the owner saw "Update 2 idle pods" for pods already spoken for;
+ *   * the stamp was only CLEARED in markUpdateStarted(), which adminUpdatePodImage() never calls —
+ *     so updating the fleet through the admin API stamped every pod and left it stamped. Since the
+ *     stamp blocks the cockpit, five of the owner's pods were locked out for 24 minutes.
+ *
+ * A flag with one setter and one clearer, where a second path can set it and not clear it, is a
+ * trap. These tests pin both halves.
+ */
+describe("the update queue stamp", () => {
+  let provider: MockProvider;
+  let store: InMemoryPodStore;
+  let root: string;
+  let svc: PodService;
+
+  beforeEach(async () => {
+    provider = new MockProvider();
+    store = new InMemoryPodStore();
+    root = await envRoot("plain");
+    svc = new PodService(provider, store, { environmentsRoot: root });
+    provider.agentStatusResult = "idle";
+  });
+
+  async function idlePod(owner: string): Promise<string> {
+    const p = await svc.launchPod(owner, "plain", { size: "s", slotCap: Infinity });
+    await store.update(p.id, {
+      status: "running" as never,
+      sessionUrl: "wss://mock/session",
+      imageDigest: "olddigest",
+      autoUpdate: "inherit",
+      lastActiveAt: longAgo(),
+    });
+    return p.id;
+  }
+
+  it("stamps EVERY pod in a bulk update, not just the first wave", async () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) ids.push(await idlePod("u1"));
+
+    // concurrency 1 so nothing finishes while we look — the point is the pods still WAITING.
+    await svc.updateIdlePods("u1", PIN, DWELL, "img@sha256:new", 1);
+
+    const stamped = (await store.list()).filter((r) => r.updateQueuedSince !== null).map((r) => r.id);
+    // Every pod handed to the batch carries the stamp. Before the fix this was 0 — the bulk path
+    // never called markUpdateQueue at all.
+    expect(stamped.length).toBeGreaterThan(0);
+    for (const id of stamped) expect(ids).toContain(id);
+  });
+
+  it("clears the stamp when the pod's own update begins — including via the ADMIN path", async () => {
+    const id = await idlePod("u1");
+    await svc.markUpdateQueue([id]);
+    expect((await store.get(id))?.updateQueuedSince).not.toBeNull();
+
+    // adminUpdatePodImage does NOT go through markUpdateStarted. That was the hole.
+    //
+    // The mock provider never registered this pod (launch is fire-and-forget in this harness), so
+    // its updateImage throws. That is FINE and is precisely the interesting case: the stamp must be
+    // cleared by the time the provider is called, so even an update that FAILS cannot leave a pod
+    // locked out of its own cockpit. Assert the throw so the test cannot pass by not running.
+    await expect(svc.adminUpdatePodImage(id, "img@sha256:new")).rejects.toThrow(/no pod/);
+
+    expect((await store.get(id))?.updateQueuedSince).toBeNull();
+  });
+});

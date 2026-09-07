@@ -2373,6 +2373,15 @@ export class PodService {
   ): Promise<{ started: string[] }> {
     const slugs = await this.updatableIdlePods(ownerId, pin, dwellMs);
     if (slugs.length === 0) return { started: [] };
+    // Mark the WHOLE batch queued before any of it starts — the same thing the admin API route does,
+    // and it was missing here (owner report, 2026-09-07: "shows updating 5, but the 2 in Q are shown
+    // as regular cards"). With concurrency 3, pods 4..N sat with no durable marker at all: their
+    // cards read as ordinary idle pods, and the bulk button re-offered them as "Update 2 idle pods"
+    // because the only thing hiding them was per-session client state that any re-render resets.
+    //
+    // markUpdateStarted() clears each pod's stamp when its own recreate begins, so the badge never
+    // outlives the wait it describes.
+    await this.markUpdateQueue(slugs);
     // Process the recreates in the BACKGROUND, at most `concurrency` at once — firing all N at once
     // was N simultaneous Incus recreates on the box (a thundering herd at fleet scale). Detached so
     // the action returns immediately; each pod's row flips to "updating" only when its recreate
@@ -2392,6 +2401,7 @@ export class PodService {
     concurrency: number,
   ): Promise<void> {
     let next = 0;
+    const unreached = new Set(slugs);
     const lane = async (): Promise<void> => {
       while (next < slugs.length) {
         const id = slugs[next++]!;
@@ -2399,11 +2409,21 @@ export class PodService {
           await this.applyPodImageUpdate(ownerId, id, image);
         } catch (e) {
           this.log.warn("bulk_update_pod_failed", { id, err: String(e) });
+        } finally {
+          // Reached either way: a pod whose update FAILED must not keep a "queued" badge.
+          unreached.delete(id);
         }
       }
     };
     const lanes = Math.max(1, Math.min(concurrency, slugs.length));
-    await Promise.all(Array.from({ length: lanes }, () => lane()));
+    try {
+      await Promise.all(Array.from({ length: lanes }, () => lane()));
+    } finally {
+      // Anything the lanes never reached must not stay flagged as still-waiting. A stale "queued"
+      // badge locks a pod out of its own cockpit, which is a worse failure than the interruption the
+      // stamp exists to prevent — so clear on every path, exactly as the admin route does.
+      if (unreached.size) await this.clearUpdateQueue([...unreached]).catch(() => undefined);
+    }
   }
 
   /** Record that the owner has seen the post-create connect walkthrough, so it never
@@ -3372,7 +3392,18 @@ export class PodService {
     // the provider touches the instance. This sits INSIDE the detached runner so the
     // brief wait is covered by the durable update-progress the cockpit already renders,
     // rather than making the owner's click feel hung.
-    await this.store.update(id, { updateStage: "handoff" }).catch(() => undefined);
+    // This pod's turn has come, so it is updating — not waiting. Cleared HERE because this is the
+    // ONE write EVERY image-update path makes, the admin API included. It used to be cleared only in
+    // markUpdateStarted(), which adminUpdatePodImage() never calls — so updating the fleet through
+    // the admin API stamped every pod "queued" and had no way to unstamp them. A queued stamp BLOCKS
+    // the cockpit, so that locked five of the owner's pods out for 24 minutes (2026-09-07).
+    //
+    // Cleared BEFORE the provider is touched, so even an update that FAILS cannot strand a pod
+    // behind a stamp nobody clears. Deliberately NOT in resizePod(): a resize is not an update, and
+    // a pod still waiting for its batch must keep the stamp.
+    await this.store
+      .update(id, { updateStage: "handoff", updateQueuedSince: null })
+      .catch(() => undefined);
     await requestHandoff({ provider: this.providerFor(rec.provider), podId: id, log: this.log });
     // Resolve the env FRESH so the update delivers the CURRENT .claude layer
     // (skills/rules) to the pod — an update used to refresh only the image, so a
@@ -3417,7 +3448,17 @@ export class PodService {
     // sees the pod as in-sync and doesn't redundantly re-deliver. Only when it resolved (null hash =
     // env didn't resolve = we delivered no layer, so leave the prior hash untouched).
     const cfgHash = configLayerHash(claudeFiles, permissions);
-    const updated = await this.store.update(id, {
+    // Retry this ONE write. It is the write that ENDS the update, and losing it strands the pod
+    // mid-flight: the row keeps saying "Booting the pod" forever from the owner's side even though
+    // the machine is up and healthy. That happened on 2026-09-07 — a transient blip reset every
+    // web→postgres connection at once ("Connection terminated unexpectedly" one side, "connection
+    // reset by peer" the other; postgres itself never restarted), and the pod sat stuck until the
+    // 8-minute stale sweep caught it.
+    //
+    // The sweep is the safety net and it worked. This is so the net is rarely needed: one immediate
+    // retry costs nothing and covers exactly the failure observed — a connection dropped between two
+    // healthy processes, where the very next attempt succeeds on a fresh one.
+    const finish = {
       imageDigest: to,
       ...(cfgHash ? { configHash: cfgHash } : {}),
       machineId: info.machineId ?? rec.machineId,
@@ -3431,7 +3472,14 @@ export class PodService {
       // the cockpit handing out a link to a session that no longer exists;
       // reconcile repopulates it once the greeter re-enables RC.
       sessionUrl: null,
-    });
+    };
+    let updated: PodRecord;
+    try {
+      updated = await this.store.update(id, finish);
+    } catch (e) {
+      this.log.warn("update_finish_write_failed_retrying", { podId: id, err: String(e) });
+      updated = await this.store.update(id, finish);
+    }
     // Incus recreates the instance from a FRESH root fs on an image update, so
     // /etc/podway/secrets.env is gone — re-inject from the vault (DB is the source
     // of truth; the app reads secrets at start, and the post-update restart picks
