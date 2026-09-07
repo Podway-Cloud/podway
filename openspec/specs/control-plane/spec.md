@@ -322,6 +322,43 @@ fail the image update — the pod simply keeps its existing layer.
 - **AND** queue POSITION SHALL be derived by counting pods still queued with an earlier mark, never
   stored, since a stored position would have to be rewritten on every row as the batch drains
 
+
+### Requirement: Machine recreates are bounded GLOBALLY, not per caller
+
+Every operation that recreates a pod's machine — an image update and a resize alike — SHALL pass
+through one admission gate shared by all callers, so the number running at once is bounded no
+matter how many owners, batches, admin sweeps and one-off actions are in flight.
+
+A per-CALL cap does not achieve this and must not be mistaken for it. Two owners each running a
+bulk update capped at three lanes put SIX recreates on the host while both callers were being
+individually polite; an admin sweep and single-pod actions add more again. That is the shape of the
+2026-09-04 outage, in which disk saturation on the shared devices degraded every pod on the box.
+
+Waiting work SHALL be served first-in-first-out, so one owner's fleet-wide sweep cannot starve
+another owner's single update behind it. A recreate that FAILS SHALL release its slot, because a
+leaked slot is permanent and therefore worse than the contention the gate exists to prevent. The
+gate SHALL delay work, never drop it: every admitted recreate eventually runs.
+
+The bound is per PROCESS, which is global only while exactly one process performs recreates. That
+holds today (`podway-web` runs a single machine and owns every entry point). If more than one
+process can recreate, the bound must move to a durable lease — raising the limit is not a fix.
+
+#### Scenario: Two owners run a bulk update at the same time
+
+- **WHEN** two owners each start a batch whose own concurrency cap is three
+- **THEN** the number of recreates running at once SHALL NOT exceed the global limit, and the
+  remainder SHALL wait rather than be dropped
+
+#### Scenario: A recreate fails
+
+- **WHEN** a recreate throws
+- **THEN** its slot SHALL be released and the next waiting recreate SHALL proceed
+
+#### Scenario: A large sweep and a single update compete
+
+- **WHEN** one owner's fleet sweep is queued ahead of another owner's single update
+- **THEN** waiters SHALL be admitted in arrival order, so the single update is not starved
+
 ### Requirement: Encrypted app-secret management
 
 The control plane SHALL manage per-pod app secrets through an encrypted secret vault, owner-scoped.

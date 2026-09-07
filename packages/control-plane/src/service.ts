@@ -67,6 +67,7 @@ import {
   type PodLiveSignals,
 } from "./types.js";
 import { generateSlug } from "./slug.js";
+import { AdmissionGate } from "./admission.js";
 import { usageForPod, type PodUsage } from "./metrics.js";
 
 /** Min gap between config-drift auto-refresh ATTEMPTS on one pod, so a persistently-failing refresh
@@ -97,6 +98,14 @@ const AGENT_ACTIVITY_SCRIPT = [
 /** Max pods the bulk "update idle pods" action recreates AT ONCE — the rest queue behind them so a
  * large fleet updates in waves instead of hammering the box with N simultaneous Incus recreates. */
 const BULK_UPDATE_CONCURRENCY = 3;
+/**
+ * The GLOBAL ceiling on machine recreates, across every caller and every owner.
+ *
+ * BULK_UPDATE_CONCURRENCY bounds one call; this bounds the BOX. Two owners each running a bulk
+ * update, plus an admin sweep, plus a single-pod update, previously ran 6-12 recreates at once
+ * while every caller believed it was being polite — the shape of the 2026-09-04 outage.
+ */
+const GLOBAL_RECREATE_LIMIT = Number(process.env.PODWAY_MAX_CONCURRENT_RECREATES ?? 4);
 /** Consecutive dashboard-probe failures before a pod is skipped rather than waited on. */
 const BREAKER_TRIP = 3;
 /** First backoff after tripping; doubles per further failure, capped by BREAKER_MAX_MS. */
@@ -1420,7 +1429,11 @@ export class PodService {
       });
     }
     try {
-      const info = await this.providerFor(rec.provider).resize(id, resources);
+      // A resize recreates the machine exactly like an update does, so it shares the ceiling —
+      // gating only updates would let a wave of resizes saturate the box unnoticed.
+      const info = await this.recreateGate.run(`resize:${id}`, () =>
+        this.providerFor(rec.provider).resize(id, resources),
+      );
       const updated = await this.store.update(id, {
         size,
         diskGb,
@@ -2959,6 +2972,15 @@ export class PodService {
    * incusd is busy recreating — so a single 30s gather could have ~10 more piled behind it, each
    * re-probing the whole fleet.
    */
+  /**
+   * Every machine RECREATE passes through here, so the box sees a bounded number no matter how
+   * many owners, sweeps and one-off updates are in flight. See admission.ts for why the per-call
+   * cap was never enough, and for the single-process caveat.
+   */
+  private recreateGate = new AdmissionGate(GLOBAL_RECREATE_LIMIT, (event, detail) =>
+    this.log.info(event, detail),
+  );
+
   private liveSignalsInFlight = new Map<string, Promise<PodLiveSignals[]>>();
 
   /**
@@ -3555,7 +3577,7 @@ export class PodService {
     } catch (e) {
       this.log.warn("update_claude_layer_resolve_failed", { podId: id, err: e });
     }
-    const info = await this.providerFor(rec.provider).updateImage(
+    const info = await this.recreateGate.run(`update:${id}`, () => this.providerFor(rec.provider).updateImage(
       id,
       image,
       (stage) => {
@@ -3568,7 +3590,7 @@ export class PodService {
       // agentAuth travels with the update for the same reason `name` does: the pod-spec is preserved
       // verbatim across a recreate, so the DB is the only thing that can correct a drifted value.
       { claudeFiles, permissions, name: rec.name ?? null, agentAuth: rec.agentAuth ?? null },
-    );
+    ));
     const to = info.imageDigest ?? image.split("@")[1] ?? null;
     // The recreate just delivered this env's current layer — record its hash so the drift sweep
     // sees the pod as in-sync and doesn't redundantly re-deliver. Only when it resolved (null hash =

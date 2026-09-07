@@ -11,6 +11,7 @@ export {
 } from "./claude-settings.js";
 export * from "./secret-vault.js";
 export * from "./slug.js";
+export * from "./admission.js";
 export { usageForPod, usageByPod, type PodUsage, type LifecycleInterval } from "./metrics.js";
 export {
   FetchMemory,
