@@ -565,6 +565,11 @@ recorded on the pod's timeline — a pod that has been running without its secre
 silently, and that is owner-visible history. The check SHALL be throttled and SHALL be skipped
 entirely for pods that have no secrets.
 
+Every process that runs the reconcile sweep MUST be configured with the secret vault, and a process
+that is not MUST say so rather than skipping the repair in silence. Shipping the restore without the
+vault made it a no-op everywhere it actually ran: the fix was deployed and correct, and the pod
+stayed broken (2026-09-07).
+
 #### Scenario: An image update destroys the file
 
 - **WHEN** a running pod with secrets is recreated and its secrets file is absent

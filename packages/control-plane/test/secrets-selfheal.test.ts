@@ -99,6 +99,25 @@ describe("the in-pod secrets file self-heals, whatever the pod's status did", ()
     expect(events.some((e) => e.type === "secrets_restored")).toBe(true);
   });
 
+  it("SAYS SO when it has no vault, instead of returning silently", async () => {
+    // The failure that made the fix useless in production: the gateway runs the reconcile sweep but
+    // was never given a secretVault, so this returned instantly on every sweep and the ops pod sat
+    // broken with a correct, deployed fix (2026-09-07). A repair that cannot run must announce it.
+    const lines: string[] = [];
+    const s = new PodService(provider, store, {
+      environmentsRoot: root,
+      // deliberately NO secretVault
+      logger: { debug: () => {}, info: () => {}, warn: (e: string) => lines.push(e), error: (e: string) => lines.push(e) } as never,
+    });
+    const rec = await s.launchPod("u1", "plain", { size: "s", slotCap: Infinity });
+    await s.provisionPending();
+    await store.update(rec.id, { status: "running" as never, sessionUrl: "wss://mock/session" });
+    provider.forceStatus(rec.id, "running");
+
+    await s.reconcile(rec.id);
+    expect(lines).toContain("secrets_selfheal_disabled_no_vault");
+  });
+
   it("a pod with NO secrets is never probed — the check costs nothing on the common path", async () => {
     const s = svc();
     const rec = await s.launchPod("u1", "plain", { size: "s", slotCap: Infinity });
@@ -138,6 +157,37 @@ describe("the in-pod secrets file self-heals, whatever the pod's status did", ()
 
     await s.reconcile(rec.id); // must NOT throw — the sweep keeps going
     expect(lines.some((l) => l.event === "best_effort_failed" || l.event === "secret_inject_failed")).toBe(true);
+  });
+
+  it("PAGES the owner when a restore fails — a log line nobody reads is not a fix", async () => {
+    const paged: { title: string }[] = [];
+    const s = new PodService(provider, store, {
+      environmentsRoot: root, secretVault: vault, onIncident: (i) => paged.push(i),
+    });
+    const rec = await s.launchPod("u1", "plain", { size: "s", slotCap: Infinity });
+    await s.provisionPending();
+    await store.update(rec.id, { status: "running" as never, sessionUrl: "wss://mock/session" });
+    provider.forceStatus(rec.id, "running");
+    await s.setSecret("u1", rec.id, "APIFY_API_TOKEN", "tok-1");
+    fileMissing(true);
+    provider.injectSecrets = (async () => { throw new Error("incus push refused"); }) as typeof provider.injectSecrets;
+    await s.reconcile(rec.id);
+    expect(paged).toHaveLength(1);
+    expect(paged[0]!.title).toMatch(/repair failed: reinject_secrets/);
+  });
+
+  it("does NOT page for a repair that fixes itself next sweep", async () => {
+    const paged: unknown[] = [];
+    const s = new PodService(provider, store, {
+      environmentsRoot: root, secretVault: vault, onIncident: () => paged.push(1),
+    });
+    const rec = await s.launchPod("u1", "plain", { size: "s", slotCap: Infinity });
+    await s.provisionPending();
+    await store.update(rec.id, { status: "running" as never, sessionUrl: "wss://mock/session" });
+    provider.forceStatus(rec.id, "running");
+    fileMissing(false);
+    await s.reconcile(rec.id);
+    expect(paged).toHaveLength(0);
   });
 
   it("is throttled — a busy reconcile loop does not exec once per tick", async () => {

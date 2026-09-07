@@ -105,6 +105,9 @@ const BULK_UPDATE_CONCURRENCY = 3;
  * update, plus an admin sweep, plus a single-pod update, previously ran 6-12 recreates at once
  * while every caller believed it was being polite — the shape of the 2026-09-04 outage.
  */
+/** Repairs that PAGE on failure: those that leave a pod stuck in a state it cannot leave itself. */
+const ALERTING_REPAIRS = new Set(["reinject_secrets", "push_secrets_after_agent_auth", "reconcile_config_drift"]);
+
 const GLOBAL_RECREATE_LIMIT = Number(process.env.PODWAY_MAX_CONCURRENT_RECREATES ?? 4);
 /** Consecutive dashboard-probe failures before a pod is skipped rather than waited on. */
 const BREAKER_TRIP = 3;
@@ -3975,6 +3978,7 @@ export class PodService {
    * Best-effort: a failure leaves the DB as source of truth for the next wake. */
   /** Per-pod throttle for the secrets-file check — one cheap exec, not one per reconcile tick. */
   private readonly secretsCheckedAt = new Map<string, number>();
+  private warnedNoVault = false;
 
   /**
    * Ensure the pod's `/etc/podway/secrets.env` actually exists, and restore it from the vault when
@@ -3989,7 +3993,20 @@ export class PodService {
     rec: PodRecord,
     prov: SandboxProvider,
   ): Promise<void> {
-    if (!this.config.secretVault || rec.status !== "running") return;
+    if (rec.status !== "running") return;
+    if (!this.config.secretVault) {
+      // A repair that cannot run must SAY it cannot run. This exact branch returned silently on
+      // every reconcile sweep because the gateway — where the sweep lives — was never given a
+      // vault, so the fix shipped, was correct, and did nothing at all. Once per process is
+      // enough: it is a deployment fault, not a per-pod one.
+      if (!this.warnedNoVault) {
+        this.warnedNoVault = true;
+        this.log.error("secrets_selfheal_disabled_no_vault", {
+          note: "reconcile cannot restore pod secrets — this process has no secretVault configured",
+        });
+      }
+      return;
+    }
     const CHECK_EVERY_MS = 10 * 60_000;
     const last = this.secretsCheckedAt.get(rec.id) ?? 0;
     if (Date.now() - last < CHECK_EVERY_MS) return;
@@ -4024,7 +4041,18 @@ export class PodService {
     try {
       await run();
     } catch (e) {
-      this.log.warn("best_effort_failed", { what, podId, error: (e as Error)?.message ?? String(e) });
+      const error = (e as Error)?.message ?? String(e);
+      this.log.warn("best_effort_failed", { what, podId, error });
+      // ...and PAGE for the repairs whose silent failure actually costs the owner something (his
+      // call, 2026-09-07: "a log line nobody reads is not a fix"). Deliberately NOT every
+      // best-effort call — only the ones that leave a pod stuck in a state it cannot leave. Paging
+      // on self-correcting failures would train him to ignore the channel.
+      if (ALERTING_REPAIRS.has(what)) {
+        const rec = await this.store.get(podId).catch(() => null);
+        if (rec) {
+          this.config.onIncident?.({ podId, ownerId: rec.ownerId, title: `repair failed: ${what} — ${error}` });
+        }
+      }
     }
   }
 
@@ -4034,7 +4062,12 @@ export class PodService {
     try {
       await (await this.providerOf(podId)).injectSecrets(podId, secrets);
     } catch (e) {
+      // Log AND RETHROW. A second swallow beneath the reporting layer defeats it entirely: every
+      // caller believed the push had succeeded — including the self-heal, whose whole job is to
+      // notice that it had not — so the alert could never fire. The CALLER decides what a failure
+      // means; this only reports it.
       this.log.warn("secret_inject_failed", { podId, error: (e as Error).message });
+      throw e;
     }
   }
 

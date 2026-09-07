@@ -97,3 +97,23 @@ it had succeeded. A user signed up, saw success, and received nothing.
 - **WHEN** a send is accepted
 - **THEN** nothing SHALL be logged as a failure
 
+### Requirement: A repair that cannot fix itself reaches the owner
+
+When a best-effort repair fails and leaves a pod in a state it cannot leave on its own, the failure
+SHALL raise an incident through the same channel as other critical incidents, not merely a log line.
+Repairs that retry successfully on the next sweep SHALL NOT raise one — paging on self-correcting
+failures trains the owner to ignore the channel.
+
+A helper performing the repair MUST NOT swallow the underlying error: a second swallow beneath the
+reporting layer defeats it entirely.
+
+#### Scenario: A pod's secrets cannot be restored
+
+- **WHEN** the self-heal fails to push a pod's secrets
+- **THEN** an incident SHALL be raised naming the repair and the pod
+
+#### Scenario: A transient repair that will retry
+
+- **WHEN** a repair that re-runs each sweep fails once
+- **THEN** no incident SHALL be raised
+

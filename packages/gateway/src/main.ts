@@ -2,7 +2,7 @@ import path from "node:path";
 import type { IncomingMessage } from "node:http";
 import { createAuth, getSessionUserId, notifyOps, type AuthEnv } from "@podway/auth";
 import { verifyBridgeToken, PREVIEW_SESSION_COOKIE, BRIDGE_TOKEN_PARAM } from "@podway/auth/bridge-token";
-import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, CustomDomainService } from "@podway/control-plane";
+import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService } from "@podway/control-plane";
 import { RelayRegistry } from "./relay-registry.js";
 import {
   IncusProvider,
@@ -13,6 +13,7 @@ import {
   type SandboxProvider,
 } from "@podway/provider";
 import { createAppDb } from "@podway/db";
+import { credKeyFromEnv } from "@podway/shared/crypto";
 import { GatewayServer } from "./server.js";
 
 /** Production wiring: real better-auth sessions, Fly (+ optional Incus)
@@ -53,6 +54,14 @@ async function main(): Promise<void> {
     // The HTTP exchange floor also runs from the gateway's reconcile, so a pod on an
     // older image (no control socket) still syncs.
     fetchMemory,
+    // The per-pod secret vault. The gateway needs it because the RECONCILE SWEEP lives here, and
+    // the sweep is what notices a pod whose /etc/podway/secrets.env was destroyed by a recreate and
+    // puts it back. Without this the self-heal returned instantly and silently on every sweep, and
+    // the ops pod sat with no secrets even after the fix shipped (observed 2026-09-07 — the fix was
+    // deployed and correct, and simply never had a vault to restore FROM).
+    secretVault: process.env.PODWAY_CRED_KEY
+      ? new SecretVault(new DrizzleSecretStore(db), credKeyFromEnv())
+      : undefined,
     // Owner-scoped pod↔pod messaging drains + routes on the same reconcile sweep.
     agentMessages,
     // Critical unplanned incidents (agent OOM, wedged pod, failed provision) page the
