@@ -8,15 +8,42 @@ export interface NotifyDeps {
   fetchImpl?: typeof fetch;
 }
 
+/**
+ * Report a notification that did not go out.
+ *
+ * These paths are deliberately best-effort — a failed notification must never break a signup or an
+ * approval — but "best-effort" was implemented as TOTAL SILENCE, and that is how the approval and
+ * invite mail stayed broken for weeks: `PODWAY_GMAIL_IMPERSONATE` pointed at an address with no
+ * domain-wide delegation, every send got a 401, and nothing anywhere said so. A user signed up, saw
+ * success, and received nothing (found 2026-09-07).
+ *
+ * Worse than the silence: the sends never checked `res.ok` at all. A 401 does not throw — fetch
+ * resolves — so the code did not merely swallow an error, it never saw one.
+ */
+function reportSendFailure(what: string, detail: Record<string, unknown>): void {
+  // console, not a logger dependency: this package is imported by the web app and the gateway, and
+  // both ship their logs to the same place. The point is that the line EXISTS.
+  console.error(JSON.stringify({ level: "error", svc: "notify", event: "notification_send_failed", what, ...detail }));
+}
+
+/** Did the API accept it? A non-2xx here is the failure that used to pass as success. */
+async function assertAccepted(what: string, res: Response, extra: Record<string, unknown> = {}): Promise<void> {
+  if (res.ok) return;
+  const body = await res.text().catch(() => "");
+  reportSendFailure(what, { status: res.status, body: body.slice(0, 300), ...extra });
+}
+
 async function sendTelegram(token: string, chatId: string, text: string, f: typeof fetch): Promise<void> {
   try {
-    await f(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const res = await f(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ chat_id: chatId, text }),
     });
-  } catch {
-    /* best-effort */
+    await assertAccepted("telegram", res, { chatId });
+  } catch (e) {
+    // Still swallowed — a failed alert must not break the thing that raised it — but never silent.
+    reportSendFailure("telegram", { error: (e as Error)?.message ?? String(e) });
   }
 }
 
@@ -135,13 +162,16 @@ export async function sendNewRequestEmail(
       `Content-Type: text/plain; charset="UTF-8"\r\n` +
       `Content-Transfer-Encoding: base64\r\n\r\n` +
       Buffer.from(body, "utf8").toString("base64");
-    await f("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    const res = await f("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ raw: b64url(message) }),
     });
-  } catch {
-    /* best-effort: never let a notification break the signup */
+    await assertAccepted("gmail", res, { to });
+  } catch (e) {
+    // Swallowed on purpose — a failed notification must never break the signup — but the
+    // failure is now RECORDED, which is the whole difference.
+    reportSendFailure("gmail", { error: (e as Error)?.message ?? String(e) });
   }
 }
 
@@ -187,12 +217,15 @@ export async function sendApprovalEmail(
       `Content-Type: text/plain; charset="UTF-8"\r\n` +
       `Content-Transfer-Encoding: base64\r\n\r\n` +
       Buffer.from(body, "utf8").toString("base64");
-    await f("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    const res = await f("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ raw: b64url(message) }),
     });
-  } catch {
-    /* best-effort: never let a notification break the approval */
+    await assertAccepted("gmail", res, { to: u.email });
+  } catch (e) {
+    // Swallowed on purpose — a failed notification must never break the approval — but the
+    // failure is now RECORDED, which is the whole difference.
+    reportSendFailure("gmail", { error: (e as Error)?.message ?? String(e) });
   }
 }

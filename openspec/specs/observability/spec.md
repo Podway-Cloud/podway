@@ -76,3 +76,24 @@ control and the error digest, never the framework's default error text.
 - **THEN** the user sees the podway error page with a "Try again" action and a digest they can
   report
 
+### Requirement: A notification that does not go out is recorded
+
+Sending an email or an ops alert is best-effort and MUST NOT break the action that raised it. It
+MUST, however, be RECORDED when it fails: the send SHALL check the API's response, and a non-2xx
+response or a thrown error SHALL be logged with enough context to identify the failure.
+
+Two distinct faults made this invisible for weeks (found 2026-09-07). The sends were wrapped in a
+bare catch, and — the more serious one — they never inspected the RESPONSE at all. A rejected send
+returns a 401; it does not throw, so there was no error to swallow and the code proceeded as though
+it had succeeded. A user signed up, saw success, and received nothing.
+
+#### Scenario: The mail API rejects the send
+
+- **WHEN** a send returns a non-2xx response
+- **THEN** the failure SHALL be logged with the status, and the calling action SHALL still succeed
+
+#### Scenario: A successful send
+
+- **WHEN** a send is accepted
+- **THEN** nothing SHALL be logged as a failure
+
