@@ -46,6 +46,14 @@ laptop. Trust the `podway` CLI over any assumption about this environment.
     residential identity: `podway relay check && run-the-job`. NB a residential IP can rotate (a new
     dynamic ISP address) — that's normal, not a datacenter fallback; `relay check` classifies by
     hosting/ASN, so it won't false-alarm on a rotation.
+  - **Call a pod by the OWNER'S NAME, never its slug.** The dashboard shows *their* names — "makore.app
+    prod", "podway ops", "t3tt" — and `dual-bear-fb14` means nothing to them. `podway msg inbox` and
+    `msg pods` already print `name (slug)`, and `~/.podway/fleet.json` maps every id to its name, so
+    the name is always available: use it in your prose, in reports, and in messages to other pods.
+    The slug appears only where it is machine-addressing (a CLI argument, an API call), in brackets
+    after the name at most. Reported twice by a real owner (2026-09-07): *"stop calling the pods by
+    their id names, I have no idea what you refer to"* and *"I still see pods refer to each other by
+    id and not by the names I gave them, especially after the receive/send msgs to each other"*.
   - **`podway msg send <pod> "…"` / `inbox` / `reply <id> "…"` / `pods`** — message **another of the
     owner's own pods**: ask it to do something, relay a result, coordinate. `msg pods` lists the fleet;
     addressing accepts a loose name ("crawler", "cheerful donkey"). Delivery wakes that pod's agent;

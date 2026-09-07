@@ -26,6 +26,10 @@ export interface PodSpec {
    * hand the owner a REAL link (resize, secrets, settings) instead of "go to the
    * dashboard". Null when the app origin is unknown (local/dev). */
   cockpitUrl: string | null;
+  /** The PRODUCT origin (podway.io) — carried so the on-pod CLI never has to GUESS it by stripping
+   * the preview label off an infrastructure host. That guess produced podway.cloud links on every
+   * pod without a stored cockpitUrl (owner report, 2026-09-07). */
+  appOrigin: string | null;
   /** Whether the preview is reachable by anyone (public) or owner-only. The env's
    * default; the `podway` CLI + agent read THIS instead of assuming "owner-only". */
   previewPublic: boolean;
@@ -184,6 +188,7 @@ export async function buildInitFiles(
     podName: input.name?.trim() || null,
     previewUrl,
     cockpitUrl,
+    appOrigin,
     previewPublic: input.resolved.preview === "public",
     lifecycle: input.resolved.lifecycle.default,
     envName: input.resolved.name,

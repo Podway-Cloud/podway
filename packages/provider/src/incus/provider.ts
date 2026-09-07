@@ -179,6 +179,37 @@ function healCockpitUrl(spec: Record<string, unknown>): boolean {
       changed = true;
     }
   }
+  // The ORIGIN, not just the path. The dashboard moved to podway.io while previews and the gateway
+  // stayed on podway.cloud, but a spec is preserved verbatim across an update — so 9 of 15 pods were
+  // still handing their owner `https://podway.cloud/dashboard/pods/<slug>` (owner report,
+  // 2026-09-07: "why do u show me links to cockpit via podway.cloud and not podway.io? This is
+  // invalid"). It only appeared to work because the podway.cloud apex happens to redirect, which is
+  // luck rather than design.
+  //
+  // PODWAY_APP_ORIGIN is the same source pod-init.ts builds a NEW pod's cockpitUrl from, so healing
+  // against it makes an existing pod converge on what a fresh one would get. Untouched when the env
+  // is unset (local/dev) or already correct.
+  const appOrigin = process.env.PODWAY_APP_ORIGIN?.replace(/\/$/, "");
+  if (appOrigin) {
+    const cur = spec.cockpitUrl;
+    if (typeof cur === "string" && cur !== "") {
+      const rehomed = cur.replace(/^https?:\/\/[^/]+/, appOrigin);
+      if (rehomed !== cur) {
+        spec.cockpitUrl = rehomed;
+        changed = true;
+      }
+    } else if (typeof spec.slug === "string" && spec.slug !== "") {
+      // ADD it when absent. 6 of 15 pods predate the field entirely, and the on-pod CLI then fell
+      // back to deriving the host from the preview URL — which is how they served podway.cloud.
+      spec.cockpitUrl = `${appOrigin}/dashboard/pods/${spec.slug}`;
+      changed = true;
+    }
+    // Carry the origin itself, so the CLI's fallback never has to guess again.
+    if (spec.appOrigin !== appOrigin) {
+      spec.appOrigin = appOrigin;
+      changed = true;
+    }
+  }
   // The pre-rename URL heal that used to live here is GONE (2026-09-06). It rewrote a dead host in
   // cockpitUrl/previewUrl for pods provisioned before the domain flip. Verified across the whole
   // fleet before removing: no pod spec still carries that host, so it had become a no-op that only
@@ -851,8 +882,8 @@ export class IncusProvider implements SandboxProvider {
     }
   }
 
-  async podHealth(id: string): Promise<PodHealth> {
-    const h = (await this.fetchHealth(id).catch(() => null)) as Partial<PodHealth> | null;
+  async podHealth(id: string, opts: { timeoutMs?: number } = {}): Promise<PodHealth> {
+    const h = (await this.fetchHealth(id, opts.timeoutMs).catch(() => null)) as Partial<PodHealth> | null;
     // The pod controls this response and it feeds events, dashboards, the alert pager, and
     // the OOM dedup key — sanitize at the boundary (M2). sanitizePodHealth also array-checks.
     return sanitizePodHealth({
@@ -1226,22 +1257,22 @@ export class IncusProvider implements SandboxProvider {
   }
 
   /** The VM's bridge IPv4 (reachable from the gateway over WireGuard). */
-  private async instanceIp(id: string): Promise<string | null> {
-    const state = await this.incus.instanceState(id);
+  private async instanceIp(id: string, timeoutMs?: number): Promise<string | null> {
+    const state = await this.incus.instanceState(id, timeoutMs);
     return state?.network ? pickPrimaryIpv4(state.network) : null;
   }
 
-  private async fetchHealth(id: string): Promise<{
+  private async fetchHealth(id: string, timeoutMs?: number): Promise<{
     idleMs?: number;
     lastActivityMs?: number;
     sessionUrl?: string;
     agentStatus?: string;
     codexStatus?: string;
   } | null> {
-    const ip = await this.instanceIp(id);
+    const ip = await this.instanceIp(id, timeoutMs);
     if (!ip) return null;
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 3000);
+    const t = setTimeout(() => ctrl.abort(), Math.min(timeoutMs ?? 3000, 3000));
     try {
       const res = await fetch(`http://${ip}:${this.config.agentPort}/healthz`, {
         signal: ctrl.signal,

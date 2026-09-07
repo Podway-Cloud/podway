@@ -36,7 +36,7 @@ free disk space, and a Claude Pro or Max subscription. The installer works from 
 shells, or from WSL2 on Windows.
 
 ```sh
-curl -fsSL podway.cloud/install.sh | sh
+curl -fsSL podway.io/install.sh | sh
 ```
 
 The installer checks your machine, downloads the Compose configuration into `./podway`, and pulls

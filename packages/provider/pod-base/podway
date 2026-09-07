@@ -41,14 +41,33 @@ cmd_visibility() {
 
 # The owner's dashboard/control page for THIS pod — where secrets & settings live.
 # Prefer the spec's cockpitUrl; if an OLDER spec lacks it (created before the field
-# existed), DERIVE it from the preview URL (…<id>.preview.<root> → https://<root>/…)
-# so a user is NEVER left without a link to hand to. Empty only with no preview base
-# at all (local/dev), where there is genuinely no dashboard to point at.
+# existed), fall back so a user is NEVER left without a link to hand to.
+#
+# The fallback used to DERIVE the host from the preview URL by stripping the preview label
+# (<id>.preview.podway.cloud → podway.cloud). That assumed the dashboard shares a root with
+# previews, and since the domain split it does not: the dashboard is podway.io while previews and
+# the gateway stayed on podway.cloud. It only appeared to work because the podway.cloud apex
+# redirects — luck, not design (owner report, 2026-09-07: "This is invalid").
+#
+# So: use PODWAY_APP_ORIGIN, which is the same source pod-init.ts builds a new pod's cockpitUrl
+# from. Never guess the product domain from an infrastructure one. Empty when neither is available
+# (local/dev), where there is genuinely no dashboard to point at.
 cockpit_url() {
   local c; c=$(field '.cockpitUrl')
   [ -n "$c" ] && { echo "$c"; return; }
-  local pv slug root; pv=$(field '.previewUrl'); slug=$(field '.slug')
-  [ -n "$pv" ] && [ -n "$slug" ] || return 0
+  local slug; slug=$(field '.slug')
+  [ -n "$slug" ] || return 0
+  # Prefer a KNOWN product origin; only guess as a last resort.
+  local origin; origin=$(field '.appOrigin')
+  [ -n "$origin" ] || origin="${PODWAY_APP_ORIGIN:-}"
+  origin="${origin%/}"
+  [ -n "$origin" ] && { echo "${origin}/dashboard/pods/${slug}"; return; }
+  # LAST RESORT: derive from the preview host. This is what produced podway.cloud links, so it is no
+  # longer the primary path — but a pod too old to carry appOrigin must still hand its owner
+  # SOMETHING. An almost-right link that redirects beats no link at all, which is the failure the
+  # original derivation was added to fix (a user with no idea where to enter a secret).
+  local pv root; pv=$(field '.previewUrl')
+  [ -n "$pv" ] || return 0
   root=$(printf '%s' "$pv" | sed -E 's#^https?://[^.]+\.##; s#^preview\.##; s#/.*$##')
   [ -n "$root" ] && echo "https://${root}/dashboard/pods/${slug}"
 }
@@ -758,8 +777,10 @@ cmd_msg_pods() {
     echo "(no fleet roster yet — the control plane pushes it on its next poll)"
     return 0
   fi
-  jq -r '.[] | "  " + .id
-    + (if .name and .name != "" then "  (" + .name + ")" else "" end)
+  # NAME first, slug in brackets — the same shape `msg inbox` uses, and the order the owner thinks in.
+  # This printed `slug (name)`, which buries the only part they recognise (owner report, 2026-09-07).
+  # The slug stays visible because it is what `msg send`/`reply` resolve against.
+  jq -r '.[] | "  " + (if .name and .name != "" then .name + "  (" + .id + ")" else .id end)
     + (if .self then "   ← this pod" else "" end)' "$MSG_FLEET" 2>/dev/null || cat "$MSG_FLEET"
 }
 

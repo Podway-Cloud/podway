@@ -173,7 +173,8 @@ export interface SandboxProvider {
    * multiplied that by the number of pods. Non-throwing: an unreachable pod, or one
    * on an image that predates a field, yields empty parts rather than an error.
    */
-  podHealth(id: string): Promise<PodHealth>;
+  /** `opts.timeoutMs` bounds the probe for user-facing callers; omit it for the long default. */
+  podHealth(id: string, opts?: { timeoutMs?: number }): Promise<PodHealth>;
   /** Run the pod's doctor. "check" changes nothing; "safe" applies the safe repairs;
    * "invasive" also applies repairs that REPLACE files (backing them up first), and
    * exists as its own mode so a safe fix can never quietly become a destructive one. */

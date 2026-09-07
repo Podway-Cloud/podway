@@ -97,6 +97,13 @@ const AGENT_ACTIVITY_SCRIPT = [
 /** Max pods the bulk "update idle pods" action recreates AT ONCE — the rest queue behind them so a
  * large fleet updates in waves instead of hammering the box with N simultaneous Incus recreates. */
 const BULK_UPDATE_CONCURRENCY = 3;
+/** Consecutive dashboard-probe failures before a pod is skipped rather than waited on. */
+const BREAKER_TRIP = 3;
+/** First backoff after tripping; doubles per further failure, capped by BREAKER_MAX_MS. */
+const BREAKER_BASE_MS = 30_000;
+const BREAKER_MAX_MS = 5 * 60_000;
+/** Probe budget for the dashboard sweep — see the 30s control-plane default it overrides. */
+const DASHBOARD_PROBE_MS = 3_000;
 /** Idle-by-inactivity floor for a pod whose agent status is UNKNOWN (null — Claude not reporting). We
  * can't confirm it's idle live, so require a much longer demonstrated inactivity than the normal dwell
  * before auto-updating it — a conservative "clearly abandoned" bar (owner decision, 2026-08-26). */
@@ -717,20 +724,28 @@ export class PodService {
 
     const pods = (await this.store.list()).filter((p) => p.status === "running");
     const rows: FleetHealthRow[] = [];
+    // A worker POOL, not a batched barrier — same fix, same reason as gatherLiveSignals: a batch
+    // finishes at the pace of its SLOWEST member, and on a fleet sweep the slow pod is the norm.
     const CONCURRENCY = 6;
-    for (let i = 0; i < pods.length; i += CONCURRENCY) {
-      const batch = pods.slice(i, i + CONCURRENCY);
-      const results = await Promise.all(
-        batch.map(async (p) => {
-          try {
-            const h = await this.providerFor(p.provider).podHealth(p.id);
-            return { pod: p, health: h, reachable: true as const };
-          } catch {
-            return { pod: p, health: null, reachable: false as const };
-          }
-        }),
-      );
-      for (const r of results) {
+    type Probe = { pod: (typeof pods)[number]; health: PodHealth | null; reachable: boolean };
+    const probes: Probe[] = new Array(pods.length);
+    let nextPod = 0;
+    const healthLane = async (): Promise<void> => {
+      while (nextPod < pods.length) {
+        const idx = nextPod++;
+        const pod = pods[idx]!;
+        try {
+          probes[idx] = { pod, health: await this.providerFor(pod.provider).podHealth(pod.id), reachable: true };
+        } catch {
+          probes[idx] = { pod, health: null, reachable: false };
+        }
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.max(1, Math.min(CONCURRENCY, pods.length)) }, () => healthLane()),
+    );
+    {
+      for (const r of probes) {
         if (!r.reachable) {
           rows.push({
             id: r.pod.id,
@@ -2933,6 +2948,31 @@ export class PodService {
   }
 
   private liveSignalsCache = new Map<string, { at: number; rows: PodLiveSignals[] }>();
+  /**
+   * In-flight probes, keyed by owner — so concurrent callers SHARE one gather instead of each
+   * starting their own.
+   *
+   * The cache alone does not prevent a stampede, and that is the failure the owner actually felt
+   * ("the UI is getting slow or even feels stuck", 2026-09-07). A miss starts an expensive gather;
+   * while it runs the cache is STILL stale, so the next poll misses too and starts another. The
+   * client polls every 3s while a pod is transitioning — exactly when probes are slowest, because
+   * incusd is busy recreating — so a single 30s gather could have ~10 more piled behind it, each
+   * re-probing the whole fleet.
+   */
+  private liveSignalsInFlight = new Map<string, Promise<PodLiveSignals[]>>();
+
+  /**
+   * PER-POD CIRCUIT BREAKER for the dashboard sweep.
+   *
+   * A pod whose agent never answers costs a FULL timeout on every single poll, forever — and it
+   * is exactly the pod most likely to be in that state for hours (wedged agent, dead machine).
+   * At a 3s poll that is one lane permanently occupied by a pod we already know is silent. After
+   * `BREAKER_TRIP` consecutive failures the sweep stops probing it and reports it straight out as
+   * unreachable, retrying on a bounded backoff. The row is IDENTICAL to the one a real failed
+   * probe produces — the breaker must never serve a stale known-good value, because a dashboard
+   * that keeps showing "healthy" through an outage is worse than the slowness this fixes.
+   */
+  private liveProbeBreaker = new Map<string, { fails: number; retryAt: number }>();
 
   /**
    * Live signals for the OWNER's dashboard cards — ONE row per pod. Every row carries
@@ -2950,6 +2990,19 @@ export class PodService {
     const cached = this.liveSignalsCache.get(ownerId);
     if (cached && Date.now() - cached.at < maxAge) return cached.rows;
 
+    // Someone is already gathering for this owner — wait for THEIR result rather than starting a
+    // second full-fleet probe. Cleared in a finally so a failed gather cannot wedge the owner.
+    const inFlight = this.liveSignalsInFlight.get(ownerId);
+    if (inFlight) return inFlight;
+    const gather = this.gatherLiveSignals(ownerId).finally(() => {
+      this.liveSignalsInFlight.delete(ownerId);
+    });
+    this.liveSignalsInFlight.set(ownerId, gather);
+    return gather;
+  }
+
+  private async gatherLiveSignals(ownerId: string): Promise<PodLiveSignals[]> {
+
     const owned = (await this.store.list()).filter((p) => p.ownerId === ownerId);
     const base = (p: (typeof owned)[number]) => ({
       id: p.id,
@@ -2957,14 +3010,27 @@ export class PodService {
       updating: Boolean(p.updatingSince),
       agentIdleMs: null as number | null, // overridden below when a running pod's health reports it
     });
-    const rows: PodLiveSignals[] = [];
+    // A worker POOL, not a batched barrier.
+    //
+    // This was `for (i += 6) { await Promise.all(batch) }`, which finishes each group of six at the
+    // pace of its SLOWEST member — five fast pods wait on one stalled probe, every round. Lanes keep
+    // the same ceiling on concurrent probes while letting a slow pod delay only its own lane. Same
+    // shape as runIdleUpdateBatch, which already got this right.
     const CONCURRENCY = 6;
-    for (let i = 0; i < owned.length; i += CONCURRENCY) {
-      const batch = owned.slice(i, i + CONCURRENCY);
-      const results = await Promise.all(
-        batch.map(async (p) => {
+    const results: PodLiveSignals[] = new Array(owned.length);
+    let next = 0;
+    const lane = async (): Promise<void> => {
+      while (next < owned.length) {
+        const idx = next++;
+        const p = owned[idx]!;
+        results[idx] = await (async () => {
           // Only RUNNING pods get a health probe; others carry lifecycle only.
-          if (p.status !== "running") {
+          //
+          // A pod MID-UPDATE is skipped too, and this is the cheapest win in the sweep: its card
+          // already reads `updating`, so a probe changes nothing the owner can see — while being
+          // the MOST likely probe to hang, because the machine is being recreated underneath it.
+          // Probing it spent a full timeout to learn what the row already knew.
+          if (p.status !== "running" || p.updatingSince) {
             return {
               ...base(p),
               agentStatus: null,
@@ -2978,9 +3044,30 @@ export class PodService {
               unreachable: false,
             } satisfies PodLiveSignals;
           }
+          const unreachableRow = (): PodLiveSignals => ({
+            ...base(p),
+            agentStatus: null,
+            codexStatus: null,
+            agentWaitingFor: null,
+            setupProgress: null,
+            agents: [],
+            appListening: null,
+            secretRequests: null,
+            criticalIssue: null,
+            unreachable: true,
+          });
+          // Breaker OPEN: this pod has failed BREAKER_TRIP times running and its backoff has not
+          // elapsed. Report it silent without spending a lane on another timeout.
+          const breaker = this.liveProbeBreaker.get(p.id);
+          if (breaker && breaker.fails >= BREAKER_TRIP && Date.now() < breaker.retryAt) {
+            return unreachableRow();
+          }
           try {
             const prov = this.providerFor(p.provider);
-            const h = await prov.podHealth(p.id);
+            // A SHORT budget: this is a user-facing poll, not a background sweep. A probe that
+            // cannot answer in 3s reports the pod unknown rather than holding a lane for 30.
+            const h = await prov.podHealth(p.id, { timeoutMs: DASHBOARD_PROBE_MS });
+            this.liveProbeBreaker.delete(p.id); // answered — closed, from the FIRST success
             const critical = h.issues.find((x) => x.severity === "critical" && !x.agent) ?? null;
             // Preview truth: healthz.appListening is the cheap path (new images). On an
             // image that predates it, fall back to the METRICS app.listening probe — the
@@ -3013,23 +3100,21 @@ export class PodService {
               unreachable: false,
             } satisfies PodLiveSignals;
           } catch {
-            return {
-              ...base(p),
-              agentStatus: null,
-              codexStatus: null,
-              agentWaitingFor: null,
-              setupProgress: null,
-              agents: [],
-              appListening: null,
-              secretRequests: null,
-              criticalIssue: null,
-              unreachable: true,
-            } satisfies PodLiveSignals;
+            const fails = (this.liveProbeBreaker.get(p.id)?.fails ?? 0) + 1;
+            const backoff = Math.min(
+              BREAKER_BASE_MS * 2 ** Math.max(0, fails - BREAKER_TRIP),
+              BREAKER_MAX_MS,
+            );
+            this.liveProbeBreaker.set(p.id, { fails, retryAt: Date.now() + backoff });
+            return unreachableRow();
           }
-        }),
-      );
-      rows.push(...results);
-    }
+        })();
+      }
+    };
+    await Promise.all(
+      Array.from({ length: Math.max(1, Math.min(CONCURRENCY, owned.length)) }, () => lane()),
+    );
+    const rows = results.filter(Boolean);
     this.liveSignalsCache.set(ownerId, { at: Date.now(), rows });
     return rows;
   }

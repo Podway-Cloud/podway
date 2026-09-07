@@ -1,5 +1,10 @@
 /**
- * Vanity self-host install endpoint: `curl -fsSL podway.cloud/install.sh | sh`.
+ * Vanity self-host install endpoint: `curl -fsSL podway.io/install.sh | sh`.
+ *
+ * podway.IO — the PRODUCT domain, the one a human types. podway.cloud also resolves here, but only
+ * because its apex redirects; documenting that one made the install command depend on a redirect
+ * (owner, 2026-09-07: "podway.cloud/install.sh is WRONG, should be podway.io/install.sh"). Same
+ * class as the cockpit links that pointed at the infrastructure domain: right by luck, not design.
  *
  * Redirects to the canonical installer in the Podway-Cloud/podway source mirror (selfhost/install.sh)
  * — ONE source of truth, so

@@ -202,9 +202,14 @@ export class IncusApi {
     return (await this.req<IncusInstance[]>("GET", "/1.0/instances?recursion=1")).metadata;
   }
 
-  async instanceState(name: string): Promise<IncusInstanceState | null> {
+  /**
+   * `timeoutMs` overrides the deliberate 30s default for USER-FACING callers. A dashboard poll
+   * that cannot answer in a couple of seconds should report the pod unknown, not hold the request
+   * open for half a minute — the control-plane's own background callers keep the long budget.
+   */
+  async instanceState(name: string, timeoutMs?: number): Promise<IncusInstanceState | null> {
     try {
-      return (await this.req<IncusInstanceState>("GET", `/1.0/instances/${name}/state`)).metadata;
+      return (await this.req<IncusInstanceState>("GET", `/1.0/instances/${name}/state`, undefined, timeoutMs)).metadata;
     } catch (e) {
       if (e instanceof IncusApiError && e.statusCode === 404) return null;
       throw e;

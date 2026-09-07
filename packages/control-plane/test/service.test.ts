@@ -791,6 +791,29 @@ describe("adminFleetHealth — which pod should I look at?", () => {
     expect(second).toEqual(first); // …but the cached sweep is served
     expect(await svc.adminFleetHealth({ maxAgeMs: 0 })).toEqual([]); // fresh sees it
   });
+
+  it("one slow pod does not hold back the sweep (pool, not barrier)", async () => {
+    const ids: string[] = [];
+    for (let i = 0; i < 8; i++)
+      ids.push((await svc.launchPod("u", "nextjs-starter", { slotCap: Infinity })).id);
+    await svc.provisionPending(Date.now(), { limit: 20 });
+    expect((await store.list()).filter((p) => p.status === "running")).toHaveLength(8);
+
+    const order: string[] = [];
+    const orig = provider.podHealth.bind(provider);
+    provider.podHealth = async (id: string) => {
+      if (id === ids[0]) await new Promise((r) => setTimeout(r, 80));
+      order.push(id);
+      return orig(id);
+    };
+
+    await svc.adminFleetHealth({ maxAgeMs: 0 });
+
+    // With the old 6-wide BARRIER the slow first pod held its whole round, so pods 7 and 8 could
+    // not start until it finished. Lanes let them overtake it.
+    expect(order[order.length - 1]).toBe(ids[0]);
+    expect(order.indexOf(ids[7]!)).toBeLessThan(order.indexOf(ids[0]!));
+  });
 });
 
 describe("podHealth (one read, many surfaces)", () => {

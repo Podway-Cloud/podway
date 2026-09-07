@@ -494,6 +494,33 @@ describe("refreshSpecPermissions", () => {
     expect(refreshSpecPermissions(spec, undefined, undefined, "setup-token")).toBe(spec);
   });
 
+  // cockpitUrl's ORIGIN. The dashboard moved to podway.io; previews and the gateway stayed on
+  // podway.cloud. A spec is preserved verbatim, so 9 of 15 pods still handed their owner a
+  // podway.cloud cockpit link, and the 6 with NO cockpitUrl had the on-pod CLI derive the same
+  // wrong host by stripping the preview label. It only looked fine because the podway.cloud apex
+  // redirects (owner: "This is invalid", 2026-09-07).
+  it("rehomes a cockpitUrl left on the old domain", () => {
+    process.env.PODWAY_APP_ORIGIN = "https://podway.io";
+    const stale = JSON.stringify({ slug: "p1", cockpitUrl: "https://podway.cloud/dashboard/pods/p1" });
+    const out = JSON.parse(refreshSpecPermissions(stale, undefined));
+    expect(out.cockpitUrl).toBe("https://podway.io/dashboard/pods/p1");
+  });
+
+  it("ADDS a cockpitUrl when the spec predates the field", () => {
+    process.env.PODWAY_APP_ORIGIN = "https://podway.io";
+    const old = JSON.stringify({ slug: "p2", previewUrl: "https://p2.preview.podway.cloud" });
+    const out = JSON.parse(refreshSpecPermissions(old, undefined));
+    expect(out.cockpitUrl).toBe("https://podway.io/dashboard/pods/p2");
+    // and carries the origin, so the on-pod CLI never guesses it from an infrastructure host
+    expect(out.appOrigin).toBe("https://podway.io");
+  });
+
+  it("leaves the spec alone when no app origin is configured (local/dev)", () => {
+    delete process.env.PODWAY_APP_ORIGIN;
+    const spec = JSON.stringify({ slug: "p3", cockpitUrl: "https://elsewhere.test/dashboard/pods/p3" });
+    expect(refreshSpecPermissions(spec, undefined)).toBe(spec);
+  });
+
   // A dashboard rename updates the DB but the on-pod spec is preserved verbatim across an update, so
   // the greeter re-applied the STALE podName as the Claude-app session title on every fresh session —
   // reverting the user's rename after each update (owner report 2026-08-30). Refresh it from the DB.

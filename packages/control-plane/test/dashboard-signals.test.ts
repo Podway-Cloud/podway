@@ -271,4 +271,155 @@ describe("ownerLiveSignals (dashboard card sweep)", () => {
     const rows = await svc.ownerLiveSignals("u1", { maxAgeMs: 0 });
     expect(rows.find((r) => r.id === theirs.id)).toBeUndefined();
   });
+
+  // THE STAMPEDE. The per-owner cache alone does not stop it: a miss starts an expensive gather,
+  // and while that runs the cache is STILL stale — so the next poll misses too and starts another.
+  // The client polls every 3s while a pod is transitioning, which is exactly when probes are
+  // slowest, so one slow gather could have ~10 more piled behind it, each re-probing the whole
+  // fleet. That is the "feels stuck" the owner reported (2026-09-07).
+  it("concurrent callers SHARE one gather instead of each starting their own", async () => {
+    const svc = new PodService(provider, store, { environmentsRoot: root });
+    await svc.launchPod("u1", "plain", { size: "s" });
+    await svc.launchPod("u1", "plain", { size: "s" });
+    await svc.provisionPending();
+
+    let probes = 0;
+    const slow = provider.podHealth.bind(provider);
+    provider.podHealth = async (id: string) => {
+      probes++;
+      await new Promise((r) => setTimeout(r, 40)); // a gather that is still running
+      return slow(id);
+    };
+
+    // Five polls fired while the first is still in flight — the shape of a 3s poll against a
+    // gather that takes longer than the interval.
+    await Promise.all([0, 1, 2, 3, 4].map(() => svc.ownerLiveSignals("u1")));
+
+    // 2 pods x ONE gather. Without single-flight this is 2 x 5.
+    expect(probes).toBe(2);
+  });
+
+  it("one slow pod does not hold back the others (pool, not barrier)", async () => {
+    const svc = new PodService(provider, store, { environmentsRoot: root });
+    const ids: string[] = [];
+    // MORE than CONCURRENCY (6), so the old code needed a SECOND round — that is the whole
+    // point of the test. provisionPending defaults to limit 5, hence the explicit limit.
+    for (let i = 0; i < 8; i++)
+      ids.push((await svc.launchPod("u1", "plain", { size: "s", slotCap: Infinity })).id);
+    await svc.provisionPending(Date.now(), { limit: 20 });
+    expect((await store.list()).filter((p) => p.status === "running")).toHaveLength(8);
+
+    const order: string[] = [];
+    const orig = provider.podHealth.bind(provider);
+    provider.podHealth = async (id: string) => {
+      // The FIRST pod is slow; with a 6-wide barrier it would hold the whole first round, so no
+      // pod from the second round could finish before it.
+      if (id === ids[0]) await new Promise((r) => setTimeout(r, 80));
+      order.push(id);
+      return orig(id);
+    };
+
+    await svc.ownerLiveSignals("u1");
+
+    // The 7th and 8th pods (second "round" under the old batching) complete BEFORE the slow first.
+    expect(order[order.length - 1]).toBe(ids[0]);
+    expect(order.indexOf(ids[7]!)).toBeLessThan(order.indexOf(ids[0]!));
+  });
+
+  // A pod being recreated is the SLOWEST thing to probe and the least informative: its card
+  // already says `updating`. Probing it spent a full timeout to learn what the row knew.
+  it("a pod mid-update is not probed at all", async () => {
+    const svc = new PodService(provider, store, { environmentsRoot: root });
+    const quiet = await svc.launchPod("u1", "plain", { size: "s" });
+    const busy = await svc.launchPod("u1", "plain", { size: "s" });
+    await svc.provisionPending();
+    await store.update(busy.id, { updatingSince: new Date().toISOString() });
+
+    const probed: string[] = [];
+    const orig = provider.podHealth.bind(provider);
+    provider.podHealth = async (id: string) => {
+      probed.push(id);
+      return orig(id);
+    };
+
+    const rows = await svc.ownerLiveSignals("u1", { maxAgeMs: 0 });
+    expect(probed).toEqual([quiet.id]);
+
+    // It must still get a ROW, flagged updating — skipping the probe is not dropping the pod,
+    // and it must NOT be reported unreachable (nothing is wrong with it).
+    const row = rows.find((r) => r.id === busy.id);
+    expect(row).toMatchObject({ updating: true, unreachable: false });
+  });
+
+  // The 30s incus default was added deliberately for the control-plane's own background callers.
+  // A DASHBOARD poll is not one of those: 30s of holding a lane open to learn a pod is silent is
+  // the exact stall the owner reported.
+  it("the dashboard sweep probes with a SHORT budget, not the 30s default", async () => {
+    const svc = new PodService(provider, store, { environmentsRoot: root });
+    await svc.launchPod("u1", "plain", { size: "s" });
+    await svc.provisionPending();
+
+    const seen: ({ timeoutMs?: number } | undefined)[] = [];
+    const orig = provider.podHealth.bind(provider);
+    provider.podHealth = async (id: string, opts?: { timeoutMs?: number }) => {
+      seen.push(opts);
+      return orig(id);
+    };
+
+    await svc.ownerLiveSignals("u1", { maxAgeMs: 0 });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.timeoutMs).toBeGreaterThan(0);
+    expect(seen[0]?.timeoutMs).toBeLessThanOrEqual(5_000);
+  });
+
+  it("a pod that never answers stops being probed (circuit breaker)", async () => {
+    const svc = new PodService(provider, store, { environmentsRoot: root });
+    const pod = await svc.launchPod("u1", "plain", { size: "s" });
+    await svc.provisionPending();
+
+    let probes = 0;
+    provider.podHealth = async () => {
+      probes++;
+      throw new Error("connect refused");
+    };
+
+    // Ten polls. The first three trip the breaker; the rest must cost nothing.
+    for (let i = 0; i < 10; i++) await svc.ownerLiveSignals("u1", { maxAgeMs: 0 });
+    expect(probes).toBe(3);
+
+    // 5.4: it is reported UNKNOWN throughout — a breaker that serves a stale known-good value
+    // through an outage is worse than the slowness this change fixes.
+    const [row] = await svc.ownerLiveSignals("u1", { maxAgeMs: 0 });
+    expect(row).toMatchObject({ id: pod.id, unreachable: true, agentStatus: null, appListening: null });
+    expect(row!.agents).toEqual([]);
+  });
+
+  it("the breaker closes on the first success", async () => {
+    const svc = new PodService(provider, store, { environmentsRoot: root });
+    await svc.launchPod("u1", "plain", { size: "s" });
+    await svc.provisionPending();
+
+    const orig = provider.podHealth.bind(provider);
+    let probes = 0;
+    let broken = true;
+    provider.podHealth = async (id: string) => {
+      probes++;
+      if (broken) throw new Error("connect refused");
+      return orig(id);
+    };
+
+    for (let i = 0; i < 5; i++) await svc.ownerLiveSignals("u1", { maxAgeMs: 0 });
+    expect(probes).toBe(3); // tripped
+
+    // The pod comes back. Force the retry window open, and one good answer must fully reset it —
+    // not decay the count, or a flaky pod would stay half-tripped forever.
+    broken = false;
+    (svc as unknown as { liveProbeBreaker: Map<string, { fails: number; retryAt: number }> })
+      .liveProbeBreaker.set((await store.list())[0]!.id, { fails: 3, retryAt: 0 });
+    await svc.ownerLiveSignals("u1", { maxAgeMs: 0 });
+    expect(probes).toBe(4);
+
+    for (let i = 0; i < 3; i++) await svc.ownerLiveSignals("u1", { maxAgeMs: 0 });
+    expect(probes).toBe(7); // probed every time again — breaker fully closed
+  });
 });

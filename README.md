@@ -43,7 +43,7 @@ You need **Docker** (Desktop or Engine + Compose v2), ~**8 GB RAM**, ~**6 GB dis
 **Claude Pro or Max subscription**. Works on macOS, Linux, and WSL2.
 
 ```sh
-curl -fsSL podway.cloud/install.sh | sh
+curl -fsSL podway.io/install.sh | sh
 ```
 
 The installer checks your machine, writes a Docker Compose setup into `./podway`, pulls the prebuilt

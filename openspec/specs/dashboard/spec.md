@@ -1431,6 +1431,60 @@ service authorizes by the session user) and never returns a secret's value, only
 - **THEN** that tab's data SHALL load on its own parallel request rather than queue behind the poll and
   stick in a skeleton until a manual refresh
 
+### Requirement: The live-signals sweep is bounded, deduplicated, and fails fast
+
+The dashboard card poll reads every running pod, so its cost is the thing that decides whether the
+dashboard feels alive or stuck. Five rules bound it. They were added together after the owner
+reported the UI "getting slow or even feels stuck from time to time" during fleet updates
+(2026-09-07); at rest the baseline was already fine, which is why a rest-only measurement had missed
+it.
+
+1. **One sweep per owner, shared.** Reads SHALL be cached per owner AND deduplicated in flight: a
+   caller arriving while a sweep runs SHALL await that sweep instead of starting another. The cache
+   alone does not achieve this — while a sweep runs the cached value is still stale, so at the
+   client's 3s transitioning-poll a 30s sweep accumulates roughly ten concurrent sweeps of the whole
+   fleet, each doing identical work. The in-flight entry SHALL be cleared even when the sweep
+   throws, so a failure cannot wedge the owner.
+2. **A worker pool, not a batched barrier.** Probes SHALL run through a fixed number of lanes each
+   pulling the next pod, so a slow pod delays only its own lane. The same applies to the admin fleet
+   sweep. A barrier finishes each group at the pace of its slowest member, which on a fleet sweep is
+   the normal case, not the exception.
+3. **A short probe budget for user-facing paths.** A probe serving a dashboard request SHALL use a
+   seconds-scale timeout and report the pod UNKNOWN on expiry. The long default remains for
+   control-plane callers, where no human is waiting.
+4. **No probe for a pod mid-update.** When the row records an update in flight, signals SHALL come
+   from the row and no probe SHALL be issued. Its card already reads `updating`, while it is the
+   probe most likely to hang — the machine is being recreated underneath it.
+5. **A per-pod circuit breaker.** After a bounded number of consecutive failures for the same pod,
+   the sweep SHALL report it unknown and back off with a bounded, growing retry, closing on the
+   first success. A pod reported from the breaker SHALL be reported UNKNOWN and never as its last
+   known-good value — a dashboard that keeps showing "healthy" through an outage is worse than the
+   slowness this fixes.
+
+#### Scenario: Polls stack up during a fleet update
+
+- **GIVEN** a live-signals sweep for an owner is already running
+- **WHEN** further polls for that owner arrive before it finishes
+- **THEN** the fleet SHALL be probed once for the whole group and every caller served that result
+
+#### Scenario: One wedged pod among healthy ones
+
+- **GIVEN** more running pods than there are lanes, one of which never answers
+- **WHEN** the sweep runs
+- **THEN** pods behind the wedged one in the queue SHALL complete before it, not after
+
+#### Scenario: A pod being recreated
+
+- **GIVEN** a pod with an update in flight
+- **WHEN** the sweep runs
+- **THEN** no probe SHALL be issued for it, and its row SHALL report `updating` and NOT `unreachable`
+
+#### Scenario: A pod whose agent has been dead for hours
+
+- **GIVEN** a pod whose probe has failed consecutively past the breaker threshold
+- **WHEN** subsequent polls run
+- **THEN** it SHALL be reported unknown without paying the probe timeout, until the backoff elapses
+
 ### Requirement: Switching cockpit tabs keeps you oriented
 
 Cockpit tab panels differ in height by hundreds of pixels, and the dashboard's scroll container

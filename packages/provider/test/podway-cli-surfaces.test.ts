@@ -279,7 +279,8 @@ describe("podway msg (agent-to-agent, same owner)", () => {
 
   it("lists the owner's fleet, marking this pod", () => {
     const out = runMsg(["msg", "pods"]);
-    expect(out).toMatch(/afisha-crawler-6bc4\s+\(afisha crawler\)/);
+    // NAME first, slug in brackets — the owner reads their own name, not ours (2026-09-07).
+    expect(out).toMatch(/afisha crawler\s+\(afisha-crawler-6bc4\)/);
     expect(out).toMatch(/web-scraper-1a2b.*← this pod/);
   });
 

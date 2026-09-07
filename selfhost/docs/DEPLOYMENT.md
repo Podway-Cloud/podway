@@ -20,7 +20,7 @@ pod installs dependencies, builds a project, or runs a database.
 Run:
 
 ```sh
-curl -fsSL podway.cloud/install.sh | sh
+curl -fsSL podway.io/install.sh | sh
 ```
 
 By default, the installer creates `./podway/compose.yaml`, starts the stack, and serves the
@@ -31,7 +31,7 @@ To choose a different directory or port:
 
 ```sh
 PODWAY_DIR=my-podway PODWAY_PORT=8090 \
-  sh -c "$(curl -fsSL podway.cloud/install.sh)"
+  sh -c "$(curl -fsSL podway.io/install.sh)"
 ```
 
 The installer does not modify system packages. It checks for Docker, Docker Compose, and `curl`,
