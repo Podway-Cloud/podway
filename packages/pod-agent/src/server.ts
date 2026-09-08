@@ -538,6 +538,11 @@ export class AgentServer {
     });
 
     this.http = http.createServer((req, res) => {
+      // An aborted in-flight client request makes Node emit `Error: aborted` on `req`; with no
+      // listener it crashes the process (node:_http_server abortIncoming). Guard it — an aborted
+      // request must never take down the pod-agent (confirmed via the e2e stack, 2026-09-08).
+      req.on("error", () => {});
+      res.on("error", () => {});
       if (req.url === "/relay") {
         // Live relay-egress capacity, so `podway relay check` can report "N of M streams in use"
         // and a workload can size its own concurrency to the cap instead of failing closed on it.
@@ -3380,6 +3385,11 @@ export class AgentServer {
   }
 
   async listen(): Promise<{ host: string; port: number }> {
+    // Requests aborted during header parse never reach the handler; destroy the socket rather than
+    // let the error surface as an uncaughtException that would crash the agent.
+    this.http.on("clientError", (_e, socket) => {
+      try { (socket as { destroy?: () => void }).destroy?.(); } catch { /* already gone */ }
+    });
     await new Promise<void>((resolve) => this.http.listen(this.opts.port, this.opts.host, resolve));
     this.metrics.start();
     await this.startRelayProxy();

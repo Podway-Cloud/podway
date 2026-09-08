@@ -181,6 +181,12 @@ export class GatewayServer {
         })
       : null;
     this.http = http.createServer((req, res) => {
+      // A client that aborts an in-flight request (browser navigates away mid-preview, mid-proxy)
+      // makes Node emit `Error: aborted` on `req` — and, because req/res are piped to/from the
+      // upstream with no error listener, it goes UNCAUGHT and crashes the process (confirmed via
+      // node:_http_server abortIncoming, 2026-09-08). An aborted client must never crash the gateway.
+      req.on("error", () => {});
+      res.on("error", () => {});
       const slug = this.previewSlug(req);
       if (slug) return void this.handlePreviewHttp(slug, req, res);
       // A custom domain serves the same pod app as a preview, so it reuses the same handler.
@@ -193,6 +199,11 @@ export class GatewayServer {
         });
       }
       return void this.httpFallback(req, res);
+    });
+    // Requests aborted DURING header parse never reach the handler above; destroy their socket
+    // instead of letting the error surface as an uncaughtException.
+    this.http.on("clientError", (_e, socket) => {
+      try { (socket as { destroy?: () => void }).destroy?.(); } catch { /* already gone */ }
     });
     // Everything that is NOT a pod app: healthz, admin endpoints, relay. Only ever reached on
     // OUR hosts — a customer's domain is resolved to their pod before this runs.
