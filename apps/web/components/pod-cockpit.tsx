@@ -1611,11 +1611,22 @@ export default function PodCockpit(props: PodCockpitProps) {
       <div ref={tabsRef} className="scroll-mt-4">
       <div ref={tabsSentinelRef} aria-hidden className="h-px" />
       <Tabs value={activeTab} onValueChange={selectTab}>
-        <TabsList variant="line" className={cn("sticky top-[60px] z-20 mb-6 max-w-full justify-start gap-5 overflow-x-auto overflow-y-clip overscroll-x-contain bg-background py-2 md:top-0 [-ms-overflow-style:none] [scrollbar-width:none] [touch-action:pan-x] [&::-webkit-scrollbar]:hidden",
-          // A rule ABOVE the strip separates it from the preview block, and is DROPPED once the
-          // strip sticks — against scrolling content a floating line reads as a seam, not a
-          // separator (owner call, 2026-09-07).
-          !tabsStuck && "border-t border-border/60 pt-3")}>
+        {/* FULL-WIDTH sticky bar. Everything that must span the row — the solid background, the
+            divider, the vertical spacing — lives HERE, not on TabsList (which is inline-flex/w-fit,
+            so a background or border on it only covered the tabs' width and let content scroll
+            through the rest of the row when stuck — owner report, 2026-09-08).
+              - not stuck: a rule ABOVE separates the tabs from the preview block, with even spacing.
+              - stuck:     an opaque background + a rule BELOW gives the bar a clear edge so content
+                           scrolling underneath cannot blend into it. */}
+        <div
+          className={cn(
+            "sticky top-[60px] z-20 -mx-4 mb-4 bg-background px-4 sm:-mx-8 sm:px-8 md:top-0",
+            tabsStuck
+              ? "border-b border-border/60 py-2.5 shadow-[0_1px_0_0_var(--border)]"
+              : "mt-1 border-t border-border/60 pt-4",
+          )}
+        >
+        <TabsList variant="line" className="max-w-full justify-start gap-5 overflow-x-auto overflow-y-clip overscroll-x-contain py-1 [-ms-overflow-style:none] [scrollbar-width:none] [touch-action:pan-x] [&::-webkit-scrollbar]:hidden">
           <TabsTrigger value="control" className="flex-none px-0" data-tour="tab-control">
             Control
             {/* The agent needs the owner — a dead sign-in, a gate it will not answer for itself.
@@ -1648,6 +1659,7 @@ export default function PodCockpit(props: PodCockpitProps) {
             )}
           </TabsTrigger>
         </TabsList>
+        </div>
 
         {/* Control — the agents (Claude/Codex) + T3 Code control, the primary thing you
             do with a pod, so it's the first tab and the default. */}
