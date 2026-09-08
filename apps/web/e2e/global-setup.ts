@@ -6,9 +6,13 @@ import { PostgreSqlContainer } from "@testcontainers/postgresql";
 import { ADMIN_EMAILS, PREAPPROVE_EMAILS } from "./users";
 
 const STATE = path.join(process.cwd(), ".e2e-state.json");
-const PORT = 3111;
-const AGENT_PORT = 8790;
-const GATEWAY_PORT = 8791;
+// Ports are offset by shard so N e2e shards run on ONE box without colliding. `--shard=i/N`
+// makes each shard a separate process; CI passes PODWAY_E2E_SHARD=i so each gets its own trio.
+// Shard 0 (unset) keeps the original ports, so a plain local `pnpm e2e` is unchanged.
+const SHARD = Number(process.env.PODWAY_E2E_SHARD ?? 0);
+const PORT = 3111 + SHARD * 20;
+const AGENT_PORT = 8790 + SHARD * 20;
+const GATEWAY_PORT = 8791 + SHARD * 20;
 const SECRET = "e2e-test-secret-not-a-real-secret";
 
 /**

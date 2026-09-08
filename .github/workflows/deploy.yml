@@ -1,0 +1,58 @@
+name: Deploy
+# Visible, durable deploys that run on YOUR box (self-hosted → no GitHub minutes) and survive an
+# agent session dying. Replaces the invisible detached bash jobs the agent used to babysit.
+#
+# Manual on purpose: a prod deploy is gated, so it is a button (or `gh workflow run deploy.yml`),
+# not auto-on-merge. The agent can TRIGGER it — the run then shows on github.com, on the box.
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Which app to deploy
+        required: true
+        default: both
+        type: choice
+        options: [gateway, web, both]
+
+concurrency:
+  group: deploy-${{ github.event.inputs.app }}
+  cancel-in-progress: false   # never interrupt a prod deploy mid-flight
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, box]
+    timeout-minutes: 30
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main            # deploy-app.sh refuses unless HEAD == origin/main; deploy main, always
+
+      - name: Install flyctl
+        run: |
+          curl -L https://fly.io/install.sh | sh
+          echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
+
+      - name: Preflight
+        run: |
+          test -n "$FLY_API_TOKEN" || { echo "FLY_API_TOKEN secret is not set — add it in repo settings"; exit 1; }
+          fly auth whoami
+
+      # Gateway BEFORE web, always: migrations apply via the gateway's release_command, so web must
+      # never come up reading a column prod does not have yet (the 0039 incident).
+      - name: Deploy gateway
+        if: ${{ github.event.inputs.app == 'gateway' || github.event.inputs.app == 'both' }}
+        run: scripts/deploy-app.sh gateway --remote-only
+
+      - name: Gateway health
+        if: ${{ github.event.inputs.app == 'gateway' || github.event.inputs.app == 'both' }}
+        run: curl -sf --max-time 30 https://gw.podway.cloud/healthz
+
+      - name: Deploy web
+        if: ${{ github.event.inputs.app == 'web' || github.event.inputs.app == 'both' }}
+        run: scripts/deploy-app.sh web --remote-only
+
+      - name: Web health
+        if: ${{ github.event.inputs.app == 'web' || github.event.inputs.app == 'both' }}
+        run: curl -sf --max-time 30 https://podway.io/ >/dev/null && echo "podway.io OK"

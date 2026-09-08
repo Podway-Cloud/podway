@@ -13,7 +13,7 @@ jobs:
   dco:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # need the full PR commit range
       - name: Verify Signed-off-by on every commit
