@@ -30,7 +30,7 @@ behind it.
 - **Keep your working environment intact.** Your repository, dependencies, tools, and files remain
   available between sessions.
 - **Run the whole project.** Claude can work with development servers, databases, background workers,
-  scheduled jobs, monitors, and project-specific skills—not just edit files.
+  scheduled jobs, monitors, and project-specific skills, not just edit files.
 - **Open what Claude builds.** Apps running in a pod receive a preview you can open or share.
 - **See when you are needed.** The dashboard shows which agents are working, idle, or waiting for
   your reply.
@@ -47,7 +47,7 @@ curl -fsSL podway.io/install.sh | sh
 ```
 
 The installer checks your machine, writes a Docker Compose setup into `./podway`, pulls the prebuilt
-images, and prints **the real URL for your setup** — it auto-detects where it runs:
+images, and prints **the real URL for your setup**, auto-detected from where it runs:
 
 - **Laptop / private box** → `http://localhost:8080`
 - **Public server, no domain** → automatic HTTPS at `https://<your-ip>.sslip.io` (each pod gets its own
@@ -65,7 +65,7 @@ From then on, Claude is the main interface. Return to the Podway dashboard to cr
 add secrets, inspect health, and open app previews. A browser terminal remains available as an
 advanced recovery tool.
 
-No repository clone or local build is required—the installer pulls prebuilt images. Prefer to build
+No repository clone or local build is required. The installer pulls prebuilt images. Prefer to build
 them yourself? See [Build from source](#build-from-source).
 
 ## What you get
@@ -98,20 +98,20 @@ See [`selfhost/`](selfhost/) for the compose file, environment variables, and th
 
 A pnpm monorepo:
 
-- **`packages/pod-agent`** — the in-pod runtime: terminal bridge, supervisor/watchdog, the in-pod
-  `podway` CLI, dev-server management.
-- **`packages/provider`** — the pod backend behind one interface (`local` = Docker for self-host);
+- **`packages/pod-agent`**: the in-pod runtime (terminal bridge, supervisor/watchdog, the in-pod
+  `podway` CLI, dev-server management).
+- **`packages/provider`**: the pod backend behind one interface (`local` = Docker for self-host);
   **`packages/provider/pod-base`** is the image (Dockerfile, init, CLI, skills).
-- **`packages/control-plane`** — the pod lifecycle service (single-tenant for self-host).
-- **`packages/gateway`** — the terminal/preview link.
-- **`packages/db`**, **`packages/auth`**, **`packages/shared`**, **`packages/selfhost`** — schema
+- **`packages/control-plane`**: the pod lifecycle service (single-tenant for self-host).
+- **`packages/gateway`**: the terminal/preview link.
+- **`packages/db`**, **`packages/auth`**, **`packages/shared`**, **`packages/selfhost`**: schema
   (Postgres/PGlite), single-owner auth, shared schemas, the self-host serve daemon.
-- **`apps/web`** — the dashboard (one edition-aware app).
-- **`environments/`**, **`skills/`** — workspace templates and the agent skill/rule layer.
+- **`apps/web`**: the dashboard (one edition-aware app).
+- **`environments/`**, **`skills/`**: workspace templates and the agent skill/rule layer.
 
 ## Managed cloud
 
-Don't want to run infrastructure? [**podway.cloud**](https://podway.cloud) is the hosted version — the
+Don't want to run infrastructure? [**podway.cloud**](https://podway.cloud) is the hosted version: the
 same runtime, plus a managed fleet, team features, and a residential-egress relay network.
 
 ## License
@@ -122,6 +122,6 @@ offering podway as a competing hosted service. Plain-English summary: [`LICENSIN
 
 ## Contributing & security
 
-- Contributions welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) (PRs are validated upstream; a DCO
+- Contributions welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) (PRs are validated upstream; a DCO
   sign-off is required).
-- Found a vulnerability? Please report it privately — see [`SECURITY.md`](SECURITY.md).
+- Found a vulnerability? Please report it privately. See [`SECURITY.md`](SECURITY.md).

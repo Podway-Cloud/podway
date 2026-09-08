@@ -313,7 +313,7 @@ export default function SelfhostLanding({
                 <h2>It never breaks your stack.</h2>
               </div>
               <p className={styles.trustLead}>
-                An AI with access to production only earns trust one way—by being careful on
+                An AI with access to production only earns trust one way: by being careful on
                 purpose. Here&rsquo;s the contract.
               </p>
             </div>
@@ -321,7 +321,7 @@ export default function SelfhostLanding({
               <article className={styles.trustCard}>
                 <span className={styles.trustIcon}><Radar aria-hidden /></span>
                 <h3>Watches upstream</h3>
-                <p>Monitors every app&rsquo;s repo for releases, bug fixes, and security advisories—so you don&rsquo;t have to.</p>
+                <p>Monitors every app&rsquo;s repo for releases, bug fixes, and security advisories, so you don&rsquo;t have to.</p>
               </article>
               <article className={styles.trustCard}>
                 <span className={styles.trustIcon}><ShieldCheck aria-hidden /></span>
@@ -331,7 +331,7 @@ export default function SelfhostLanding({
               <article className={styles.trustCard}>
                 <span className={styles.trustIcon}><MessageCircleQuestion aria-hidden /></span>
                 <h3>Asks before anything risky</h3>
-                <p>Breaking changes, major versions, data migrations—it proposes, you approve.</p>
+                <p>Breaking changes, major versions, data migrations: it proposes, you approve.</p>
               </article>
               <article className={styles.trustCard}>
                 <span className={styles.trustIcon}><RotateCcw aria-hidden /></span>
