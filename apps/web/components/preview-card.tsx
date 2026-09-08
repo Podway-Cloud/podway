@@ -10,10 +10,13 @@ import { getPodAppListening } from "@/lib/actions";
  * The pod's live preview, as a browser-window card rather than a lone button in an
  * empty row (owner feedback, 2026-07-29).
  *
- * The frame is a REAL live view, not a screenshot: the preview host is a subdomain
- * of the dashboard's own domain, so it is same-site and the owner's session cookie
- * rides along — an owner-only preview frames fine in the owner's browser (an
- * unauthenticated request gets 401, which is the point).
+ * The frame is a REAL live view, not a screenshot. The preview host (*.podway.cloud)
+ * is a DIFFERENT registrable domain from the dashboard (podway.io), so the frame is
+ * cross-site and the owner's session cookie does NOT ride along. For an owner-only
+ * preview the frame instead loads a `frameUrl` carrying a one-time `?__pw_t=` bridge
+ * token (minted server-side in the cockpit page, which holds the session); the gateway
+ * consumes it and sets a host-only Partitioned cookie. A public/self-host preview needs
+ * no token and loads the plain URL.
  *
  * Built so the card still reads correctly if the frame never paints (app not
  * started, crashed, still building): the chrome bar carries the URL, the state
@@ -28,6 +31,7 @@ function PreviewCard({
   slug,
   url,
   altUrl = null,
+  frameUrl = null,
   isPublic,
   running,
 }: {
@@ -35,6 +39,10 @@ function PreviewCard({
   url: string;
   /** The preview URL, shown quietly beneath when a custom domain has taken the primary slot. */
   altUrl?: string | null;
+  /** The URL the IFRAME loads. For a private cloud preview it carries a one-time `?__pw_t=` bridge
+   * token so the cross-site frame authenticates without the blocked third-party session cookie; the
+   * visible "Open" link and copy still use the clean `url`. Falls back to `url` when absent. */
+  frameUrl?: string | null;
   isPublic: boolean;
   running: boolean;
 }) {
@@ -167,7 +175,7 @@ function PreviewCard({
           <div className="h-[220px] overflow-hidden sm:h-[280px]">
             <iframe
               key={reloadKey}
-              src={url}
+              src={frameUrl ?? url}
               title="Pod preview"
               className="pointer-events-none h-[440px] w-[200%] origin-top-left scale-50 border-0 sm:h-[560px]"
               sandbox="allow-scripts allow-same-origin"

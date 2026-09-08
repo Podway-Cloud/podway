@@ -20,6 +20,7 @@ import { deriveSetupStep } from "@/lib/pod-onboarding";
 import { recordAttributedUserEvent } from "@/lib/landing-experiment-store";
 import { editionOss } from "@/lib/session";
 import { harnessEnabled } from "@/lib/agent-harness";
+import { mintBridgeToken, BRIDGE_TOKEN_PARAM } from "@podway/auth/bridge-token";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +128,29 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
   // Cloud derives the preview from PODWAY_PREVIEW_BASE; self-host has none, so fall back to the
   // container's published :3000 (http://127.0.0.1:<port>) so the running dev server is openable.
   const previewUrl = previewBase ? `https://${pod.id}.${previewBase}` : await localPreviewUrl(pod.id);
+  // The cockpit frames the preview in an iframe on podway.io while the preview itself lives on
+  // *.podway.cloud — a different registrable domain, so the owner's session cookie is third-party in
+  // that frame and cannot ride along. An owner-only preview therefore 401'd and showed the Podway
+  // sign-in page INSIDE the card instead of the app (owner report, 2026-09-08). We already hold the
+  // session HERE, so mint a one-time preview bridge token and give the FRAME a `?__pw_t=` URL: the
+  // gateway consumes it, sets the host-only Partitioned cookie, and serves the app — no cross-site
+  // cookie needed. Only for a PRIVATE CLOUD preview; a public preview or self-host (same origin, no
+  // preview base) needs nothing, so the frame just uses the plain URL.
+  let previewFrameUrl = previewUrl;
+  if (previewBase && !pod.previewPublic && previewUrl) {
+    const secret = process.env.BETTER_AUTH_SECRET;
+    if (secret) {
+      const token = mintBridgeToken({
+        userId: user.id,
+        podId: pod.id,
+        purpose: "preview",
+        now: Date.now(),
+        ttlMs: 60 * 60_000, // 1h; the gateway cookie carries the session, the frame re-mints on reload
+        secret,
+      });
+      previewFrameUrl = `${previewUrl}?${BRIDGE_TOKEN_PARAM}=${encodeURIComponent(token)}`;
+    }
+  }
   // Once an owner's own domain is LIVE it is the pod's real address, so the preview card leads with
   // it and keeps the preview URL as the always-there fallback. Only an `active` domain counts: a
   // domain still verifying has no certificate, so pointing anyone at it yields a TLS error.
@@ -312,6 +336,7 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
         lifecycle={pod.lifecycle}
         lifecycleLocked={envDetail?.lifecycle.locked ?? false}
         previewUrl={previewUrl}
+        previewFrameUrl={previewFrameUrl}
         customDomainUrl={customDomainUrl}
         previewPublic={pod.previewPublic}
         autoUpdate={pod.autoUpdate}

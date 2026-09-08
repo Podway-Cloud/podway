@@ -344,3 +344,35 @@ describe("TunnelRouter — per-owner and per-pod usage", () => {
     });
   });
 });
+
+describe("TunnelRouter — stale-stream reaper", () => {
+  it("reaps a stream idle past the TTL, so a leaked open count returns to reality", async () => {
+    const h = harness();
+    await h.router.open("pod1", "s1", "example.com", 443);
+    expect(h.router.ownerUsage("owner1").open).toBe(1);
+
+    // Fresh — a sweep now reaps nothing.
+    expect(h.router.reapStale()).toBe(0);
+    expect(h.router.ownerUsage("owner1").open).toBe(1);
+
+    // 11 minutes with no byte activity (its close was missed) → reaped, count back to 0.
+    h.tick(11 * 60_000);
+    expect(h.router.reapStale()).toBe(1);
+    expect(h.router.ownerUsage("owner1").open).toBe(0);
+    // The relay is told to forget it too.
+    expect(h.toRelay.some((m) => m.type === "tunnel-close")).toBe(true);
+    h.router.close();
+  });
+
+  it("keeps an active stream — byte activity refreshes its idle timer", async () => {
+    const h = harness();
+    await h.router.open("pod1", "s1", "example.com", 443);
+    const gw = h.gwId();
+    h.tick(9 * 60_000);
+    h.router.fromRelay("owner1", { type: "tunnel-data", id: gw, b64: Buffer.from("x").toString("base64") });
+    h.tick(9 * 60_000); // 18 min since open, but only 9 min since last activity
+    expect(h.router.reapStale()).toBe(0);
+    expect(h.router.ownerUsage("owner1").open).toBe(1);
+    h.router.close();
+  });
+});

@@ -60,6 +60,8 @@ interface Stream {
   bytesUp: number;
   bytesDown: number;
   at: number;
+  /** Last byte-activity time — the basis for reaping a leaked stream whose close was missed. */
+  lastAt: number;
 }
 
 /**
@@ -138,6 +140,12 @@ interface Waiter {
 /** Outcome of trying to place a stream right now: served, hold-for-a-slot, or hard-refuse. */
 type PlaceResult = { ok: true } | { wait: string } | { refuse: string };
 
+/** A relay fetch is request/response and short-lived, so a stream with NO byte activity for this
+ * long is almost certainly a leak — its close frame was missed. Reaped on a sweep so an owner's
+ * `open` count reflects reality (observed live: stuck at 3 while reqLastMin was 0). */
+const STREAM_IDLE_TTL_MS = 10 * 60_000;
+const REAP_SWEEP_MS = 60_000;
+
 export class TunnelRouter {
   private readonly byGw = new Map<string, Stream>();
   private readonly byPod = new Map<string, Map<string, Stream>>(); // podId → podStreamId → stream
@@ -153,8 +161,32 @@ export class TunnelRouter {
   private seq = 0;
   private readonly policy: TunnelPolicy;
 
+  private readonly sweepTimer: ReturnType<typeof setInterval>;
   constructor(private readonly deps: TunnelRouterDeps) {
     this.policy = { ...DEFAULT_POLICY, ...(deps.policy ?? {}) };
+    this.sweepTimer = setInterval(() => this.reapStale(), REAP_SWEEP_MS);
+    this.sweepTimer.unref?.();
+  }
+
+  /** Stop the stale-stream sweep (process shutdown / tests). */
+  close(): void {
+    clearInterval(this.sweepTimer);
+  }
+
+  /** Drop tunnel streams idle longer than `idleMs` — leaked streams whose close was missed, which
+   * otherwise inflate the owner's `open` count forever. Returns how many were reaped. */
+  reapStale(idleMs = STREAM_IDLE_TTL_MS): number {
+    const cutoff = this.now() - idleMs;
+    let n = 0;
+    for (const stream of [...this.byGw.values()]) {
+      if (stream.lastAt <= cutoff) {
+        this.deps.relayLink(stream.ownerId)?.send(JSON.stringify({ type: "tunnel-close", id: stream.gwId }));
+        this.drop(stream);
+        n++;
+      }
+    }
+    if (n > 0) this.deps.log?.("tunnel_reaped_stale", { count: n, idleMs });
+    return n;
   }
 
   private now(): number {
@@ -232,7 +264,7 @@ export class TunnelRouter {
 
     const stream: Stream = {
       gwId, podId: w.podId, podStreamId: w.podStreamId, ownerId: w.ownerId, host: domain, port: w.port,
-      bytesUp: 0, bytesDown: 0, at: this.now(),
+      bytesUp: 0, bytesDown: 0, at: this.now(), lastAt: this.now(),
     };
     this.byGw.set(gwId, stream);
     if (!this.byPod.has(w.podId)) this.byPod.set(w.podId, new Map());
@@ -490,6 +522,7 @@ export class TunnelRouter {
    * only what has already finished. Domain and owner roll up cumulatively; the per-pod
    * view is derived from open streams instead, so it disappears when the pod stops. */
   private addBytes(s: Stream, up: number, down: number): void {
+    s.lastAt = this.now();
     const u = this.usage.get(s.host) ?? { connections: 0, bytesUp: 0, bytesDown: 0 };
     u.bytesUp += up;
     u.bytesDown += down;

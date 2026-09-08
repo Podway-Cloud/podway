@@ -793,6 +793,16 @@ temporarily-unavailable service, not a 4xx), with `Retry-After` and an auto-retr
 cases that recover without a human (starting, no-app) but NOT for suspended (the owner must resume — the
 page links to the dashboard instead).
 
+Because the cockpit FRAMES an owner-only preview in an iframe on the dashboard's domain while the
+preview lives on a DIFFERENT registrable domain (the app/preview domain split), the owner's session
+cookie is third-party in that frame and cannot authenticate it — so a naive frame hits the sign-in
+redirect above and shows the sign-in page INSIDE the card instead of the app. To prevent that, the
+cockpit page (which holds the session) SHALL mint a one-time preview **bridge token** and give the
+iframe a URL carrying it (`?__pw_t=`); the gateway consumes the token, sets a host-only Partitioned
+preview cookie, and serves the app — no cross-site session cookie required. This applies ONLY to a
+private cloud preview; a public preview, a delegated-auth preview, or a same-origin self-host preview
+frames with the plain URL. The visible "Open" link and the copyable address stay token-free.
+
 Beyond owner-only and public, a THIRD preview visibility — **delegated-auth** (`previewAppAuth`) — SHALL
 forward the preview as public transport WITHOUT requiring a podway session, for a pod running an
 agent-harness backend (e.g. T3 Code) that guards its OWN endpoint with a pairing token. A podway cookie

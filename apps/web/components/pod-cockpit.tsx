@@ -207,6 +207,10 @@ export interface PodCockpitProps {
   lifecycle: string;
   lifecycleLocked: boolean;
   previewUrl: string | null;
+  /** The preview URL for the IFRAME — carries a one-time `?__pw_t=` bridge token for a private cloud
+   * preview so the cross-site frame authenticates without the (third-party, blocked) session cookie.
+   * Same as previewUrl for a public or self-host preview. */
+  previewFrameUrl?: string | null;
   /** The owner's own domain when it is LIVE — then it, not the preview URL, is the pod's address. */
   customDomainUrl?: string | null;
   previewPublic: boolean;
@@ -294,6 +298,7 @@ export default function PodCockpit(props: PodCockpitProps) {
     size,
     diskGb,
     previewUrl,
+    previewFrameUrl = null,
     customDomainUrl = null,
     createdAt,
     lastActiveAt,
@@ -1592,6 +1597,9 @@ export default function PodCockpit(props: PodCockpitProps) {
                 slug={slug}
                 url={customDomainUrl ?? previewUrl}
                 altUrl={customDomainUrl ? previewUrl : null}
+                // The token URL is the preview subdomain's; only use it when the FRAME shows that
+                // subdomain. A live custom domain is the primary slot then and needs no token.
+                frameUrl={customDomainUrl ? null : previewFrameUrl}
                 isPublic={previewPublic}
                 running={status === "running"}
               />
