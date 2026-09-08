@@ -3,6 +3,7 @@
 import { GithubHandle } from "@/components/github-handle";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import GithubMark from "@/components/github-mark";
 import { GithubDevicePanel } from "@/components/github-device-panel";
 import { useConfirm } from "@/components/ui/use-confirm";
@@ -131,58 +132,85 @@ export function GithubAccountCard() {
   if (!configured) return null; // GitHub not configured on this deployment — nothing to manage
 
   return (
-    <section className="rounded-xl border border-border/60 bg-card p-5">
+    <section className="overflow-hidden rounded-xl border border-border bg-card">
       {dialog}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <GithubMark className="mt-0.5 h-5 w-5 shrink-0 text-foreground" />
-          <div>
-            <h2 className="text-base font-semibold">GitHub</h2>
-            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-              {login ? (
-                <>
-                  Connected as <GithubHandle login={login} />. Every pod you launch or add reuses this connection.
-                </>
-              ) : (
-                <>Connect once — every pod you launch or add then reuses it, no per-pod sign-in.</>
-              )}
-            </p>
-          </div>
+      <div className="flex items-start justify-between gap-3 px-5 py-4">
+        <div className="flex items-center gap-2.5">
+          <span className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-white/[0.04] text-foreground">
+            <GithubMark className="h-[18px] w-[18px]" />
+          </span>
+          <h2 className="text-[15.5px] font-semibold">GitHub</h2>
         </div>
-
         {login ? (
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="outline" size="sm" onClick={connect} disabled={busy || !!device}>
-              {busy ? "Reconnecting…" : "Reconnect"}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
-              onClick={disconnect}
-              disabled={busy}
-            >
-              Disconnect
-            </Button>
-          </div>
-        ) : device ? (
-          <Button variant="outline" size="sm" onClick={cancelConnect} className="shrink-0">
-            Cancel
-          </Button>
+          <Badge className="gap-1.5 bg-success/15 text-success hover:bg-success/15">
+            <span className="size-1.5 rounded-full bg-success" />
+            Connected
+          </Badge>
         ) : (
-          <Button variant="outline" size="sm" className="shrink-0" onClick={connect} disabled={busy}>
-            {busy ? "Connecting…" : "Connect GitHub"}
-          </Button>
+          <Badge variant="outline" className="text-muted-foreground">
+            Not connected
+          </Badge>
         )}
       </div>
 
+      {login ? (
+        <>
+          <div className="grid grid-cols-2 divide-x divide-y divide-border/60 border-y border-border/60 sm:grid-cols-3 sm:divide-y-0">
+            <div className="min-w-0 px-4 py-3">
+              <div className="text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground">Account</div>
+              <div className="mt-1 truncate text-[15px] font-semibold"><GithubHandle login={login} /></div>
+            </div>
+            <div className="min-w-0 px-4 py-3">
+              <div className="text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground">Access</div>
+              <div className="mt-1 truncate text-[15px] font-semibold">Clone · pull · push</div>
+              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">private repos included</div>
+            </div>
+            <div className="min-w-0 px-4 py-3">
+              <div className="text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground">Applies to</div>
+              <div className="mt-1 truncate text-[15px] font-semibold">Every pod</div>
+              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">launched or added</div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+            <span className="text-[12px] text-muted-foreground">Disconnecting revokes GitHub from every pod.</span>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={connect} disabled={busy || !!device}>
+                {busy ? "Reconnecting…" : "Reconnect"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-warning/40 text-warning hover:bg-warning/10 hover:text-warning"
+                onClick={disconnect}
+                disabled={busy}
+              >
+                Disconnect
+              </Button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-5 py-4">
+          <span className="text-[12.5px] text-muted-foreground">
+            Connect once — every pod you launch or add then reuses it, no per-pod sign-in.
+          </span>
+          {device ? (
+            <Button variant="outline" size="sm" onClick={cancelConnect}>Cancel</Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={connect} disabled={busy}>
+              {busy ? "Connecting…" : "Connect GitHub"}
+            </Button>
+          )}
+        </div>
+      )}
+
       {device && (
-        <div className="mt-4">
+        <div className="border-t border-border/60 px-5 py-4">
           <GithubDevicePanel userCode={device.userCode} verificationUri={device.url} />
         </div>
       )}
-      {error && <p className="mt-3 text-[13px] text-destructive">{error}</p>}
-      {notice && !error && <p className="mt-3 text-[13px] text-success">{notice}</p>}
+      {error && <p className="px-5 pb-4 text-[13px] text-destructive">{error}</p>}
+      {notice && !error && <p className="px-5 pb-4 text-[13px] text-success">{notice}</p>}
     </section>
   );
 }

@@ -4,12 +4,12 @@ import { GithubAccountCard } from "@/components/github-account-card";
 import ThemeSwitcher from "@/components/theme-switcher";
 import { myRelayLive } from "@/lib/relay-actions";
 import { editionOss } from "@/lib/session";
+import { Palette } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-/** Settings — theme/font live in the terminal top bar; account actions in the sidebar
- * user menu. The relay lives here because it is an owner-level capability (one relay
- * per person, shared across their pods), not a per-pod setting. */
+/** Settings — account-level connections + appearance, each in its own full-width card. Sign out and
+ * per-pod actions live elsewhere (the sidebar user menu, the pod cockpit). */
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
@@ -17,27 +17,33 @@ export default async function SettingsPage() {
   // no part of — and a self-host pod already egresses from the owner's own network. So it's not a
   // thing in OSS; don't show it (nor mint a relay command that can't work).
   const oss = editionOss();
-  // myRelayLive, not myRelayStatus: this page is now the ONLY place the relay is shown (the per-pod
-  // row was removed 2026-09-07), so it must carry everything that row did — tunnel health and usage,
-  // not just connected/not. Removing a surface must not quietly delete the information it held.
   const relay = oss ? null : await myRelayLive();
   return (
     <DashboardPage title="Settings">
-      <div className="space-y-6">
+      <div className="space-y-4">
         {!oss && relay && <RelayConnectCard initial={relay} />}
-        {/* GitHub is an owner-level connection (one per person, reused by every pod), so it lives
-            here like the relay. Cloud-only: self-host connects GitHub in-pod per pod. */}
+        {/* GitHub is an owner-level connection (one per person, reused by every pod). Cloud-only:
+            self-host connects GitHub in-pod per pod. */}
         {!oss && <GithubAccountCard />}
-        <div className="flex flex-col gap-2.5 border-t border-border/60 pt-5">
-          <div>
-            <h2 className="text-[15px] font-semibold tracking-tight">Appearance</h2>
-            <p className="text-[12.5px] text-muted-foreground">
-              How the dashboard looks. The landing page always uses Podway.
-            </p>
+
+        <section className="overflow-hidden rounded-xl border border-border bg-card">
+          <div className="flex items-start gap-2.5 px-5 py-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-white/[0.04] text-muted-foreground">
+              <Palette className="size-[18px]" />
+            </span>
+            <div>
+              <h2 className="text-[15.5px] font-semibold">Appearance</h2>
+              <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                How the dashboard looks. The landing page always uses Podway.
+              </p>
+            </div>
           </div>
-          <ThemeSwitcher />
-        </div>
-        <p className="text-sm text-muted-foreground">
+          <div className="border-t border-border/60 px-5 py-4">
+            <ThemeSwitcher />
+          </div>
+        </section>
+
+        <p className="text-[12.5px] text-muted-foreground">
           Sign out is in the user menu at the bottom of the sidebar. More settings are coming soon.
         </p>
       </div>

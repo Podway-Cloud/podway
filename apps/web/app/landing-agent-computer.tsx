@@ -13,6 +13,7 @@ import {
   Wrench,
 } from "lucide-react";
 import dashboardImage from "../../../docs/images/dashboard.png";
+import ImageLightbox from "@/components/image-lightbox";
 import { TrackedLink } from "./landing-examples";
 import { getCurrentUser } from "@/lib/session";
 import styles from "./landing-agent.module.css";
@@ -86,7 +87,7 @@ export default async function AgentComputerLanding({
               <i /><i /><i />
               <span>podway dashboard</span>
             </div>
-            <Image
+            <ImageLightbox
               className={styles.dashboardImage}
               src={dashboardImage}
               alt="Podway dashboard showing pods that are working, idle, or waiting for a reply, with app previews"
