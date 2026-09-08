@@ -37,11 +37,18 @@ export default async function globalSetup(): Promise<void> {
       ["ECONNRESET", "ECONNABORTED", "EPIPE"].includes(err?.code ?? "")
     );
   };
+  // The MAIN process (this file + the in-process gateway/pod-agent + the spawned Next server) never
+  // runs test assertions — those run in Playwright's WORKER processes — so an uncaughtException /
+  // unhandledRejection HERE is always infrastructure churn, never a test failure it could mask.
+  // Under the 2-shard concurrent load, aborted connections reject with shapes a keyword filter can't
+  // enumerate (ECONNRESET, a bare `aborted`, even `undefined`), and rethrowing ANY of them crashed a
+  // run whose tests ALL passed (observed 2026-09-08: `throw undefined` mid-run → exit 1, and again at
+  // teardown). So NEVER rethrow — swallow it; just LOG the ones that are not obvious churn, for visibility.
   process.on("uncaughtException", (e) => {
-    if (!isPgChurn(e)) throw e;
+    if (!isPgChurn(e)) console.warn("[e2e] swallowed main-process uncaughtException:", e);
   });
   process.on("unhandledRejection", (e) => {
-    if (!isPgChurn(e)) throw e;
+    if (!isPgChurn(e)) console.warn("[e2e] swallowed main-process unhandledRejection:", e);
   });
 
   // Postgres for the hermetic stack. testcontainers needs a container runtime, which

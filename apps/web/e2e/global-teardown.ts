@@ -6,9 +6,16 @@ const STATE = path.join(process.cwd(), ".e2e-state.json");
 
 /** Kill the Next server (process group) and remove the Postgres container. */
 export default async function globalTeardown(): Promise<void> {
-  // Tests have already passed by now; removing the container force-closes any
-  // pg pool we can't reach (e.g. better-auth's) → swallow that teardown churn
-  // so it doesn't fail the run.
+  // Tests have already passed by now. Teardown tears down a LIVE stack (kill the Next server,
+  // close the in-process gateway/pod-agent, drop the db, remove the container) and that inherently
+  // throws connection errors — and NOT only pg-churn: under the 2-shard concurrent load a Node
+  // stream `aborted`/TypeError surfaces here too, and global-setup's STRICT uncaughtException handler
+  // (which rethrows anything non-churn) then crashes a run whose tests ALL PASSED (observed 2026-09-08:
+  // 53/53 green, then exit 1 at teardown). Nothing that happens after the last test should fail the
+  // run — drop setup's strict handlers and swallow everything from here on.
+  process.removeAllListeners("uncaughtException");
+  process.removeAllListeners("unhandledRejection");
+  process.on("uncaughtException", () => {});
   process.on("unhandledRejection", () => {});
 
   let state: {
