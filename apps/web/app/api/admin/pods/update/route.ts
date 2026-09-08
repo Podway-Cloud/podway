@@ -2,11 +2,9 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getPodService } from "@/lib/pod-service";
 import { createLogger } from "@podway/shared/log";
+import { normalizeUpdateIds } from "@/lib/admin-update-ids";
 
 const log = createLogger("api-admin-pods-update");
-
-/** Never burst the Incus box: recreates run one at a time, exactly like the bulk idle-update. */
-const MAX_IDS = 24;
 
 function authed(req: Request): boolean | null {
   const expected = process.env.ADMIN_API_TOKEN;
@@ -32,15 +30,18 @@ export async function POST(req: Request): Promise<Response> {
   if (ok === null) return NextResponse.json({ error: "ADMIN_API_TOKEN not configured" }, { status: 503 });
   if (!ok) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  let ids: string[] = [];
+  let rawIds: unknown;
   try {
     const body = (await req.json()) as { ids?: unknown };
-    if (Array.isArray(body?.ids)) ids = body.ids.filter((v): v is string => typeof v === "string" && v.length > 0);
+    rawIds = body?.ids;
   } catch {
     return NextResponse.json({ error: "body must be JSON: { ids: string[] }" }, { status: 400 });
   }
-  if (ids.length === 0) return NextResponse.json({ error: "ids[] required" }, { status: 400 });
-  if (ids.length > MAX_IDS) return NextResponse.json({ error: `at most ${MAX_IDS} ids` }, { status: 400 });
+  // A whole fleet is accepted in one call now — no more rejecting >24. The box is protected by the
+  // SEQUENTIAL recreate loop below + admission.ts, not by a request-size cap (see admin-update-ids.ts).
+  const norm = normalizeUpdateIds(rawIds);
+  if ("error" in norm) return NextResponse.json({ error: norm.error }, { status: norm.status });
+  const ids = norm.ids;
 
   const image = process.env.PODWAY_BASE_IMAGE;
   if (!image) return NextResponse.json({ error: "No pod image is configured" }, { status: 503 });

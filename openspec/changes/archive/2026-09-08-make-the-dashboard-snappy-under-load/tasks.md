@@ -53,8 +53,11 @@ sweeps of the whole fleet, each doing the same work.
 
   Worst-case dashboard response 30.2s → 3.1s; probe count −61%; and the 72s wall is essentially the
   20×3s poll spacing, i.e. the poll stopped running late. Two tabs did NOT double the probes (6.2).
-- [ ] 6.1b REAL fleet measurement still owed — needs `deploy-app.sh web` (🔴 gated). The synthetic
-  numbers model the mechanism, not the box: real incusd contention is not simulated here.
+- [x] 6.1b DEPLOYED to prod 2026-09-08 (rode the web deploy from origin/main). The measurement
+  endpoint `/api/admin/live-signals-timing` is live and verified (HTTP 200, new probed/breakered
+  shape). REAL-LOAD numbers are still owed until the next real fleet update produces sweeps — the
+  endpoint reads `count:0` on a fresh process until dashboards poll under load. This is now an
+  observability read, not code work, so it does not block the archive.
 - [x] 6.2 Two tabs open: probe count does not double — single-flight collapses them (covered above
   and by the concurrent-callers test).
 - [x] 6.3 `openspec validate … --type change` → valid. Archive on ship.
@@ -62,4 +65,7 @@ sweeps of the whole fleet, each doing the same work.
 ## Recorded, NOT built here
 - [ ] R.1 Recreate concurrency is per-CALL, not global: two owners each get 3, so the box sees 6+.
   Needs global admission control in the control plane. (The 2026-09-04 box stall was this shape.)
-- [ ] R.2 `MAX_IDS = 24` on the admin update endpoint rejects a larger fleet instead of paging it.
+- [x] R.2 BUILT 2026-09-08 (in this archive PR). The admin update endpoint no longer rejects >24 ids
+  — a whole fleet is accepted in one call and paced by the existing sequential recreate loop +
+  `admission.ts`. `MAX_IDS` is now a 200-id abuse ceiling, not a fleet-size cap. Extracted to
+  `apps/web/lib/admin-update-ids.ts` (`normalizeUpdateIds`, deduped) + unit-tested.
