@@ -1,4 +1,8 @@
-name: Deploy
+name: Deploy apps (web+gateway)
+# Scope: the two Fly apps ONLY (web + gateway). The pod-base Incus image, the ghcr self-host
+# images, and the OSS source mirror are separate surfaces (see docs/runbooks/shipping.md) with
+# their own scripts/workflows — deliberately NOT bundled here.
+#
 # Visible, durable deploys that run on YOUR box (self-hosted → no GitHub minutes) and survive an
 # agent session dying. Replaces the invisible detached bash jobs the agent used to babysit.
 #
