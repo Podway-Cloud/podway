@@ -1,55 +1,64 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Copy, Check, Radio, Terminal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RelayInfoDialog } from "@/components/relay-info-dialog";
 import { Badge } from "@/components/ui/badge";
-import { mintRelayCommand, myRelayStatus, type RelayCommand } from "@/lib/relay-actions";
+import { RelayInfoDialog } from "@/components/relay-info-dialog";
+import { mintRelayCommand, myRelayLive, type RelayCommand, type MyRelayLive } from "@/lib/relay-actions";
 import { copyText } from "@/lib/clipboard";
 
 /**
- * Bring up a relay for your own machine.
+ * Bring up a relay for your own machine — no prose here on purpose: what the relay IS and
+ * its limits live behind the ⓘ (RelayInfoDialog). This card is just state + the one command.
  *
- * The relay lets a pod fetch pages that refuse a datacenter IP — through your own
- * connection, from your own browser. You run one command on your computer; the pod
- * never touches your machine except to ask it to fetch a page and get the result back.
- *
- * The command carries a single-use, short-lived code — so the card mints it on demand
- * and shows the countdown, rather than leaving a live code sitting on the page.
+ * The command carries a single-use, short-lived code — so the card mints it on demand and
+ * shows the countdown, rather than leaving a live code sitting on the page.
  */
-/** Same formatting the removed per-pod row used, so the number reads identically. */
 function fmtBytes(n: number): string {
-  if (!n) return "0 B";
-  const u = ["B", "KB", "MB", "GB", "TB"];
-  const i = Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(1024)));
-  return `${(n / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${u[i]}`;
+  if (n >= 1_073_741_824) return `${(n / 1_073_741_824).toFixed(1)} GB`;
+  if (n >= 1_048_576) return `${(n / 1_048_576).toFixed(1)} MB`;
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+  return `${n} B`;
 }
 
-export default function RelayConnectCard({
-  initial,
-}: {
-  /** The FULL live shape. This card is the only relay surface now (the per-pod row was
-   *  removed 2026-09-07), so it carries tunnel health and usage too, not just connected. */
-  initial: {
-    connected: boolean;
-    loginDomains: string[];
-    health?: { state?: string | null; detail?: string | null } | null;
-    usage?: { bytesUp: number; bytesDown: number } | null;
-  };
-}) {
-  const [status, setStatus] = useState(initial);
+export default function RelayConnectCard({ initial }: { initial: MyRelayLive }) {
+  const [live, setLive] = useState<MyRelayLive>(initial);
   const [cmd, setCmd] = useState<RelayCommand | null>(null);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const busy = useRef(false);
+  const misses = useRef(0);
 
-  // Poll connection status while the card is open, so running the command flips the
-  // badge to "connected" without a manual refresh.
+  // Poll the live picture (connected? + usage + signed-in sites). Running the command flips
+  // the pill to Connected with no refresh. Two guards keep the stats from FLICKERING away:
+  //  - a failed poll keeps the last good value (catch), never blanks the card;
+  //  - a single `connected:false` (a stale heartbeat between the gateway's updates) is ridden
+  //    out — we only downgrade to "Not connected" after two consecutive misses.
   useEffect(() => {
-    const t = setInterval(() => void myRelayStatus().then(setStatus).catch(() => undefined), 4000);
-    return () => clearInterval(t);
+    const tick = async () => {
+      if (busy.current || document.visibilityState !== "visible") return;
+      busy.current = true;
+      try {
+        const next = await myRelayLive();
+        setLive((prev) => {
+          if (!next.connected && prev.connected) {
+            misses.current += 1;
+            return misses.current >= 2 ? next : prev;
+          }
+          misses.current = 0;
+          return next;
+        });
+      } catch {
+        /* transient — keep the last good value rather than flicker */
+      } finally {
+        busy.current = false;
+      }
+    };
+    const id = setInterval(tick, 5000);
+    return () => clearInterval(id);
   }, []);
 
   const generate = () =>
@@ -74,75 +83,71 @@ export default function RelayConnectCard({
   };
 
   const expiresInMin = cmd ? Math.max(0, Math.round((cmd.expiresAt - Date.now()) / 60000)) : 0;
+  const u = live.usage;
+  const bytes = u ? u.bytesUp + u.bytesDown : 0;
+  const failing = live.health?.state === "failed";
+  const droppedRecently =
+    !!live.lastDroppedAt && Date.now() - Date.parse(live.lastDroppedAt) < 15 * 60_000;
 
   return (
     <Card className="gap-1 py-4">
       <CardHeader className="flex-row items-start justify-between gap-3">
-        <CardTitle className="flex items-center gap-2 text-base font-semibold">
-          <Radio className="size-4 shrink-0 text-muted-foreground" />
-          Relay
-          {/* The owner's ONE explanation of what the relay does and its limits. It lived on the
-              per-pod row; removing that row left it rendered nowhere at all, which a visual test
-              caught. Moved here with the rest of the relay (2026-09-07). */}
+        <div className="flex items-center gap-1">
+          <CardTitle className="flex items-center gap-2 text-base font-semibold">
+            <Radio className="size-4 shrink-0 text-muted-foreground" />
+            Relay
+          </CardTitle>
           <RelayInfoDialog />
-        </CardTitle>
-        {status.connected ? (
-          <Badge className="bg-success/15 text-success hover:bg-success/15">Connected</Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">
-            Not connected
-          </Badge>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-3 py-0">
-        <p className="text-[12.5px] leading-relaxed text-muted-foreground">
-          Some websites block traffic from datacenters. Podway Relay lets your pods fetch those sites
-          through your computer&apos;s internet connection. Start it with one command and leave it
-          running. Pages open signed out by default; to use your account on a specific site, sign in
-          once with <code className="rounded bg-muted px-1 py-0.5 text-[11px]">relay login</code>.
-        </p>
+        </div>
+        {/* Pill + its stats, stacked — the live detail sits directly UNDER the pill and stays put. */}
+        <div className="flex flex-col items-end gap-1 text-right">
+          {live.connected ? (
+            <Badge
+              className={
+                failing
+                  ? "bg-destructive/15 text-destructive hover:bg-destructive/15"
+                  : "bg-success/15 text-success hover:bg-success/15"
+              }
+            >
+              {failing ? "Relay failure" : "Connected"}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">
+              Not connected
+            </Badge>
+          )}
 
-        {/* Tunnel health + traffic. These used to sit on EVERY pod's settings row, where the
-            figures were account-wide totals rendered against one pod — a wrong number, not just
-            clutter. They belong here, once, where "one relay for all your pods" is the frame. */}
-        {status.connected && (status.health || status.usage) && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted-foreground">
-            {status.health?.state && (
-              <span className="inline-flex items-center gap-1.5">
+          {live.connected && (
+            <div className="flex flex-col items-end gap-0.5">
+              {u && (
+                <span className="whitespace-nowrap text-[11px] text-muted-foreground">
+                  {u.open > 0 ? `${u.open} active · ` : ""}
+                  {fmtBytes(bytes)}
+                </span>
+              )}
+              {droppedRecently && (
                 <span
-                  className={
-                    status.health.state === "failed"
-                      ? "size-1.5 rounded-full bg-destructive"
-                      : "size-1.5 rounded-full bg-success"
-                  }
-                  aria-hidden
-                />
-                {status.health.state === "failed" ? "Tunnel failing" : "Tunnel healthy"}
-              </span>
-            )}
-            {status.usage && (
-              <span className="tabular-nums">
-                {fmtBytes(status.usage.bytesUp + status.usage.bytesDown)} through the relay
-              </span>
-            )}
-          </div>
-        )}
+                  className="text-[11px] text-warning"
+                  title={`${live.dropCount} drop${live.dropCount === 1 ? "" : "s"} total — the link is flapping`}
+                >
+                  dropped {Math.max(1, Math.round((Date.now() - Date.parse(live.lastDroppedAt!)) / 60_000))}m ago · unstable
+                </span>
+              )}
+              {live.loginDomains.length > 0 && (
+                <span className="max-w-[220px] truncate text-[11px] text-muted-foreground">
+                  Signed in: {live.loginDomains.join(", ")}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </CardHeader>
 
-        {status.connected && status.loginDomains.length > 0 && (
-          <p className="text-[12px] text-muted-foreground">
-            Signed in for:{" "}
-            {status.loginDomains.map((d) => (
-              <span key={d} className="mr-1 rounded bg-muted px-1.5 py-0.5 text-[11px]">
-                {d}
-              </span>
-            ))}
-          </p>
-        )}
-
+      <CardContent className="space-y-2 py-0">
         {!cmd ? (
           <Button variant="outline" size="sm" onClick={generate} disabled={pending}>
             <Terminal className="size-3.5" />
-            {pending ? "Generating…" : status.connected ? "Connect another machine" : "Generate command"}
+            {pending ? "Generating…" : live.connected ? "Use a different machine" : "Generate command"}
           </Button>
         ) : (
           <div className="space-y-2">
