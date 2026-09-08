@@ -46,6 +46,10 @@ export async function startTerminalStack(opts: {
     host: "127.0.0.1",
     port: opts.agentPort,
     credential: { agent: "claude-code", path: fakeCreds },
+    // In-process: a real process.exit(1) from the session watchdog would kill the whole Playwright
+    // run (the sharded-e2e flake, 2026-09-08). A dead session in a test is a test concern, not a
+    // reason to take down the runner — so never exit here.
+    exitForRestart: () => {},
   });
   await agent.listen();
 
@@ -62,6 +66,7 @@ export async function startTerminalStack(opts: {
     host: "127.0.0.1",
     port: unauthedPort,
     // no credential → not signed in
+    exitForRestart: () => {},
   });
   await agentUnauthed.listen();
 

@@ -168,6 +168,11 @@ export interface AgentServerOptions extends PtySessionOptions {
    * agent invisible to the check meant to notice it (caught in live testing,
    * 2026-07-29: killing an agent's window produced no repair at all). */
   declaredAgents?: string[];
+  /** How the session watchdog ends the process when a dead tmux session can only be recovered by a
+   * full re-boot: prod exits (default) so the service manager restarts the agent. Injectable because
+   * the e2e runs this server IN-PROCESS inside the Playwright runner — a real process.exit there kills
+   * the whole test run (this was the ~50% sharded-e2e flake, root-caused 2026-09-08). */
+  exitForRestart?: () => void;
   /** Builds the boot command for an agent being ADDED to a live pod (slice 3).
    * main.ts owns the pod-spec (permission mode etc.), so it supplies this rather
    * than the server guessing. Absent → /agent/add is unavailable. */
@@ -433,6 +438,7 @@ export class AgentServer {
   private readonly credential?: { agent: string; path: string };
   private readonly agentCommandFor?: (agent: string) => string;
   private readonly declaredAgents: string[];
+  private readonly exitForRestart: () => void;
   private readonly displayName?: string;
   private readonly greeter?: Pick<GreeterOptions, "rcTitle" | "agentAuth" | "kickoffTrigger" | "resumeTrigger" | "greetedMarkerPath">;
   private bootedUnauthed = false;
@@ -507,6 +513,7 @@ export class AgentServer {
     this.declaredAgents = options.declaredAgents ?? [];
     this.displayName = options.displayName;
     this.greeter = options.greeter;
+    this.exitForRestart = options.exitForRestart ?? (() => process.exit(1));
     // "Booted unauthed" = the CLI came up with no credentials, so login is still pending.
     // Track it even when there's NO kickoff to respawn into (an OSS/bare pod) so RC still
     // gets enabled after login — both sources point at the same creds file.
@@ -1622,7 +1629,7 @@ export class AgentServer {
       if (this.tryRepair("session", "session_dead")) {
         this.log.error("watchdog_session_restart", { session: this.session.sessionName });
         // Give the log a beat to flush, then let the supervisor restart us.
-        setTimeout(() => process.exit(1), 250);
+        setTimeout(() => this.exitForRestart(), 250);
       }
       return; // nothing else is assessable without a session
     }
