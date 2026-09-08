@@ -98,5 +98,7 @@ describe("fetch memory round trip", () => {
     await bare.provisionPending();
     await expect(bare.reconcile(rec.id)).resolves.toBeTruthy();
     await t2.close();
-  });
+    // Spins up a SECOND fresh PGlite db + provisions a pod; on a loaded CI box that can exceed
+    // vitest's 5s default (a required-check flake, 2026-09-08). Give it room.
+  }, 20_000);
 });

@@ -25,10 +25,18 @@ export default async function globalSetup(): Promise<void> {
   // container goes away at teardown. Those are EventEmitter 'error' events that
   // crash the main process if unhandled. Swallow ONLY pg connection churn here
   // (test assertions run in worker processes, so this can't mask a failure).
-  const isPgChurn = (e: unknown) =>
-    /postmaster|terminating connection|ECONNRESET|Connection terminated|read ECONN/i.test(
-      String((e as Error)?.message ?? e),
+  const isPgChurn = (e: unknown) => {
+    const err = e as { message?: string; code?: string } | undefined;
+    const msg = String(err?.message ?? e);
+    // pg pool sockets erroring during teardown/navigation churn — plus the bare "aborted" (code
+    // ECONNRESET) a client-closed request throws, whose MESSAGE is "aborted" not "ECONNRESET", so
+    // the old message-only regex missed it and the rethrow crashed the runner before Playwright's
+    // retry could absorb it (observed on a sharded run under load, 2026-09-08).
+    return (
+      /postmaster|terminating connection|ECONNRESET|ECONNABORTED|Connection terminated|read ECONN|aborted/i.test(msg) ||
+      ["ECONNRESET", "ECONNABORTED", "EPIPE"].includes(err?.code ?? "")
     );
+  };
   process.on("uncaughtException", (e) => {
     if (!isPgChurn(e)) throw e;
   });
