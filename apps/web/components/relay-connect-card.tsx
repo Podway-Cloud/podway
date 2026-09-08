@@ -133,10 +133,10 @@ export default function RelayConnectCard({ initial }: { initial: MyRelayLive }) 
         <>
           {/* Full-width live stats strip. */}
           <div className="grid grid-cols-2 divide-x divide-y divide-border/60 border-y border-border/60 sm:grid-cols-4 sm:divide-y-0">
-            <Stat label="Link" sub={live.health?.ms != null ? `${live.health.ms} ms` : "through your computer"}>
+            <Stat label="Link" sub={live.health?.ms != null ? `${live.health.ms} ms` : undefined}>
               <span className={linkClass}>{linkLabel}</span>
             </Stat>
-            <Stat label="Active streams" sub={u ? `${u.connections} total this session` : undefined}>
+            <Stat label="Active now" sub={u ? `${u.connections} total this session` : undefined}>
               {u ? u.open : "—"}
             </Stat>
             <Stat label="Transferred" sub={u ? `↑ ${fmtBytes(u.bytesUp)} · ↓ ${fmtBytes(u.bytesDown)}` : undefined}>

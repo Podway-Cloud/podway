@@ -126,3 +126,22 @@ export async function disconnectGithubAccount(): Promise<{ ok: boolean }> {
   await disconnect(user.id).catch(() => {});
   return { ok: true };
 }
+
+/** Which cloned repos map to which pods, for the Settings GitHub card — grouped by repo, each with
+ * the pods that cloned it (BYO-repo `githubRepo`), so the card links straight to them. */
+export async function githubReposToPods(): Promise<
+  { repo: string; pods: { slug: string; name: string; status: string }[] }[]
+> {
+  const user = await requireUser();
+  const pods = await getPodService().listPods(user.id);
+  const byRepo = new Map<string, { slug: string; name: string; status: string }[]>();
+  for (const p of pods) {
+    if (!p.githubRepo) continue;
+    const list = byRepo.get(p.githubRepo) ?? [];
+    list.push({ slug: p.id, name: p.name ?? p.id, status: p.status });
+    byRepo.set(p.githubRepo, list);
+  }
+  return [...byRepo.entries()]
+    .map(([repo, pods]) => ({ repo, pods }))
+    .sort((a, b) => a.repo.localeCompare(b.repo));
+}

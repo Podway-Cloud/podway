@@ -33,9 +33,7 @@ export default async function SettingsPage() {
             </span>
             <div>
               <h2 className="text-[15.5px] font-semibold">Appearance</h2>
-              <p className="mt-0.5 text-[12.5px] text-muted-foreground">
-                How the dashboard looks. The landing page always uses Podway.
-              </p>
+              <p className="mt-0.5 text-[12.5px] text-muted-foreground">Choose theme</p>
             </div>
           </div>
           <div className="border-t border-border/60 px-5 py-4">
@@ -43,9 +41,6 @@ export default async function SettingsPage() {
           </div>
         </section>
 
-        <p className="text-[12.5px] text-muted-foreground">
-          Sign out is in the user menu at the bottom of the sidebar. More settings are coming soon.
-        </p>
       </div>
     </DashboardPage>
   );

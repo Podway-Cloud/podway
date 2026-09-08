@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
+import { ArrowUpRight, FileCode } from "lucide-react";
 import { GithubHandle } from "@/components/github-handle";
+import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +16,7 @@ import {
   completeGithubAccountConnect,
   startGithubAccountWebConnect,
   disconnectGithubAccount,
+  githubReposToPods,
 } from "@/lib/github-connect-actions";
 
 /**
@@ -29,6 +33,7 @@ export function GithubAccountCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [repos, setRepos] = useState<{ repo: string; pods: { slug: string; name: string; status: string }[] }[]>([]);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { confirm, dialog } = useConfirm();
 
@@ -38,6 +43,7 @@ export function GithubAccountCard() {
         setConfigured(s.configured);
         setWebFlow(s.webFlow);
         setLogin(s.login);
+        if (s.login) void githubReposToPods().then(setRepos).catch(() => undefined);
       })
       .catch(() => setConfigured(false));
     // A one-click return lands with ?github=connected|denied|error — surface the non-happy paths.
@@ -135,11 +141,18 @@ export function GithubAccountCard() {
     <section className="overflow-hidden rounded-xl border border-border bg-card">
       {dialog}
       <div className="flex items-start justify-between gap-3 px-5 py-4">
-        <div className="flex items-center gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
           <span className="grid size-9 shrink-0 place-items-center rounded-[10px] border border-border bg-white/[0.04] text-foreground">
             <GithubMark className="h-[18px] w-[18px]" />
           </span>
-          <h2 className="text-[15.5px] font-semibold">GitHub</h2>
+          <div className="min-w-0">
+            <h2 className="text-[15.5px] font-semibold">GitHub</h2>
+            {login && (
+              <p className="mt-0.5 truncate text-[12.5px] text-muted-foreground">
+                Connected as <GithubHandle login={login} /> · reused by every pod
+              </p>
+            )}
+          </div>
         </div>
         {login ? (
           <Badge className="gap-1.5 bg-success/15 text-success hover:bg-success/15">
@@ -155,22 +168,48 @@ export function GithubAccountCard() {
 
       {login ? (
         <>
-          <div className="grid grid-cols-2 divide-x divide-y divide-border/60 border-y border-border/60 sm:grid-cols-3 sm:divide-y-0">
-            <div className="min-w-0 px-4 py-3">
-              <div className="text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground">Account</div>
-              <div className="mt-1 truncate text-[15px] font-semibold"><GithubHandle login={login} /></div>
+          {repos.length > 0 ? (
+            <div className="border-y border-border/60">
+              <div className="px-5 pb-1.5 pt-3 text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
+                Cloned repositories → pods
+              </div>
+              <ul>
+                {repos.map((r) => (
+                  <li
+                    key={r.repo}
+                    className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border/60 px-5 py-2.5 first:border-t-0"
+                  >
+                    <span className="flex min-w-0 items-center gap-2 font-mono text-[12.5px]">
+                      <FileCode className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{r.repo}</span>
+                    </span>
+                    <span className="ml-auto flex flex-wrap justify-end gap-2">
+                      {r.pods.map((pod) => (
+                        <Link
+                          key={pod.slug}
+                          href={`/dashboard/pods/${pod.slug}`}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-sky-400/25 bg-sky-400/[0.06] px-2 py-1 text-[12px] font-medium text-sky-300 hover:bg-sky-400/[0.12]"
+                        >
+                          <span
+                            className={cn(
+                              "size-1.5 rounded-full",
+                              pod.status === "running" ? "bg-success" : "bg-muted-foreground/60",
+                            )}
+                          />
+                          {pod.name}
+                          <ArrowUpRight className="size-3" />
+                        </Link>
+                      ))}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
-            <div className="min-w-0 px-4 py-3">
-              <div className="text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground">Access</div>
-              <div className="mt-1 truncate text-[15px] font-semibold">Clone · pull · push</div>
-              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">private repos included</div>
+          ) : (
+            <div className="border-y border-border/60 px-5 py-3 text-[12.5px] text-muted-foreground">
+              No repositories cloned into a pod yet.
             </div>
-            <div className="min-w-0 px-4 py-3">
-              <div className="text-[10.5px] font-medium uppercase tracking-[0.05em] text-muted-foreground">Applies to</div>
-              <div className="mt-1 truncate text-[15px] font-semibold">Every pod</div>
-              <div className="mt-0.5 truncate text-[11px] text-muted-foreground">launched or added</div>
-            </div>
-          </div>
+          )}
           <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
             <span className="text-[12px] text-muted-foreground">Disconnecting revokes GitHub from every pod.</span>
             <div className="flex items-center gap-2">
