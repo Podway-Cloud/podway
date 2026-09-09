@@ -247,7 +247,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 # sentence we can say; updates ride a reviewed image bump, not build timing.
 # Bump the pin deliberately when cutting a new image (npm view … version).
 RUN npm install -g @anthropic-ai/claude-code@2.1.263 @openai/codex@0.153.4 pnpm@10 \
-    @fission-ai/openspec@1.6.0 \
+    @fission-ai/openspec@1.12.0 \
     && rm -rf /home/dev/.npm /root/.npm \
     && openspec --version   # fail the build if the openspec bin isn't on PATH
 
