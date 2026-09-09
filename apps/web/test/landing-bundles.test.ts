@@ -192,6 +192,6 @@ describe("revised landing bundles", () => {
     expect(landingFooter).toContain('href="/privacy"');
     expect(landingFooter).toContain('href="/terms"');
     expect(landingFooter).toContain('href="/cookies"');
-    expect(landingFooter).toContain('href="mailto:support@podway.cloud"');
+    expect(landingFooter).toContain('href="mailto:support@podway.io"');
   });
 });

@@ -43,5 +43,5 @@ public installer should not yet be treated as a reproducible source distribution
 ## Reporting a vulnerability
 
 Do not include exploit details, credentials, tokens, or private data in a public issue. Send
-sensitive security reports to [security@podway.cloud](mailto:security@podway.cloud). Use
+sensitive security reports to [security@podway.io](mailto:security@podway.io). Use
 [GitHub Issues](https://github.com/podway-cloud/podway/issues) for non-sensitive installation bugs.

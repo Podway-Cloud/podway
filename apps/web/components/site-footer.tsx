@@ -15,7 +15,7 @@ export default function SiteFooter() {
           <Link href="/privacy" className="hover:text-foreground">Privacy</Link>
           <Link href="/terms" className="hover:text-foreground">Terms</Link>
           <Link href="/cookies" className="hover:text-foreground">Cookies</Link>
-          <a href="mailto:support@podway.cloud" className="hover:text-foreground">Support</a>
+          <a href="mailto:support@podway.io" className="hover:text-foreground">Support</a>
         </nav>
       </div>
     </footer>

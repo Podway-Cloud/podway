@@ -96,7 +96,7 @@ docker compose up -d
 
 ## Documentation
 
-- [Podway docs](https://podway.cloud/docs) — what Claude can accomplish, how to ask for recurring
+- [Podway docs](https://podway.io/docs) — what Claude can accomplish, how to ask for recurring
   work, and how to manage previews, skills, secrets, and recovery
 - [Deployment](docs/DEPLOYMENT.md) — supported hosts, ports, private access, remote-host guidance,
   and configuration
@@ -120,4 +120,4 @@ installer—not the source distribution.
 
 This edition is being shaped with early users. Report reproducible bugs and installation problems
 in [GitHub Issues](https://github.com/podway-cloud/podway/issues). For the managed version, visit
-[podway.cloud](https://podway.cloud).
+[podway.io](https://podway.io).

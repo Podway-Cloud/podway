@@ -17,7 +17,7 @@ export default function LandingFooter({
         <Link href="/privacy">Privacy</Link>
         <Link href="/terms">Terms</Link>
         <Link href="/cookies">Cookies</Link>
-        <a href="mailto:support@podway.cloud">Support</a>
+        <a href="mailto:support@podway.io">Support</a>
       </nav>
       <span className={styles.meta}>podway.io · © {new Date().getFullYear()}</span>
     </footer>

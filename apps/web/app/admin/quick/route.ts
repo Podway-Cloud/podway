@@ -14,7 +14,7 @@ function page(title: string, msg: string): Response {
       `<body style="font-family:system-ui,sans-serif;max-width:32rem;margin:14vh auto;padding:0 1.5rem;line-height:1.5">` +
       `<h1 style="font-size:1.15rem;margin:0 0 .4rem">${title}</h1>` +
       `<p style="color:#555;margin:0 0 1rem">${msg}</p>` +
-      `<p><a href="https://podway.cloud/admin" style="color:#2563eb">Open access requests →</a></p>`,
+      `<p><a href="https://podway.io/admin" style="color:#2563eb">Open access requests →</a></p>`,
     { headers: { "content-type": "text/html; charset=utf-8" }, status: 200 },
   );
 }

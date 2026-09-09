@@ -29,8 +29,8 @@ export default function LegalDoc({
 
       <footer className="mt-12 border-t border-border/60 pt-4 text-[12.5px] text-muted-foreground">
         Questions? Email{" "}
-        <a href="mailto:privacy@podway.cloud" className="text-[var(--accent-light)] hover:underline">
-          privacy@podway.cloud
+        <a href="mailto:privacy@podway.io" className="text-[var(--accent-light)] hover:underline">
+          privacy@podway.io
         </a>
         . See also our{" "}
         <Link href="/privacy" className="text-[var(--accent-light)] hover:underline">Privacy Policy</Link>,{" "}

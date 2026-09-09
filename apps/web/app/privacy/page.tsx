@@ -13,10 +13,10 @@ export default function PrivacyPage() {
       <p>
         Podway (&ldquo;Podway&rdquo;, &ldquo;we&rdquo;, &ldquo;us&rdquo;) provides cloud
         &ldquo;pods&rdquo; that run coding agents (such as Claude Code and Codex) you can reach from
-        any browser. This policy covers <code>podway.cloud</code> and the Podway app. Podway is
+        any browser. This policy covers <code>podway.io</code> and the Podway app. Podway is
         operated by <strong>Itzhak Lobak</strong> (an individual/sole proprietor), the data
         controller. A postal address is available on request at{" "}
-        <a href="mailto:privacy@podway.cloud">privacy@podway.cloud</a>.
+        <a href="mailto:privacy@podway.io">privacy@podway.io</a>.
       </p>
 
       <h2>2. Information we collect</h2>
@@ -111,7 +111,7 @@ export default function PrivacyPage() {
         right to access, correct, delete, port, or restrict processing of your personal data, to
         object to certain processing, and to withdraw consent. California residents may request that
         we not &ldquo;sell&rdquo; or &ldquo;share&rdquo; personal information — we do not. To exercise
-        any right, email <a href="mailto:privacy@podway.cloud">privacy@podway.cloud</a>. You may also
+        any right, email <a href="mailto:privacy@podway.io">privacy@podway.io</a>. You may also
         complain to your local data-protection authority.
       </p>
 
@@ -138,8 +138,8 @@ export default function PrivacyPage() {
 
       <h2>13. Contact</h2>
       <p>
-        Privacy questions or requests: <a href="mailto:privacy@podway.cloud">privacy@podway.cloud</a>.
-        Security reports: <a href="mailto:security@podway.cloud">security@podway.cloud</a>.
+        Privacy questions or requests: <a href="mailto:privacy@podway.io">privacy@podway.io</a>.
+        Security reports: <a href="mailto:security@podway.io">security@podway.io</a>.
       </p>
 
       <h2>14. Changes to this policy</h2>

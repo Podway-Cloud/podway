@@ -9,7 +9,7 @@ and recurring work. Sign in once, then continue the same pod from the official C
 desktop or mobile, using the Claude Pro or Max subscription you already have.
 
 Self-host it in one command, or use the managed service at
-[podway.cloud](https://podway.cloud).
+[podway.io](https://podway.io).
 
 [![License: BSL 1.1](https://img.shields.io/badge/license-BSL%201.1-blue.svg)](LICENSE)
 [![Self-host](https://img.shields.io/badge/self--host-one%20command-brightgreen.svg)](#quickstart-self-host)
@@ -111,7 +111,7 @@ A pnpm monorepo:
 
 ## Managed cloud
 
-Don't want to run infrastructure? [**podway.cloud**](https://podway.cloud) is the hosted version: the
+Don't want to run infrastructure? [**podway.io**](https://podway.io) is the hosted version: the
 same runtime, plus a managed fleet, team features, and a residential-egress relay network.
 
 ## License

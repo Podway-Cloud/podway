@@ -3,8 +3,8 @@ import { sendApprovalEmail } from "../src/notify.js";
 
 const CFG = {
   saJson: JSON.stringify({ client_email: "sa@x.iam", private_key: "PEM" }),
-  impersonate: "itzhak@podway.cloud",
-  from: "Itzhak · Podway <hi@podway.cloud>",
+  impersonate: "itzhak@podway.io",
+  from: "Itzhak · Podway <hi@podway.io>",
 };
 
 describe("sendApprovalEmail (Gmail API)", () => {
@@ -30,7 +30,7 @@ describe("sendApprovalEmail (Gmail API)", () => {
     const raw = JSON.parse((init as RequestInit).body as string).raw as string;
     const msg = Buffer.from(raw, "base64url").toString("utf8");
     expect(msg).toContain("To: ada@x.com");
-    expect(msg).toContain("<hi@podway.cloud>");
+    expect(msg).toContain("<hi@podway.io>");
     expect(msg).toMatch(/=\?UTF-8\?B\?/); // non-ASCII From/subject MIME-encoded, not raw
   });
 

@@ -13,7 +13,7 @@ export function openSupportChat(prefill?: string): void {
     conversations.show();
     return;
   }
-  const to = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@podway.cloud";
+  const to = process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@podway.io";
   const subject = encodeURIComponent("Podway — support");
   const body = prefill ? `&body=${encodeURIComponent(prefill)}` : "";
   window.location.href = `mailto:${to}?subject=${subject}${body}`;

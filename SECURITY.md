@@ -5,7 +5,7 @@
 Please report security issues **privately** — do not open a public issue for a vulnerability.
 
 - Use **GitHub's private vulnerability reporting** ("Report a vulnerability" under the Security tab), or
-- email the maintainer at **security@podway.cloud**.
+- email the maintainer at **security@podway.io**.
 
 Include enough to reproduce: affected version/commit, steps, and impact. We'll acknowledge within a few
 business days, work with you on a fix and disclosure timeline, and credit you (unless you prefer not).

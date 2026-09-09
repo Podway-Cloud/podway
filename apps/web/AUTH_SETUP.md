@@ -18,8 +18,8 @@ DATABASE_URL=postgres://... pnpm -F @podway/db exec drizzle-kit migrate
 
 Create a GitHub OAuth app (Settings → Developer settings → OAuth Apps):
 
-- Homepage URL: `https://podway.cloud`
-- Authorization callback URL: `https://podway.cloud/api/auth/callback/github`
+- Homepage URL: `https://podway.io`
+- Authorization callback URL: `https://podway.io/api/auth/callback/github`
 
 Copy the Client ID and generate a Client Secret.
 
@@ -31,7 +31,7 @@ Set as **Fly secrets** — never commit them:
 fly secrets set -a podway-web \
   DATABASE_URL="postgres://..." \
   BETTER_AUTH_SECRET="$(openssl rand -base64 32)" \
-  BETTER_AUTH_URL="https://podway.cloud" \
+  BETTER_AUTH_URL="https://podway.io" \
   GITHUB_CLIENT_ID="..." \
   GITHUB_CLIENT_SECRET="..."
 ```
@@ -57,7 +57,7 @@ Visit `/signin` → Continue with GitHub → you should land on `/dashboard` sig
   as Fly secrets. Until then `/new` shows a "provisioning not enabled" banner and Launch is disabled.
 - The image sets `PODWAY_ENVIRONMENTS_ROOT=/app/environments` (the catalog is read from disk); the
   Dockerfile copies `environments/` into the runner.
-- Shareable launch link: `podway.cloud/new?env=<name>` preselects an environment and survives the
+- Shareable launch link: `podway.io/new?env=<name>` preselects an environment and survives the
   sign-in round-trip — the basis for future "Launch on Podway" README badges.
 
 ## Access control (invite-only)
