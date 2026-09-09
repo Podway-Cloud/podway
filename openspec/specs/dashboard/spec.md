@@ -2152,10 +2152,16 @@ The guidance for continuing a Codex session in the ChatGPT app SHALL be defined 
 
 ### Requirement: The app shell's height follows the real viewport, not a cached one
 
-The dashboard shell pins itself to the viewport and scrolls a single inner pane. Its height SHALL be
-driven by a measured value that is refreshed when the viewport can have changed — including on
-`pageshow` (the back/forward-cache restore) and on returning to a backgrounded tab — with a viewport
-unit only as the first-paint fallback.
+The dashboard shell SHALL be anchored to the viewport with `position: fixed` at the top (like the
+terminal page), NOT a normal-flow box, and scroll a single inner pane. Anchoring matters
+independently of the height: a flow box whose height goes stale-tall overflows and scrolls the BODY,
+stranding the top above the fold; a shell fixed at `top: 0` keeps the top reachable and leaves the
+body with nothing to scroll even while a stale height is being corrected. Its height SHALL be driven
+by a measured value that is refreshed when the viewport can have changed — including on `pageshow`
+(the back/forward-cache restore), on returning to a backgrounded tab, and on window `focus` /
+`visualViewport` changes — with a viewport unit only as the first-paint fallback. Because iOS can
+report a stale inner height at the moment such an event fires, the refresh SHALL re-measure after the
+layout settles (a following frame and a short delay), not only synchronously.
 
 `dvh` alone is not sufficient: iOS Safari does not reliably recompute it after a bfcache restore, so
 the shell keeps the height it had when the browser chrome was in a different state. A shell taller

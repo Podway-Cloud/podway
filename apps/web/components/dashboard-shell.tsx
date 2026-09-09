@@ -113,7 +113,14 @@ export default function DashboardShell({
   return (
     // bg-background/text-foreground so the whole dashboard re-themes (the <body> keeps the legacy
     // --bg for the landing). Identical to the body in podway, so no visual change there.
-    <div className="flex h-[var(--app-h,100dvh)] bg-background text-foreground">
+    // Pinned to the viewport (position: fixed), exactly like the terminal's `.term-wrap`, NOT a
+    // normal-flow box. A flow box whose height goes stale-tall after an iOS bfcache/tab-return
+    // overflows the body, the body scrolls, and the top strands above the fold (the owner's
+    // "shifted up, top cropped, dead space at the bottom" report, 2026-09-07 → still 2026-09-09).
+    // Anchored at top:0 the top can never be cropped, and overflow-hidden + a fixed shell means the
+    // body has nothing to scroll; only <main> inside scrolls. `--app-h` (see use-app-height) keeps
+    // the height exact so there's no dead band at the bottom either.
+    <div className="fixed inset-x-0 top-0 flex h-[var(--app-h,100dvh)] overflow-hidden bg-background text-foreground">
       {/* Mobile top bar */}
       <header className="fixed inset-x-0 top-0 z-30 flex h-[60px] items-center gap-3 border-b border-border bg-card px-3 md:hidden">
         <button
