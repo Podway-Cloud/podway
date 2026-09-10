@@ -39,7 +39,7 @@ describe("recreates are bounded GLOBALLY, not just per caller", () => {
   });
 
   async function makePod(owner: string): Promise<string> {
-    const p = await svc.launchPod(owner, "plain", { size: "s", slotCap: Infinity });
+    const p = await svc.launchPod(owner, "plain", { size: "s", ramCap: Infinity });
     await store.update(p.id, {
       status: "running" as never,
       sessionUrl: "wss://mock/session",

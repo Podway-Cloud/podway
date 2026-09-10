@@ -305,7 +305,7 @@ describe("ownerLiveSignals (dashboard card sweep)", () => {
     // MORE than CONCURRENCY (6), so the old code needed a SECOND round — that is the whole
     // point of the test. provisionPending defaults to limit 5, hence the explicit limit.
     for (let i = 0; i < 8; i++)
-      ids.push((await svc.launchPod("u1", "plain", { size: "s", slotCap: Infinity })).id);
+      ids.push((await svc.launchPod("u1", "plain", { size: "s", ramCap: Infinity })).id);
     await svc.provisionPending(Date.now(), { limit: 20 });
     expect((await store.list()).filter((p) => p.status === "running")).toHaveLength(8);
 

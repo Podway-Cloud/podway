@@ -201,7 +201,7 @@ export interface PodRecord {
   lastActiveAt: string;
 }
 
-export type ControlErrorCode = "not_found" | "invalid" | "slot_limit";
+export type ControlErrorCode = "not_found" | "invalid" | "capacity_limit";
 
 export class ControlError extends Error {
   code: ControlErrorCode;

@@ -1261,7 +1261,7 @@ export default function PodCockpit(props: PodCockpitProps) {
         onResume={() => {
           setConfirm({
             title: `Resume ${name?.trim() || slug}?`,
-            message: "It starts using compute again and counts toward your slots.",
+            message: "It starts running again and resumes billing at its monthly price.",
             confirmLabel: "Resume",
             run: () => {
               track("pod_resumed", { pod_id: slug, environment: environmentName });

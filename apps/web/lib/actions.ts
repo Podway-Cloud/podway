@@ -10,7 +10,7 @@ import { harnessEnabled } from "./agent-harness";
 import QRCode from "qrcode";
 import { requireApprovedUser } from "./access";
 import { isAdmin } from "./access-rules";
-import { ACCOUNT_SLOT_CAP } from "@podway/shared/tiers";
+import { ACCOUNT_RAM_GB } from "@podway/shared/tiers";
 import { getConnectionToken } from "./github-connect";
 import { getEnvironmentDetail } from "./environments";
 import { getPodService, isProvisioningEnabled, localPreviewUrl } from "./pod-service";
@@ -350,7 +350,7 @@ export async function launchPod(
       agentApiKey: config?.agentApiKey,
       githubToken,
       // Account slot budget — admins are exempt (they run the fleet).
-      slotCap: isAdmin(user.email) || editionOss() ? Infinity : ACCOUNT_SLOT_CAP,
+      ramCap: isAdmin(user.email) || editionOss() ? Infinity : ACCOUNT_RAM_GB,
       ref: ref ?? undefined,
     });
     if (!editionOss()) await recordAttributedUserEvent(user.id, "pod_created", rec.id);
@@ -796,7 +796,7 @@ export async function resizePod(slug: string, size: string): Promise<ActionResul
     // Detached: it returns as soon as the pod is marked in-flight, so the cockpit
     // can render "Resizing…" and poll for progress instead of hanging on the action.
     await getPodService().startPodResize(user.id, slug, size as never, {
-      slotCap: isAdmin(user.email) || editionOss() ? Infinity : ACCOUNT_SLOT_CAP,
+      ramCap: isAdmin(user.email) || editionOss() ? Infinity : ACCOUNT_RAM_GB,
     });
   } catch (e) {
     log.error("resize_pod_failed", { userId: user.id, podId: slug, size, err: e });
@@ -841,7 +841,7 @@ export async function wakePod(slug: string): Promise<ActionResult> {
   const user = await requireUser();
   try {
     await getPodService().wake(user.id, slug, {
-      slotCap: isAdmin(user.email) || editionOss() ? Infinity : ACCOUNT_SLOT_CAP,
+      ramCap: isAdmin(user.email) || editionOss() ? Infinity : ACCOUNT_RAM_GB,
     });
   } catch (e) {
     log.error("wake_failed", { userId: user.id, podId: slug, err: e });
@@ -1137,10 +1137,3 @@ export async function podUpdateProgress(
   }
 }
 
-/** The signed-in owner's slot usage, for the dashboard meter + launch gating. Admins are
- * exempt (unlimited); the `used` count is real either way. */
-export async function mySlotUsage(): Promise<{ used: number; cap: number; unlimited: boolean }> {
-  const user = await requireUser();
-  const usage = await getPodService().accountSlotUsage(user.id, ACCOUNT_SLOT_CAP);
-  return { used: usage.used, cap: ACCOUNT_SLOT_CAP, unlimited: isAdmin(user.email) || editionOss() };
-}

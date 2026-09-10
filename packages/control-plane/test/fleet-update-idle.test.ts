@@ -44,7 +44,7 @@ describe("updatableIdlePods — bulk idle-update eligibility", () => {
     owner: string,
     over: { imageDigest?: string; status?: string; autoUpdate?: "inherit" | "off"; lastActiveAt?: string } = {},
   ): Promise<string> {
-    const p = await svc.launchPod(owner, "plain", { size: "s", slotCap: Infinity });
+    const p = await svc.launchPod(owner, "plain", { size: "s", ramCap: Infinity });
     await store.update(p.id, {
       status: (over.status ?? "running") as never,
       // Non-null sessionUrl so listPods doesn't reconcile a running+session-less pod against the
@@ -213,7 +213,7 @@ describe("the update queue stamp", () => {
   });
 
   async function idlePod(owner: string): Promise<string> {
-    const p = await svc.launchPod(owner, "plain", { size: "s", slotCap: Infinity });
+    const p = await svc.launchPod(owner, "plain", { size: "s", ramCap: Infinity });
     await store.update(p.id, {
       status: "running" as never,
       sessionUrl: "wss://mock/session",

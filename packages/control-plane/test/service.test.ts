@@ -121,30 +121,30 @@ describe("resizePod (compute tiers)", () => {
   it("launches at the chosen tier and hands the resolved resources to the provider", async () => {
     const rec = await svc.launchPod("u", ENV, { size: "l" });
     expect(rec.size).toBe("l");
-    expect(rec.diskGb).toBe(40);
+    expect(rec.diskGb).toBe(100);
     await svc.provisionPending();
     expect(provider.created.find((c) => c.id === rec.id)?.resources).toEqual({
-      cpus: 8,
-      memoryGb: 16,
-      diskGb: 40,
+      cpus: 4,
+      memoryGb: 8,
+      diskGb: 100,
     });
   });
 
-  it("defaults to Small when no size is given", async () => {
+  it("defaults to Medium when no size is given", async () => {
     const rec = await svc.launchPod("u", ENV);
-    expect(rec.size).toBe("s");
-    expect(rec.diskGb).toBe(10);
+    expect(rec.size).toBe("m");
+    expect(rec.diskGb).toBe(50);
   });
 
   it("resizes CPU/RAM down but keeps disk at the high-water mark", async () => {
-    const rec = await svc.launchPod("u", ENV, { size: "l" }); // 8/16/40
+    const rec = await svc.launchPod("u", ENV, { size: "l" }); // 4/8/100
     await svc.provisionPending();
 
-    const back = await svc.resizePod("u", rec.id, "s"); // down to 2/4/10
+    const back = await svc.resizePod("u", rec.id, "s"); // down to 2/2/25
     expect(back.size).toBe("s");
-    expect(back.diskGb).toBe(40); // disk cannot shrink
-    // provider was asked for Small CPU/RAM but the 40GB disk high-water mark
-    expect(provider.resized.at(-1)).toEqual({ id: rec.id, cpus: 2, memoryGb: 4, diskGb: 40 });
+    expect(back.diskGb).toBe(100); // disk cannot shrink
+    // provider was asked for Small CPU/RAM but the 100GB disk high-water mark
+    expect(provider.resized.at(-1)).toEqual({ id: rec.id, cpus: 2, memoryGb: 2, diskGb: 100 });
   });
 
   it("refuses to resize a pod that isn't running or sleeping", async () => {
@@ -795,7 +795,7 @@ describe("adminFleetHealth — which pod should I look at?", () => {
   it("one slow pod does not hold back the sweep (pool, not barrier)", async () => {
     const ids: string[] = [];
     for (let i = 0; i < 8; i++)
-      ids.push((await svc.launchPod("u", "nextjs-starter", { slotCap: Infinity })).id);
+      ids.push((await svc.launchPod("u", "nextjs-starter", { ramCap: Infinity })).id);
     await svc.provisionPending(Date.now(), { limit: 20 });
     expect((await store.list()).filter((p) => p.status === "running")).toHaveLength(8);
 

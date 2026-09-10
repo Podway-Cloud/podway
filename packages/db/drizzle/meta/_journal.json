@@ -414,6 +414,13 @@
       "when": 1788400400000,
       "tag": "0058_custom_domains",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1788400500000,
+      "tag": "0059_pod_size_ladder",
+      "breakpoints": true
     }
   ]
 }

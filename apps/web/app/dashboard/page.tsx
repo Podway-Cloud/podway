@@ -5,14 +5,14 @@ import PodCardList from "@/components/pod-card-list";
 import type { PodCardProps } from "@/components/pod-card";
 import AutoRefresh from "@/components/auto-refresh";
 import DashboardPage from "@/components/dashboard-page";
-import SlotMeter from "@/components/slot-meter";
+import AccountCostStrip from "@/components/account-cost-strip";
 import { editionOss } from "@/lib/session";
 import { sameDigest } from "@/lib/pod-image";
 import { currentImage } from "@/lib/image-manifest";
 import { Button } from "@/components/ui/button";
 import { getEnvironmentDetail } from "@/lib/environments";
-import { isAdmin } from "@/lib/access-rules";
-import { ACCOUNT_SLOT_CAP } from "@podway/shared/tiers";
+import { POD_TIERS, type PodSize } from "@podway/shared/tiers";
+import { priceForRamGb, SUSPENDED_USD } from "@/lib/pricing-catalog";
 import { Plus } from "lucide-react";
 
 /** Statuses that resolve on their own soon — poll fast while any are present. */
@@ -34,7 +34,17 @@ export default async function Dashboard() {
   const user = await requireApprovedUser();
   const svc = getPodService();
   const pods = await svc.listPods(user.id);
-  const slots = await svc.accountSlotUsage(user.id, ACCOUNT_SLOT_CAP);
+  // Monthly-cost summary (replaces the slot meter). A suspended pod bills the flat suspended rate;
+  // everything else is billed at its size's price (priced by RAM via the catalog — no migration).
+  const priceOf = (size: PodSize): number => priceForRamGb(POD_TIERS[size]?.memoryGb ?? 0) ?? 0;
+  const suspendedPods = pods.filter((p) => p.status === "suspended");
+  const runningPods = pods.filter((p) => p.status !== "suspended");
+  const cost = {
+    running: runningPods.length,
+    runningUsd: runningPods.reduce((sum, p) => sum + priceOf(p.size), 0),
+    suspended: suspendedPods.length,
+    suspendedUsd: suspendedPods.length * SUSPENDED_USD,
+  };
   // Live signals (agent activity, :3000 liveness, live-critical trouble) are fetched
   // CLIENT-side in PodCardList — NOT here — so a dashboard navigation renders instantly
   // from lifecycle state instead of blocking on an N-pod /healthz sweep first.
@@ -102,10 +112,14 @@ export default async function Dashboard() {
     >
       <AutoRefresh fast={pods.some((p) => TRANSITIONAL.has(p.status) || isUpdating(p))} />
 
-      {/* Slots are a cloud account-budget concept — self-host runs on your own machine, so there's
-          no slot cap to show (resource limits belong on the machine, not an account). */}
+      {/* Monthly spend — a cloud-only concept (self-host runs on your own machine, no per-pod price). */}
       {pods.length > 0 && !editionOss() && (
-        <SlotMeter used={slots.used} cap={ACCOUNT_SLOT_CAP} unlimited={isAdmin(user.email)} />
+        <AccountCostStrip
+          running={cost.running}
+          runningUsd={cost.runningUsd}
+          suspended={cost.suspended}
+          suspendedUsd={cost.suspendedUsd}
+        />
       )}
 
       {!isProvisioningEnabled() && (

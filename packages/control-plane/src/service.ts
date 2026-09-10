@@ -7,8 +7,8 @@ import {
   DEFAULT_POD_SIZE,
   isPodSize,
   resolveResources,
-  slotsForSize,
-  ACCOUNT_SLOT_CAP,
+  ramGbForSize,
+  ACCOUNT_RAM_GB,
   sanitizeRef,
   type PodSize,
   type AgentCli,
@@ -290,9 +290,9 @@ export interface LaunchOptions {
   /** The BYO API key for api-key mode, resolved by the caller. Stored as the reserved
    * PODWAY_AGENT_* secret (past the ToS denylist), injected, never on the pod row. */
   agentApiKey?: string;
-  /** Per-account slot budget to enforce (default ACCOUNT_SLOT_CAP). The caller
-   * (web) passes Infinity to exempt admins. See accountSlotUsage. */
-  slotCap?: number;
+  /** Per-account RAM budget (GB) to enforce (default ACCOUNT_RAM_GB). The caller
+   * (web) passes Infinity to exempt admins. See accountRamUsage. */
+  ramCap?: number;
   /** Attribution source active for this launch (deeplink-onboarding) — the caller (web) resolves
    * this to an explicit `/start?ref=` from a fresh visit this session, else the account's
    * first-touch ref. Re-sanitized here (never trust the caller); invalid/oversized ⇒ null. */
@@ -440,10 +440,10 @@ export class PodService {
     // the grow-only high-water mark from here on.
     const size: PodSize = isPodSize(opts.size) ? opts.size : DEFAULT_POD_SIZE;
 
-    // Slot budget: this pod's slots must fit in the account's remaining allowance.
+    // RAM budget: this pod's RAM must fit in the account's remaining allowance.
     // Checked BEFORE any write, so an over-budget launch has no side effects. Admins pass
-    // slotCap: Infinity (never trips). Suspend a pod to free slots (see accountSlotUsage).
-    await this.assertSlotsFit(ownerId, slotsForSize(size), opts.slotCap ?? ACCOUNT_SLOT_CAP);
+    // ramCap: Infinity (never trips). Suspend a pod to free RAM (see accountRamUsage).
+    await this.assertRamFits(ownerId, ramGbForSize(size), opts.ramCap ?? ACCOUNT_RAM_GB);
 
     // Agent(s) the user picked (multi-agent-plan.md slice 3). Constrain to what the
     // env declares (never trust the client to widen the roster); empty ⇒ null, which
@@ -1202,35 +1202,35 @@ export class PodService {
    * back). error/gone pods hold nothing. This is the single source the guards and the UI
    * both read, so "3 / 4 used" on the dashboard and a launch refusal can never disagree.
    */
-  async accountSlotUsage(
+  async accountRamUsage(
     ownerId: string,
-    cap = ACCOUNT_SLOT_CAP,
-  ): Promise<{ used: number; cap: number; pods: { id: string; size: PodSize; slots: number }[] }> {
+    cap = ACCOUNT_RAM_GB,
+  ): Promise<{ usedGb: number; capGb: number; pods: { id: string; size: PodSize; ramGb: number }[] }> {
     const pods = await this.store.listByOwner(ownerId);
     const active = pods.filter((p) => p.status !== "suspended" && p.status !== "error" && p.status !== "gone");
-    const detail = active.map((p) => ({ id: p.id, size: p.size, slots: slotsForSize(p.size) }));
-    return { used: detail.reduce((n, p) => n + p.slots, 0), cap, pods: detail };
+    const detail = active.map((p) => ({ id: p.id, size: p.size, ramGb: ramGbForSize(p.size) }));
+    return { usedGb: detail.reduce((n, p) => n + p.ramGb, 0), capGb: cap, pods: detail };
   }
 
   /**
-   * Throw a `slot_limit` ControlError if the account can't fit `add` more slots.
-   * `excludeCost` is the slots the target pod ALREADY contributes to the current tally
-   * (0 for a new launch or a suspended pod being resumed; its old cost for a resize), so
-   * the check reads used − excludeCost + add. A cap of Infinity (admins) never trips.
+   * Throw a `capacity_limit` ControlError if the account can't fit `addGb` more RAM.
+   * `excludeGb` is the RAM the target pod ALREADY contributes to the current tally
+   * (0 for a new launch or a suspended pod being resumed; its old RAM for a resize), so
+   * the check reads used − excludeGb + addGb. A cap of Infinity (admins) never trips.
    */
-  private async assertSlotsFit(
+  private async assertRamFits(
     ownerId: string,
-    add: number,
+    addGb: number,
     cap: number,
-    excludeCost = 0,
+    excludeGb = 0,
   ): Promise<void> {
     if (!Number.isFinite(cap)) return;
-    const { used } = await this.accountSlotUsage(ownerId, cap);
-    const total = used - excludeCost + add;
+    const { usedGb } = await this.accountRamUsage(ownerId, cap);
+    const total = usedGb - excludeGb + addGb;
     if (total > cap) {
       throw new ControlError(
-        `This would use ${total} of your ${cap} slots. Suspend a pod to free slots, or contact support for more.`,
-        "slot_limit",
+        `This would use ${total} GB of your ${cap} GB. Suspend a pod to free memory, or contact support for more.`,
+        "capacity_limit",
       );
     }
   }
@@ -1313,11 +1313,11 @@ export class PodService {
     return rec;
   }
 
-  async wake(ownerId: string, id: string, opts: { slotCap?: number } = {}): Promise<PodRecord> {
+  async wake(ownerId: string, id: string, opts: { ramCap?: number } = {}): Promise<PodRecord> {
     const rec = await this.owned(ownerId, id);
-    // Resuming a suspended pod reclaims its slots — it must still fit the budget. The pod
+    // Resuming a suspended pod reclaims its RAM — it must still fit the budget. The pod
     // is suspended (0 in the tally now), so we just add its size back. Admins pass Infinity.
-    await this.assertSlotsFit(ownerId, slotsForSize(rec.size), opts.slotCap ?? ACCOUNT_SLOT_CAP);
+    await this.assertRamFits(ownerId, ramGbForSize(rec.size), opts.ramCap ?? ACCOUNT_RAM_GB);
     await this.providerFor(rec.provider).wake(id);
     // The machine is starting but the pod-agent isn't reachable yet — hold
     // "waking" rather than lying "running". reconcile flips it once it answers.
@@ -1367,7 +1367,7 @@ export class PodService {
     ownerId: string,
     id: string,
     size: PodSize,
-    opts: { slotCap?: number } = {},
+    opts: { ramCap?: number } = {},
   ): Promise<void> {
     const rec = await this.owned(ownerId, id);
     if (rec.status !== "running" && rec.status !== "suspended") {
@@ -1375,14 +1375,14 @@ export class PodService {
     }
     if (rec.size === size) return; // no-op: never restart a pod for nothing
     // A running pod counts against the budget at its CURRENT size; resizing it swaps that
-    // cost for the new size's — so a resize UP must still fit. A suspended pod counts as 0
-    // now, so its slots are re-checked when it resumes, not here.
+    // RAM for the new size's — so a resize UP must still fit. A suspended pod counts as 0
+    // now, so its RAM is re-checked when it resumes, not here.
     if (rec.status === "running") {
-      await this.assertSlotsFit(
+      await this.assertRamFits(
         ownerId,
-        slotsForSize(size),
-        opts.slotCap ?? ACCOUNT_SLOT_CAP,
-        slotsForSize(rec.size),
+        ramGbForSize(size),
+        opts.ramCap ?? ACCOUNT_RAM_GB,
+        ramGbForSize(rec.size),
       );
     }
     await this.store.update(id, {

@@ -15,7 +15,6 @@ import { SecretInput } from "@/components/ui/secret-input";
 import { Label } from "@/components/ui/label";
 import SizePicker from "@/components/size-picker";
 import HostResourceChooser, { type HostCapacity } from "@/components/host-resource-chooser";
-import { slotsForSize } from "@podway/shared/tiers";
 import { openSupportChat } from "@/lib/support-chat";
 import { GithubRepoField } from "@/components/github-repo-field";
 import { DEFAULT_POD_SIZE, POD_TIERS, type PodSize } from "@podway/shared/tiers";
@@ -80,7 +79,7 @@ export default function LaunchConfigure({
   agentIds = [],
   enabled,
   initialStep,
-  slots,
+  ram,
   oss = false,
   capacity = null,
   initialName,
@@ -97,9 +96,9 @@ export default function LaunchConfigure({
   /** Optional starting step from `?step=` — a bookmark/share lands right; the
    * sessionStorage draft (if any) still wins so a reload resumes exactly. */
   initialStep?: string;
-  /** The account's slot budget, so a launch that won't fit is blocked here rather than
+  /** The account's RAM budget (GB), so a launch that won't fit is blocked here rather than
    * failing on submit. `unlimited` (admins) skips the gate. */
-  slots: { used: number; cap: number; unlimited: boolean };
+  ram: { used: number; cap: number; unlimited: boolean };
   /** Self-host (self-host-pod-sizing): swap the cloud tier cards for a real-host resource
    * chooser. `capacity` is the Docker host's CPU/RAM + what running pods reserved (null if
    * docker was unreachable). Both default off ⇒ cloud tier picker, unchanged. */
@@ -257,13 +256,13 @@ export default function LaunchConfigure({
   // A name is required — it's how the pod (and the session in the user's Claude app) is
   // identified; an unnamed pod reads as a mistake in the list.
   const nameFilled = name.trim().length > 0;
-  // Slot budget: the chosen size must fit the account's free slots (admins skip this).
-  const slotCost = slotsForSize(size);
-  const slotsFree = slots.cap - slots.used;
-  const slotsFit = slots.unlimited || slotCost <= slotsFree;
+  // RAM budget: the chosen size must fit the account's free memory (admins skip this).
+  const ramCost = POD_TIERS[size].memoryGb;
+  const ramFree = ram.cap - ram.used;
+  const ramFit = ram.unlimited || ramCost <= ramFree;
   // api-key mode needs a key before launch (there's no /login to fall back on).
   const keyProvided = agentAuth !== "api-key" || agentApiKey.trim().length > 0;
-  const launchable = nameFilled && requiredFilled && repoPicked && enabled && slotsFit && keyProvided;
+  const launchable = nameFilled && requiredFilled && repoPicked && enabled && ramFit && keyProvided;
 
   const idx = steps.indexOf(step);
   const isFirst = idx <= 0;
@@ -431,16 +430,15 @@ export default function LaunchConfigure({
                     Reserved compute for this pod. You can change it later (a brief restart).
                   </p>
                 )}
-                {!slots.unlimited && (
-                  <p className={`text-[13px] ${slotsFit ? "text-muted-foreground" : "text-destructive"}`}>
-                    Uses <strong>{slotCost}</strong> of your <strong>{slotsFree}</strong> free slot
-                    {slotsFree === 1 ? "" : "s"}.{" "}
-                    {!slotsFit && (
+                {!ram.unlimited && (
+                  <p className={`text-[13px] ${ramFit ? "text-muted-foreground" : "text-destructive"}`}>
+                    Uses <strong>{ramCost} GB</strong> of your <strong>{ramFree} GB</strong> free.{" "}
+                    {!ramFit && (
                       <>
                         Suspend a pod to free some, or{" "}
                         <button
                           type="button"
-                          onClick={() => openSupportChat(`I'd like more than ${slots.cap} slots on my Podway account.`)}
+                          onClick={() => openSupportChat(`I'd like more than ${ram.cap} GB on my Podway account.`)}
                           className="font-medium text-[var(--link-accent)] hover:underline"
                         >
                           contact support
@@ -735,8 +733,8 @@ export default function LaunchConfigure({
                       ? "Fill the required secrets to continue."
                       : !keyProvided
                         ? "Enter your API key (or switch to Subscription) to continue."
-                        : !slotsFit
-                          ? `This ${slotCost}-slot pod won’t fit your ${slotsFree} free slots — pick a smaller size, suspend a pod, or contact support for more.`
+                        : !ramFit
+                          ? `This ${ramCost} GB pod won’t fit your ${ramFree} GB free — pick a smaller size, suspend a pod, or contact support for more.`
                           : "Provisioning isn’t enabled yet."}
                 </p>
               )}

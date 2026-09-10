@@ -1,12 +1,15 @@
 /**
- * Pod compute tiers. The launch/resize picker offers three presets. CPU and RAM
- * are RESERVED per pod (so we price per tier); disk is the hard quota and can
- * only GROW — a pod that was Large and later resized down to Medium keeps its
- * larger disk, so a pod is stored as (size, diskGb) where diskGb may exceed the
- * size's own disk. See docs/strategy/pricing-model.md.
+ * Pod compute tiers — the size ladder, anchored to RAM. The launch/resize picker offers these
+ * presets. CPU and RAM are RESERVED per pod (CPU is a burstable ceiling, overcommitted); disk is a
+ * grow-only quota — a pod resized DOWN keeps its larger disk, so a pod is stored as (size, diskGb)
+ * where diskGb may exceed the size's own disk. Each size also carries its flat monthly price (cloud;
+ * self-host ignores it). See docs/strategy/pricing-model.md.
+ *
+ * The ladder is RAM-anchored with disk in the box's natural ratio (~13 GB/GB) — so RAM and disk fill
+ * up together (size-based-pod-pricing). Sizes: mini 1 · s 2 · m 4 · l 8 · xl 16 GB.
  */
 
-export type PodSize = "s" | "m" | "l";
+export type PodSize = "mini" | "s" | "m" | "l" | "xl";
 
 export interface PodResources {
   cpus: number;
@@ -14,36 +17,50 @@ export interface PodResources {
   diskGb: number;
 }
 
-export const POD_TIERS: Record<PodSize, PodResources & { label: string }> = {
-  s: { label: "Small", cpus: 2, memoryGb: 4, diskGb: 10 },
-  m: { label: "Medium", cpus: 4, memoryGb: 8, diskGb: 20 },
-  l: { label: "Large", cpus: 8, memoryGb: 16, diskGb: 40 },
+export interface PodTier extends PodResources {
+  label: string;
+  /** Flat price per month in USD (cloud edition). */
+  monthlyUsd: number;
+}
+
+export const POD_TIERS: Record<PodSize, PodTier> = {
+  mini: { label: "Mini", cpus: 1, memoryGb: 1, diskGb: 12, monthlyUsd: 4 },
+  s: { label: "Small", cpus: 2, memoryGb: 2, diskGb: 25, monthlyUsd: 7 },
+  m: { label: "Medium", cpus: 2, memoryGb: 4, diskGb: 50, monthlyUsd: 12 },
+  l: { label: "Large", cpus: 4, memoryGb: 8, diskGb: 100, monthlyUsd: 22 },
+  xl: { label: "XL", cpus: 6, memoryGb: 16, diskGb: 180, monthlyUsd: 42 },
 };
 
-export const POD_SIZES: PodSize[] = ["s", "m", "l"];
-/** Old fixed sizing was 2/4/10 == Small, so this is also the backfill value. */
-export const DEFAULT_POD_SIZE: PodSize = "s";
+export const POD_SIZES: PodSize[] = ["mini", "s", "m", "l", "xl"];
+
+/** The default size that runs the prebuilt stack (Next build + in-pod Postgres). Mini/Small are too
+ * small for that, so the default is Medium. Also the backfill value for a legacy row missing a size. */
+export const DEFAULT_POD_SIZE: PodSize = "m";
+
+/** Flat monthly price (USD) for a size — cloud only. */
+export function priceForSize(size: PodSize): number {
+  return POD_TIERS[size].monthlyUsd;
+}
+
+/** Flat rate a SUSPENDED pod bills, any size (its disk is archived off the box). */
+export const SUSPENDED_USD = 1;
 
 /**
- * Account slot budget. Each account gets a fixed number of SLOTS; a pod occupies
- * slots by size (memory/4 → Small 1, Medium 2, Large 4), so the budget spends the same
- * whether it's four small pods, two mediums, or one large. A SUSPENDED pod frees its
- * slots — resuming it needs enough free slots to fit again. Over budget ⇒ contact support.
- * This is the same unit the box uses for density (BoxStats.slots = memGb/4).
- *
- * Default 4; `PODWAY_ACCOUNT_SLOT_CAP` overrides it (tune the global cap without a deploy).
- * Read server-side only — the client receives the cap as a prop, never this constant.
+ * Per-account RAM budget (GB) — the pre-billing abuse limit that replaced the old "slot" budget
+ * (size-based-pod-pricing). A running pod counts its size's RAM against it; a SUSPENDED pod frees it.
+ * Default 16 GB (≈ four Mediums, or one XL); `PODWAY_ACCOUNT_RAM_GB` overrides it without a deploy.
+ * Read server-side only — the client receives the cap as a prop.
  */
-export const ACCOUNT_SLOT_CAP =
-  Number(typeof process !== "undefined" ? process.env?.PODWAY_ACCOUNT_SLOT_CAP : undefined) || 4;
+export const ACCOUNT_RAM_GB =
+  Number(typeof process !== "undefined" ? process.env?.PODWAY_ACCOUNT_RAM_GB : undefined) || 16;
 
-/** Slots a pod of this size occupies (memory GB / 4). */
-export function slotsForSize(size: PodSize): number {
-  return POD_TIERS[size].memoryGb / 4;
+/** RAM (GB) a pod of this size reserves — the unit the account budget is spent in. */
+export function ramGbForSize(size: PodSize): number {
+  return POD_TIERS[size].memoryGb;
 }
 
 export function isPodSize(x: unknown): x is PodSize {
-  return x === "s" || x === "m" || x === "l";
+  return x === "mini" || x === "s" || x === "m" || x === "l" || x === "xl";
 }
 
 /**

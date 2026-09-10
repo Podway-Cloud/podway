@@ -64,7 +64,7 @@ export default async function globalSetup(): Promise<void> {
   process.env.PODWAY_FAKE_CODEX_RC = "1";
   // The suite launches many pods as one non-admin user across a run; a real 4-slot cap
   // would block them. Lift it (the cap logic is unit-covered in control-plane).
-  process.env.PODWAY_ACCOUNT_SLOT_CAP = process.env.PODWAY_ACCOUNT_SLOT_CAP ?? "1000";
+  process.env.PODWAY_ACCOUNT_RAM_GB = process.env.PODWAY_ACCOUNT_RAM_GB ?? "100000";
   // A resize must APPEAR to take time, or the transient progress it drives ("stopping · Ns",
   // read-only settings) collapses before it can be observed — the fake box resizes instantly.
   process.env.PODWAY_FAKE_RESIZE_MS = process.env.PODWAY_FAKE_RESIZE_MS ?? "5000";
@@ -133,7 +133,7 @@ export default async function globalSetup(): Promise<void> {
       PODWAY_FAKE_STATE_FILE: fakeStateFile,
       PODWAY_FAKE_CODEX_RC: process.env.PODWAY_FAKE_CODEX_RC,
       PODWAY_FAKE_RESIZE_MS: process.env.PODWAY_FAKE_RESIZE_MS!,
-      PODWAY_ACCOUNT_SLOT_CAP: process.env.PODWAY_ACCOUNT_SLOT_CAP!,
+      PODWAY_ACCOUNT_RAM_GB: process.env.PODWAY_ACCOUNT_RAM_GB!,
       // Hand fake pods an RC link so the wizard reaches READY at once instead of
       // waiting out the 90s remote-control grace (see FakeProvider.sessionUrl).
       PODWAY_FAKE_SESSION_URL: "https://claude.ai/code/session_e2efake",

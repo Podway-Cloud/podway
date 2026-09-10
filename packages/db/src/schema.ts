@@ -263,7 +263,7 @@ export const pods = pgTable(
     // gives reserved CPU/RAM; `diskGb` is the hard quota and can only GROW —
     // a resize-down keeps the larger disk, so diskGb may exceed the size's
     // default. Default 's'/10 == the old fixed 2/4/10 (backfills existing pods).
-    size: text("size").notNull().default("s"),
+    size: text("size").notNull().default("m"),
     diskGb: integer("disk_gb").notNull().default(10),
     // Self-host explicit sizing (self-host-pod-sizing): when set, these override the tier's
     // reserved CPU/RAM for a `local` pod and are applied as `docker run --cpus/--memory`. NULL =

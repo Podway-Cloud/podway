@@ -43,26 +43,26 @@ describe("resize: handoff + new-params note", () => {
     expect(note, "a resize note should be written").toBeTruthy();
     // The note carries the NEW tier's resources.
     expect(note).toContain("Large");
-    expect(note).toContain("8 vCPU");
-    expect(note).toContain("16 GB RAM");
+    expect(note).toContain("4 vCPU");
+    expect(note).toContain("8 GB RAM");
     // …and it lands in the handoff dir the resume rule reads.
     expect(note).toContain("/.podway/handoff/pod-resized.md");
-    expect(provider.resized.at(-1)).toMatchObject({ cpus: 8, memoryGb: 16 });
+    expect(provider.resized.at(-1)).toMatchObject({ cpus: 4, memoryGb: 8 });
   });
 
   it("disk is grow-only: a resize-DOWN keeps the larger disk in the note", async () => {
     const s = svc();
-    const pod = await s.launchPod("u1", "plain", { size: "l" }); // diskGb 40
+    const pod = await s.launchPod("u1", "plain", { size: "l" }); // diskGb 100
     await s.provisionPending();
     await store.update(pod.id, { status: "running" });
 
-    await s.resizePod("u1", pod.id, "s"); // CPU/RAM shrink, disk stays 40
+    await s.resizePod("u1", pod.id, "s"); // CPU/RAM shrink, disk stays 100
 
     const note = noteWrite() ?? "";
     expect(note).toContain("2 vCPU");
-    expect(note).toContain("4 GB RAM");
-    expect(note).toContain("40 GB disk"); // NOT small's default 10
-    expect(provider.resized.at(-1)).toMatchObject({ cpus: 2, memoryGb: 4, diskGb: 40 });
+    expect(note).toContain("2 GB RAM");
+    expect(note).toContain("100 GB disk"); // NOT small's default 25
+    expect(provider.resized.at(-1)).toMatchObject({ cpus: 2, memoryGb: 2, diskGb: 100 });
   });
 
   it("a SUSPENDED pod's resize skips handoff + note (no live agent, no reachable machine)", async () => {
@@ -76,6 +76,6 @@ describe("resize: handoff + new-params note", () => {
     expect(askedHandoff()).toBe(false);
     expect(noteWrite()).toBeUndefined();
     // …but the resize itself still happens.
-    expect(provider.resized.at(-1)).toMatchObject({ cpus: 8, memoryGb: 16 });
+    expect(provider.resized.at(-1)).toMatchObject({ cpus: 4, memoryGb: 8 });
   });
 });

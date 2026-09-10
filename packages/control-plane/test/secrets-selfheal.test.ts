@@ -68,7 +68,7 @@ describe("the in-pod secrets file self-heals, whatever the pod's status did", ()
 
   async function podWithSecrets() {
     const s = svc();
-    const rec = await s.launchPod("u1", "plain", { size: "s", slotCap: Infinity });
+    const rec = await s.launchPod("u1", "plain", { size: "s", ramCap: Infinity });
     await s.provisionPending();
     await store.update(rec.id, { status: "running" as never, sessionUrl: "wss://mock/session" });
     provider.forceStatus(rec.id, "running"); // the LIVE status is what reconcile gates on
@@ -109,7 +109,7 @@ describe("the in-pod secrets file self-heals, whatever the pod's status did", ()
       // deliberately NO secretVault
       logger: { debug: () => {}, info: () => {}, warn: (e: string) => lines.push(e), error: (e: string) => lines.push(e) } as never,
     });
-    const rec = await s.launchPod("u1", "plain", { size: "s", slotCap: Infinity });
+    const rec = await s.launchPod("u1", "plain", { size: "s", ramCap: Infinity });
     await s.provisionPending();
     await store.update(rec.id, { status: "running" as never, sessionUrl: "wss://mock/session" });
     provider.forceStatus(rec.id, "running");
@@ -120,7 +120,7 @@ describe("the in-pod secrets file self-heals, whatever the pod's status did", ()
 
   it("a pod with NO secrets is never probed — the check costs nothing on the common path", async () => {
     const s = svc();
-    const rec = await s.launchPod("u1", "plain", { size: "s", slotCap: Infinity });
+    const rec = await s.launchPod("u1", "plain", { size: "s", ramCap: Infinity });
     await s.provisionPending();
     await store.update(rec.id, { status: "running" as never, sessionUrl: "wss://mock/session" });
     provider.forceStatus(rec.id, "running");
@@ -144,7 +144,7 @@ describe("the in-pod secrets file self-heals, whatever the pod's status did", ()
         error: (event: string, detail?: Record<string, unknown>) => lines.push({ event, detail }),
       } as never,
     });
-    const rec = await s.launchPod("u1", "plain", { size: "s", slotCap: Infinity });
+    const rec = await s.launchPod("u1", "plain", { size: "s", ramCap: Infinity });
     await s.provisionPending();
     await store.update(rec.id, { status: "running" as never, sessionUrl: "wss://mock/session" });
     provider.forceStatus(rec.id, "running");
@@ -164,7 +164,7 @@ describe("the in-pod secrets file self-heals, whatever the pod's status did", ()
     const s = new PodService(provider, store, {
       environmentsRoot: root, secretVault: vault, onIncident: (i) => paged.push(i),
     });
-    const rec = await s.launchPod("u1", "plain", { size: "s", slotCap: Infinity });
+    const rec = await s.launchPod("u1", "plain", { size: "s", ramCap: Infinity });
     await s.provisionPending();
     await store.update(rec.id, { status: "running" as never, sessionUrl: "wss://mock/session" });
     provider.forceStatus(rec.id, "running");
@@ -181,7 +181,7 @@ describe("the in-pod secrets file self-heals, whatever the pod's status did", ()
     const s = new PodService(provider, store, {
       environmentsRoot: root, secretVault: vault, onIncident: () => paged.push(1),
     });
-    const rec = await s.launchPod("u1", "plain", { size: "s", slotCap: Infinity });
+    const rec = await s.launchPod("u1", "plain", { size: "s", ramCap: Infinity });
     await s.provisionPending();
     await store.update(rec.id, { status: "running" as never, sessionUrl: "wss://mock/session" });
     provider.forceStatus(rec.id, "running");

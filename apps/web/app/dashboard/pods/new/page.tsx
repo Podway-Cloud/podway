@@ -8,7 +8,7 @@ import HideSupportChat from "@/components/hide-support-chat";
 import { isAdmin } from "@/lib/access-rules";
 import { editionOss } from "@/lib/session";
 import { harnessEnabled } from "@/lib/agent-harness";
-import { ACCOUNT_SLOT_CAP } from "@podway/shared/tiers";
+import { ACCOUNT_RAM_GB } from "@podway/shared/tiers";
 import { sanitizeRef } from "@podway/shared";
 
 export const dynamic = "force-dynamic";
@@ -44,9 +44,9 @@ export default async function NewPodPage({
   const presetName = rawName?.trim().replace(/\s+/g, " ").slice(0, 60);
   const initialName = deeplink ? (presetName || `my ${detail.title}`) : undefined;
   const ref = sanitizeRef(rawRef);
-  // The account's slot budget, so the wizard can show the cost + free slots and block a
+  // The account's RAM budget (GB), so the wizard can show the cost + free memory and block a
   // launch that won't fit BEFORE the user fills everything in. Admins are unbounded.
-  const slots = await getPodService().accountSlotUsage(user.id, ACCOUNT_SLOT_CAP);
+  const ram = await getPodService().accountRamUsage(user.id, ACCOUNT_RAM_GB);
   // Self-host: the real Docker host's CPU/RAM + what running pods have reserved, so the
   // size step can show free capacity instead of cloud tiers. null in cloud (unused there).
   const oss = editionOss();
@@ -68,7 +68,7 @@ export default async function NewPodPage({
         agentIds={detail.agentIds}
         enabled={isProvisioningEnabled()}
         initialStep={step}
-        slots={{ used: slots.used, cap: ACCOUNT_SLOT_CAP, unlimited: isAdmin(user.email) || oss }}
+        ram={{ used: ram.usedGb, cap: ACCOUNT_RAM_GB, unlimited: isAdmin(user.email) || oss }}
         oss={oss}
         t3Enabled={harnessEnabled("t3")}
         capacity={capacity}

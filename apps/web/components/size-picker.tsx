@@ -1,6 +1,7 @@
 "use client";
 
 import { POD_TIERS, POD_SIZES, type PodSize } from "@podway/shared/tiers";
+import { priceForRamGb } from "@/lib/pricing-catalog";
 import { cn } from "@/lib/utils";
 
 /**
@@ -21,12 +22,13 @@ export default function SizePicker({
   note?: (s: PodSize) => string | null;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
       {POD_SIZES.map((s) => {
         const t = POD_TIERS[s];
         const disabled = disabledSizes.includes(s);
         const active = value === s;
         const footnote = note?.(s);
+        const price = priceForRamGb(t.memoryGb);
         return (
           <button
             key={s}
@@ -40,7 +42,14 @@ export default function SizePicker({
               disabled && "cursor-not-allowed opacity-40 hover:border-border",
             )}
           >
-            <span className="text-[13.5px] font-semibold">{t.label}</span>
+            <span className="flex items-baseline justify-between gap-2">
+              <span className="text-[13.5px] font-semibold">{t.label}</span>
+              {price != null && (
+                <span className="text-[12.5px] font-semibold tabular-nums">
+                  ${price}<span className="text-[10.5px] font-normal text-muted-foreground">/mo</span>
+                </span>
+              )}
+            </span>
             <span className="text-[12px] tabular-nums text-muted-foreground">
               {t.cpus} vCPU · {t.memoryGb} GB RAM
             </span>
