@@ -8,7 +8,8 @@
  *     the owner wants to be pinged / recapped (`agentPushNotifEnabled`, `awaySummaryEnabled`).
  *   · git identity — the attribution trailers on commits/PRs, including the Remote-Control session
  *     link that pods add BY DEFAULT (`attribution.sessionUrl`).
- *   · long-session health — `autoCompactEnabled` keeps a 24/7 session from dying at the context limit.
+ *   · (auto-compact is NOT a setting here — it is FORCED ON for every pod in the boot merge, so a
+ *     24/7 session can never be left unable to compact; see refresh-common.sh.)
  *
  * We deliberately DON'T expose: `model` (the Claude mobile/desktop client's `/model` owns it, and it
  * needs a restart), `env` (podway already injects env/secrets), `autoUpdatesChannel` (podway pins
@@ -35,7 +36,6 @@ export interface ClaudeAttribution {
 
 export interface ClaudeSettings {
   attribution?: ClaudeAttribution;
-  autoCompactEnabled?: boolean;
   /** Idle time before an unanswered AskUserQuestion times out. "never" (default) = wait forever —
    * a hang for an unattended pod; e.g. "30m" lets the agent move on. */
   askUserQuestionTimeout?: string;
@@ -49,7 +49,6 @@ export interface ClaudeSettings {
  * user's own and is left untouched. Kept in sync with CLAUDE_SETTINGS_MERGE_PY's ALLOWED set. */
 export const CLAUDE_SETTINGS_KEYS = [
   "attribution",
-  "autoCompactEnabled",
   "askUserQuestionTimeout",
   "dialogExpiry",
   "agentPushNotifEnabled",
@@ -70,7 +69,6 @@ export function pickClaudeSettings(parsed: unknown): ClaudeSettings {
   if (!parsed || typeof parsed !== "object") return {};
   const src = parsed as Record<string, unknown>;
   const out: ClaudeSettings = {};
-  if (typeof src.autoCompactEnabled === "boolean") out.autoCompactEnabled = src.autoCompactEnabled;
   if (typeof src.agentPushNotifEnabled === "boolean")
     out.agentPushNotifEnabled = src.agentPushNotifEnabled;
   if (typeof src.awaySummaryEnabled === "boolean") out.awaySummaryEnabled = src.awaySummaryEnabled;
@@ -104,7 +102,6 @@ export function validateClaudeSettings(patch: unknown): Record<string, unknown> 
       continue;
     }
     switch (key) {
-      case "autoCompactEnabled":
       case "agentPushNotifEnabled":
       case "awaySummaryEnabled":
         out[key] = asBool(v, key);
@@ -152,7 +149,7 @@ export function validateClaudeSettings(patch: unknown): Record<string, unknown> 
 export const CLAUDE_SETTINGS_MERGE_PY = String.raw`
 import json, sys, base64, os, pwd
 PATH = "/home/dev/.claude/settings.json"
-ALLOWED = {"attribution","autoCompactEnabled","askUserQuestionTimeout","dialogExpiry","agentPushNotifEnabled","awaySummaryEnabled"}
+ALLOWED = {"attribution","askUserQuestionTimeout","dialogExpiry","agentPushNotifEnabled","awaySummaryEnabled"}
 patch = json.loads(base64.b64decode(sys.argv[1]))
 try:
     cur = json.load(open(PATH))

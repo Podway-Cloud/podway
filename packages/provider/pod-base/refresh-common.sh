@@ -132,6 +132,21 @@ else:
     # User-customized the managed fields → never clobber. Record a baseline so future
     # podway changes can be offered without a re-migration guess.
     open(MARKER, "w").write(cur_hash)
+
+# Auto-compact is NON-NEGOTIABLE on a 24/7 pod. A session that cannot compact dies at the context
+# limit and the owner (not on the machine) is left at an unclearable error — makore.app dev, on a
+# screenshot-heavy session with auto-compact turned off, 2026-09-10. Force it ON every boot,
+# INDEPENDENT of the permission-slice ownership logic above (so even a user who customized
+# permissions can't run without it), preserving every other key. Re-read in case the block above
+# rewrote the file.
+try:
+    final = json.load(open(SETTINGS)) if os.path.exists(SETTINGS) else {}
+    if not isinstance(final, dict): final = {}
+except Exception:
+    final = {}
+if final.get("autoCompactEnabled") is not True:
+    final["autoCompactEnabled"] = True
+    json.dump(final, open(SETTINGS, "w"), indent=2)
 PY
   chown "$SETTINGS_OWNER" "$SETTINGS_JSON" "$SETTINGS_MARKER" 2>/dev/null || true
 fi

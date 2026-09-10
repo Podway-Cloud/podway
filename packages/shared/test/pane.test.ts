@@ -6,6 +6,7 @@ import {
   paneAcceptsInput,
   classifyGate,
   authFailureInPane,
+  atContextLimit,
 } from "../src/pane.js";
 
 // The real "Select login method" menu (Claude 2.1.215) that hung velsa's Reconnect, 2026-08-22.
@@ -120,5 +121,22 @@ describe("pane safety predicates", () => {
     // The post-login confirmation — sign-in succeeded but the agent sits until Enter; the watchdog
     // must recognize it so it doesn't read as "Needs you" forever (makore.app dev, 2026-08-26).
     expect(classifyGate("Login successful. Press Enter to continue…")).toBe("login-continue");
+  });
+});
+
+describe("atContextLimit — the context-overflow stuck state", () => {
+  it("matches the real dead-end panes (makore.app dev, 2026-09-10)", () => {
+    expect(
+      atContextLimit(
+        "Context limit reached · /compact or /clear to continue · auto-compact is off · /config to turn it on",
+      ),
+    ).toBe(true);
+    expect(atContextLimit("Context low (0% remaining) · Run /compact to compact & continue")).toBe(true);
+    expect(atContextLimit("API Error: Prompt is too long")).toBe(true);
+  });
+  it("does NOT flag a healthy low-context warning or a normal prompt", () => {
+    expect(atContextLimit("Context low (25% remaining) · Run /compact to compact & continue")).toBe(false);
+    expect(atContextLimit("❯ ")).toBe(false);
+    expect(atContextLimit("⏵⏵ bypass permissions on (shift+tab to cycle)")).toBe(false);
   });
 });

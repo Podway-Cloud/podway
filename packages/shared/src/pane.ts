@@ -88,6 +88,18 @@ export function looksLikeAgentTui(paneText: string): boolean {
   return /[─━]{8,}/.test(paneText) || /shift\+tab to cycle|bypass permissions/i.test(paneText);
 }
 
+/**
+ * True when the agent's Claude session has hit the CONTEXT LIMIT and cannot take a turn — the state
+ * where every message fails with "prompt is too long". This is how a screenshot-heavy 24/7 session
+ * strands (makore.app dev, 2026-09-10): base64 images are un-compactable, so the context only grows
+ * and, with auto-compact unable to run, no turn ever succeeds. Matches only the definite dead-end
+ * markers — NOT a healthy "context low (12% remaining)" warning, which is normal and self-heals.
+ */
+const CONTEXT_LIMIT_RE = /context limit reached|prompt is too long|context low \(0% remaining\)/i;
+export function atContextLimit(paneText: string): boolean {
+  return CONTEXT_LIMIT_RE.test(paneText);
+}
+
 /** Which known blocking gate a pane is showing. `atBlockingGate` only says "some gate is up, don't
  * type"; the menu WATCHDOG needs to know WHICH one so it can drive the right answer (or surface an
  * owner-decision one). `bypass` is tested with its dual-match so the working status line never counts;

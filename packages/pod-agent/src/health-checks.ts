@@ -31,7 +31,7 @@ export interface PodIssue {
 
 export interface HealthInput {
   sessionAlive: boolean;
-  agents: { id: string; window: number | null; authed: boolean; loginExpired?: boolean; needsReauth?: boolean; stuckGate?: string; expiresAt?: number | null }[];
+  agents: { id: string; window: number | null; authed: boolean; loginExpired?: boolean; needsReauth?: boolean; stuckGate?: string; contextReset?: boolean; expiresAt?: number | null }[];
   /** Targets the watchdog stopped trying to repair. */
   repairGaveUp: string[];
   /** For a given `startup:<slug>` target, the working directory its command `cd`s into that no
@@ -189,6 +189,18 @@ export function computeIssues(input: HealthInput): PodIssue[] {
         severity: "warn",
         title: `${label(a.id)} is waiting on you`,
         detail: `${label(a.id)} is stopped at ${a.stuckGate} in its terminal and can't continue until you answer it (open the terminal tab).`,
+        fixable: false,
+        agent: a.id,
+      });
+    } else if (a.contextReset) {
+      // The context-overflow guard recovered the agent but had to start a FRESH conversation (the
+      // session couldn't be trimmed back under the limit). Surface it so the owner knows the earlier
+      // history is gone — informational, not an action, so "info" severity (agent-context-overflow-guard).
+      issues.push({
+        id: `agent-context-reset:${a.id}`,
+        severity: "info",
+        title: `${label(a.id)} conversation was reset`,
+        detail: `${label(a.id)} ran out of room and couldn't be trimmed back, so Podway started it on a fresh conversation to get it working again. Earlier history is gone; the work in your repo is untouched.`,
         fixable: false,
         agent: a.id,
       });

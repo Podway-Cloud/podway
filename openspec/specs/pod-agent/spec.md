@@ -944,6 +944,48 @@ surfaced as "needs you".
 - **WHEN** the agent shows a confirmation the platform cannot safely answer on the owner's behalf
 - **THEN** the pod surfaces it as a "needs you" state so the owner decides, rather than hanging
 
+### Requirement: A context-overflowed agent is recovered automatically
+
+The pod SHALL detect when the Claude agent can no longer take a turn because its context is full —
+the dead-end state where every message fails with "prompt is too long" / "context limit reached",
+with no menu showing (so the menu watchdog never sees it). This happens to a screenshot-heavy 24/7
+session because base64 image tool-results are un-compactable, so the context only grows. The pod
+SHALL keep this from happening by forcing Claude Code auto-compaction ON for every boot (it is NOT an
+owner-settable toggle), and SHALL recover a session that has already overflowed by: trimming the
+un-compactable image payloads out of the active transcript (replacing each with a short text
+placeholder, backing the transcript up first and never dropping a line), restarting the agent so it
+re-reads the trimmed transcript, and — if it is still over the limit — sending `/compact`. Recovery
+SHALL be rate-limited per agent so it can never loop, and SHALL be logged. If the session still will
+not fit, the agent continues on a fresh conversation (the launcher's existing fallback) and the pod
+SHALL surface an owner-visible note that the prior conversation was reset. The owner's repository is
+never touched by recovery.
+
+#### Scenario: A screenshot-overflowed session is trimmed and resumed
+
+- **WHEN** the agent's pane shows the context-limit dead-end across consecutive health checks
+- **THEN** the pod trims the image blobs from the active transcript, restarts the agent so it reloads
+  the trimmed transcript, and (if still stuck) sends `/compact`, returning the agent to a working
+  prompt without the owner touching the terminal
+
+#### Scenario: Recovery cannot loop
+
+- **WHEN** a recovery has just run for an agent
+- **THEN** a further recovery for that agent is suppressed until a bounded cooldown has passed, and a
+  recovery already in flight is never re-entered while it is running
+
+#### Scenario: A reset conversation is reported, not hidden
+
+- **WHEN** recovery cannot fit the session back under the limit and the agent continues on a fresh
+  conversation
+- **THEN** the pod surfaces an informational owner note that the earlier conversation was reset, while
+  making clear the work in the repository is untouched
+
+#### Scenario: Auto-compaction is not owner-disableable
+
+- **WHEN** a stored pod setting or a settings write tries to turn Claude Code auto-compaction off
+- **THEN** the pod ignores it and boots with auto-compaction ON, and the setting is not offered as an
+  owner-facing toggle
+
 #### Scenario: A rejected OAuth code is recognized and never retried automatically
 
 - **WHEN** the agent shows a rejected-code OAuth error ("invalid code … press Enter to retry")

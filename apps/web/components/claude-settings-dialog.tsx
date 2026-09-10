@@ -192,7 +192,6 @@ type FormFields = {
   dialogExpiry: string;
   pushNotif: boolean;
   awaySummary: boolean;
-  autoCompact: boolean;
   sessionUrl: boolean;
   commitMode: AttrMode;
   commitCustom: string;
@@ -208,7 +207,6 @@ function formSig(v: FormFields): string {
     v.dialogExpiry,
     v.pushNotif,
     v.awaySummary,
-    v.autoCompact,
     v.sessionUrl,
     v.commitMode,
     v.commitMode === "custom" ? v.commitCustom : "",
@@ -237,7 +235,6 @@ export default function ClaudeSettingsDialog({ slug }: { slug: string }) {
   const [prCustom, setPrCustom] = useState("");
   const [sessionUrl, setSessionUrl] = useState(true);
   // Long-session health
-  const [autoCompact, setAutoCompact] = useState(true);
 
   function hydrate(s: ClaudeSettings) {
     const a = s.attribution ?? {};
@@ -260,7 +257,6 @@ export default function ClaudeSettingsDialog({ slug }: { slug: string }) {
       dialogExpiry: s.dialogExpiry ?? "5m",
       pushNotif: s.agentPushNotifEnabled ?? false,
       awaySummary: s.awaySummaryEnabled ?? false,
-      autoCompact: s.autoCompactEnabled ?? true,
       sessionUrl: a.sessionUrl ?? true,
       commitMode,
       commitCustom,
@@ -271,7 +267,6 @@ export default function ClaudeSettingsDialog({ slug }: { slug: string }) {
     setDialogExpiry(fields.dialogExpiry);
     setPushNotif(fields.pushNotif);
     setAwaySummary(fields.awaySummary);
-    setAutoCompact(fields.autoCompact);
     setSessionUrl(fields.sessionUrl);
     setCommitMode(fields.commitMode);
     setCommitCustom(fields.commitCustom);
@@ -312,7 +307,6 @@ export default function ClaudeSettingsDialog({ slug }: { slug: string }) {
       dialogExpiry,
       agentPushNotifEnabled: pushNotif,
       awaySummaryEnabled: awaySummary,
-      autoCompactEnabled: autoCompact,
       attribution,
     };
     const res = await saveClaudeSettings(slug, patch);
@@ -327,7 +321,6 @@ export default function ClaudeSettingsDialog({ slug }: { slug: string }) {
       dialogExpiry,
       pushNotif,
       awaySummary,
-      autoCompact,
       sessionUrl,
       commitMode,
       commitCustom,
@@ -411,15 +404,6 @@ export default function ClaudeSettingsDialog({ slug }: { slug: string }) {
               />
             </Group>
 
-            <Group title="Long sessions">
-              <Toggle
-                id="cs-compact"
-                checked={autoCompact}
-                onChange={setAutoCompact}
-                label="Auto-compact"
-                hint="Automatically compact the conversation before it hits the limit."
-              />
-            </Group>
 
             {error && <p className="text-[13px] text-destructive">{error}</p>}
           </div>

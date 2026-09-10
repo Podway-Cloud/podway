@@ -85,10 +85,14 @@ export default function GithubWizard({
   // A one-click OAuth return lands with ?github=connected|denied|error. On success the account query
   // refetches and reflects "connected".
   useEffect(() => {
-    const p = new URLSearchParams(window.location.search).get("github");
+    const q = new URLSearchParams(window.location.search);
+    const p = q.get("github");
     if (p === "denied") setError("GitHub authorization was cancelled.");
     else if (p === "error") setError("Couldn’t connect GitHub — please try again.");
     else if (p === "connected") void queryClient.invalidateQueries({ queryKey: ["gh-account"] });
+    // Arrived via Settings' "Change repo" (which already showed the destructive warning) → open
+    // straight on the picker instead of the "working on X" summary, so it's one fewer click.
+    if (q.get("change") === "1") setCloneDifferent(true);
     return () => {
       if (poll.current) clearTimeout(poll.current);
     };

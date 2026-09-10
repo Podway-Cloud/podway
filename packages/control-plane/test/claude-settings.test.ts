@@ -11,7 +11,7 @@ describe("pickClaudeSettings (read side)", () => {
       permissions: { allow: ["Bash(*)"] }, // podbay-managed — must not leak through
       hooks: { Stop: [] },
       model: "opus", // not exposed
-      autoCompactEnabled: false,
+      autoCompactEnabled: false, // podway-managed (forced on) — no longer owner-settable, must not leak
       askUserQuestionTimeout: "30m",
       dialogExpiry: "10m",
       agentPushNotifEnabled: true,
@@ -19,7 +19,6 @@ describe("pickClaudeSettings (read side)", () => {
       attribution: { commit: "", pr: "x", sessionUrl: false, junk: 1 },
     });
     expect(got).toEqual({
-      autoCompactEnabled: false,
       askUserQuestionTimeout: "30m",
       dialogExpiry: "10m",
       agentPushNotifEnabled: true,
@@ -38,7 +37,6 @@ describe("pickClaudeSettings (read side)", () => {
 describe("validateClaudeSettings (write side — the trust boundary)", () => {
   it("passes a well-formed patch through", () => {
     const patch = {
-      autoCompactEnabled: true,
       askUserQuestionTimeout: "30m",
       dialogExpiry: "5m",
       agentPushNotifEnabled: false,
@@ -49,9 +47,14 @@ describe("validateClaudeSettings (write side — the trust boundary)", () => {
   });
 
   it("keeps null (reset-to-default) for a key", () => {
-    expect(validateClaudeSettings({ autoCompactEnabled: null })).toEqual({
-      autoCompactEnabled: null,
+    expect(validateClaudeSettings({ agentPushNotifEnabled: null })).toEqual({
+      agentPushNotifEnabled: null,
     });
+  });
+
+  it("rejects autoCompactEnabled — it is podway-managed (forced on), not owner-settable", () => {
+    expect(() => validateClaudeSettings({ autoCompactEnabled: true })).toThrow(ControlError);
+    expect(() => validateClaudeSettings({ autoCompactEnabled: false })).toThrow(ControlError);
   });
 
   it("rejects unknown top-level keys (e.g. model, permissions, __proto__)", () => {
@@ -67,7 +70,7 @@ describe("validateClaudeSettings (write side — the trust boundary)", () => {
   });
 
   it("type-checks booleans and durations", () => {
-    expect(() => validateClaudeSettings({ autoCompactEnabled: "true" })).toThrow(ControlError);
+    expect(() => validateClaudeSettings({ agentPushNotifEnabled: "true" })).toThrow(ControlError);
     expect(() => validateClaudeSettings({ dialogExpiry: "soon" })).toThrow(ControlError);
     expect(() => validateClaudeSettings({ dialogExpiry: "never" })).toThrow(ControlError); // expiry has no "never"
     expect(validateClaudeSettings({ askUserQuestionTimeout: "never" })).toEqual({

@@ -481,6 +481,34 @@ export function lastAgentActivityMs(
   if (newest === 0) return null;
   return Math.max(0, now - newest);
 }
+/**
+ * The newest Claude transcript .jsonl for a given working directory, or null if none.
+ *
+ * Claude Code stores a session's transcript at
+ * `~/.claude/projects/<cwd-with-slashes-as-dashes>/<session-id>.jsonl` — the same mapping the pod's
+ * own resume uses (boot.ts: `pwd | sed "s|/|-|g"`). The context-overflow guard needs the ACTIVE
+ * session's transcript to trim its image blobs, and "newest by last-entry timestamp" is the active
+ * one. Scoped to the one project dir (not a fleet-wide walk) so it can't pick another repo's session.
+ */
+export function newestClaudeTranscript(cwd: string, claudeRoot = CLAUDE_PROJECTS_DIR): string | null {
+  const dir = `${claudeRoot}/${cwd.replace(/\//g, "-")}`;
+  let best: string | null = null;
+  let bestTs = -1;
+  let names: string[];
+  try {
+    names = readdirSync(dir);
+  } catch {
+    return null;
+  }
+  for (const name of names) {
+    if (!name.endsWith(".jsonl")) continue;
+    const p = `${dir}/${name}`;
+    const ts = lastTimestampInJsonl(p) || (() => { try { return statSync(p).mtimeMs; } catch { return 0; } })();
+    if (ts > bestTs) { bestTs = ts; best = p; }
+  }
+  return best;
+}
+
 /** Codex writes NO live state file (unlike Claude), and its TUI can't be reliably scraped
  * (stripped binary; the pane is often not even rendering). But it APPENDS to a rollout log
  * `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` as it works — every message / tool call /

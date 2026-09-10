@@ -26,6 +26,7 @@ import {
   selectWindow,
   newWindow,
   spawnAgentWindow,
+  newestClaudeTranscript,
 } from "./signals.js";
 import { runGreeter, driveLoginMenu, startResumeWatch, type GreeterOptions } from "./greeter.js";
 import {
@@ -34,8 +35,10 @@ import {
   agentGone,
   paneAcceptsInput,
   looksLikeAgentTui,
+  atContextLimit,
   type GateKind,
 } from "@podway/shared/pane";
+import { recoverContextOverflow, type RecoveryState } from "./context-recovery.js";
 import type { RcState } from "@podway/shared/protocol";
 import { classifyRcState, isOrphanedRcYield, shouldAttemptRcRestore } from "./rc-state.js";
 import { credentialsPathForAgent, sanitizeSessionName, podNameFromSpec } from "./boot.js";
@@ -2535,7 +2538,7 @@ export class AgentServer {
     }
     return computeIssues({
       sessionAlive: this.session.isAlive,
-      agents: this.agentStates().map((a) => ({ id: a.id, window: a.window, authed: a.authed, loginExpired: a.loginExpired, needsReauth: a.needsReauth, expiresAt: a.expiresAt, stuckGate: this.menuStuck.get(a.id) })),
+      agents: this.agentStates().map((a) => ({ id: a.id, window: a.window, authed: a.authed, loginExpired: a.loginExpired, needsReauth: a.needsReauth, expiresAt: a.expiresAt, stuckGate: this.menuStuck.get(a.id), contextReset: this.contextReset.get(a.id) })),
       repairGaveUp: [...this.cappedTargets],
       startupMissingDir: this.startupMissingDirs(),
       disk: { usedMb: m.disk.usedMb, totalMb: m.disk.totalMb },
@@ -2676,6 +2679,9 @@ export class AgentServer {
     // driver is clearing (any respawn site — reconnect, resume, update, window-repair)
     // and drive/surface it. Same "after advanceAddedAgents" rationale.
     await this.menuWatchdog();
+    // Context watchdog: catch an agent wedged at the context limit (screenshot-heavy overflow) —
+    // alive but unable to take a turn, with no menu up, so menuWatchdog never sees it. Trim + recover.
+    await this.contextWatchdog();
     // Fail-state watchdog: detect a live auth failure (that the credential FILE misses) and
     // auto-restore remote control once the login recovers — the two gaps behind the 2026-08-23
     // mid-session-logout incident.
@@ -2780,6 +2786,21 @@ export class AgentServer {
    * rode a version bump. Both read from the pane already captured in menuWatchdog. */
   private readonly menuStuck = new Map<string, string>();
   private readonly menuUnknown = new Map<string, { hash: string; ticks: number; warned: boolean }>();
+
+  /**
+   * Context-overflow recovery state (see context-recovery.ts + the agent-context-overflow-guard change).
+   * `contextLimitTicks` debounces the `atContextLimit` signal across consecutive ticks (a transient
+   * "prompt is too long" that self-retries must not trigger a restart); `recoveryState` holds the
+   * per-agent cooldown that `recoverContextOverflow` uses to guarantee it can never loop;
+   * `contextRecovering` guards against a second run while one is in flight — the ladder sleeps for
+   * minutes (restart + resume + compact), out of band from the ~3s tick, so it MUST NOT re-enter;
+   * `contextReset` records that a recovery fell back to a fresh session, surfaced as an owner health
+   * note (task 4.3). All in-memory: they reset on a pod restart, which is correct — a restart is a
+   * clean slate for this bookkeeping. */
+  private readonly contextLimitTicks = new Map<string, number>();
+  private readonly recoveryState = new Map<string, RecoveryState>();
+  private readonly contextRecovering = new Set<string>();
+  private readonly contextReset = new Map<string, boolean>();
 
   /**
    * Self-healing backstop for stuck menus. Every tick, for each Claude window, if it shows a KNOWN
@@ -2891,6 +2912,78 @@ export class AgentServer {
     } catch (e) {
       this.log.warn("menu_watchdog_drive_failed", { agent: agentId, gate, err: String(e) });
     }
+  }
+
+  /**
+   * Context-overflow watchdog. A screenshot-heavy 24/7 session fills the context with un-compactable
+   * base64 image tool-results and every turn then dies with "prompt is too long" — the agent is alive
+   * but can't take a turn, and no menu is up, so menuWatchdog never sees it (makore.app dev, 2026-09-10,
+   * recovered by hand). This detects that dead-end (`atContextLimit`), debounces it so a transient
+   * retry doesn't trip it, and — once — runs the same recovery a human ran: trim the image blobs from
+   * the transcript, restart so the agent re-reads it, `/compact`, and surface a note if it had to reset
+   * fresh. Codex excluded (its TUI isn't reliably pane-scrapeable, per signals.ts). */
+  private async contextWatchdog(): Promise<void> {
+    const CONTEXT_STATIC_TICKS = 3; // ~9s at a 3s tick — long enough that a self-retrying transient clears first
+    for (const id of this.agentsOnPod()) {
+      if (id === "codex") continue;
+      const w = this.windowForAgent(id);
+      if (w == null) continue;
+      const target = `${this.session.sessionName}:${w}`;
+      const pane = await capturePane(target, { uid: this.tmuxUid, gid: this.tmuxGid }).catch(() => "");
+      if (!pane || !atContextLimit(pane)) {
+        this.contextLimitTicks.delete(id);
+        continue;
+      }
+      const ticks = (this.contextLimitTicks.get(id) ?? 0) + 1;
+      this.contextLimitTicks.set(id, ticks);
+      if (ticks < CONTEXT_STATIC_TICKS) continue;
+      if (this.contextRecovering.has(id)) continue; // a run is already in flight — never re-enter (it sleeps for minutes)
+      this.contextRecovering.add(id);
+      this.log.warn("agent_context_limit_detected", { agent: id, window: w });
+      void this.runContextRecovery(id, target, w).finally(() => this.contextRecovering.delete(id));
+    }
+  }
+
+  /** Run the recovery ladder for one agent, out of band from the tick (it sleeps minutes). Wires the
+   * pure orchestrator (context-recovery.ts) to this pod's real tmux/transcript; the orchestrator owns
+   * the cooldown + the ladder order. On a fresh-session fallback, records the owner-visible note. */
+  private async runContextRecovery(agentId: string, target: string, window: number): Promise<void> {
+    this.contextLimitTicks.set(agentId, 0); // the ladder now owns it; let a fresh detection re-arm afterwards
+    const state = this.recoveryState.get(agentId) ?? { lastRecoveryAt: 0 };
+    this.recoveryState.set(agentId, state);
+    const tmux = (args: string[]) =>
+      new Promise<void>((resolve) =>
+        execFile("tmux", args, { uid: this.tmuxUid, gid: this.tmuxGid }, () => resolve()),
+      );
+    const outcome = await recoverContextOverflow(
+      {
+        // The stuck session's transcript: newest .jsonl for the agent's cwd (~/work). The trim targets
+        // the active session precisely rather than a fleet-wide guess.
+        findTranscript: async () => newestClaudeTranscript("/home/dev/work"),
+        // Same respawn the /agent/restart endpoint uses — resumes via the boot command's `--continue`,
+        // so the agent re-reads the now-trimmed transcript. A context-overflowed session is authed
+        // (it was working), so no /login drive is needed here.
+        restartAgent: async () => {
+          if (!this.agentCommandFor) return;
+          await tmux(["respawn-pane", "-k", "-t", target, this.agentCommandFor(agentId)]);
+        },
+        sendCompact: async () => {
+          await tmux(["send-keys", "-t", target, "-l", "/compact"]);
+          await tmux(["send-keys", "-t", target, "Enter"]);
+        },
+        readPane: async () =>
+          stripAnsiText(await capturePane(target, { uid: this.tmuxUid, gid: this.tmuxGid }).catch(() => "")),
+        log: (event, data) => this.log.warn(event, { agent: agentId, window, ...data }),
+        now: Date.now,
+        sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+      },
+      state,
+    ).catch((e) => {
+      this.log.warn("agent_context_recover_failed", { agent: agentId, err: String(e) });
+      return "cooldown" as const;
+    });
+    if (outcome === "reset-fresh") this.contextReset.set(agentId, true);
+    else if (outcome === "recovered") this.contextReset.delete(agentId);
   }
 
   /** Append a timestamped snapshot whenever the terminal screen changes, capped so

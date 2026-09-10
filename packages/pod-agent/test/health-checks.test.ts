@@ -44,6 +44,18 @@ describe("health checks", () => {
     expect(issue?.detail).toMatch(/folder-trust/i);
   });
 
+  it("surfaces a context-overflow reset as an INFO note (not an action the owner must take)", () => {
+    const out = computeIssues({
+      ...healthy,
+      agents: [{ id: "claude-code", window: 0, authed: true, contextReset: true }],
+    });
+    const issue = out.find((i) => i.id === "agent-context-reset:claude-code");
+    expect(issue?.severity).toBe("info");
+    expect(issue?.title).toMatch(/conversation was reset/i);
+    expect(issue?.detail).toMatch(/repo is untouched/i);
+    expect(issue?.fixable).toBe(false);
+  });
+
   it("does not invent a disk problem when the disk size is unknown", () => {
     // totalMb 0 means we couldn't read it. Reporting "0% free" would be a lie
     // that sends the owner chasing a full disk that isn't full.
