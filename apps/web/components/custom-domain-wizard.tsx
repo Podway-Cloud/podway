@@ -112,11 +112,11 @@ export default function CustomDomainWizard({ slug }: { slug: string }) {
       {showRecords && existing && (
         <div className="flex flex-col gap-3 rounded-xl border border-border/60 p-4">
           <p className="text-[13px] text-muted-foreground">
-            Add these at <span className="font-medium text-foreground">your</span> DNS provider — any works.
-            We verify &amp; issue HTTPS automatically.
+            Add these records at <span className="font-medium text-foreground">your</span> DNS provider. We verify
+            &amp; issue HTTPS automatically.
           </p>
           {existing.records.map((rec) => (
-            <RecordRow key={rec.type + rec.name} label={rec.label} value={`${rec.name} → ${rec.value}`} />
+            <RecordCard key={rec.type + rec.name} rec={rec} apex={apexOf(existing.hostname)} />
           ))}
           <div className="mt-1 flex items-center justify-between">
             <span className="flex items-center gap-2 text-[13px] text-muted-foreground">
@@ -147,18 +147,65 @@ export default function CustomDomainWizard({ slug }: { slug: string }) {
   );
 }
 
-function RecordRow({ label, value }: { label: string; value: string }) {
+/** The registrable domain (last two labels) — the "zone" the user manages at their DNS provider. Used
+ * to derive the short host most providers want (e.g. dashboard.makore.app → host "dashboard"). Good
+ * enough for the common case; the full Name is always shown + copyable, which works everywhere. */
+function apexOf(hostname: string): string {
+  return hostname.split(".").slice(-2).join(".");
+}
+
+/** The host (subdomain) a provider's Name field wants: the record name minus the zone, or "@" for root. */
+function hostOf(name: string, apex: string): string {
+  if (name === apex) return "@";
+  return name.endsWith(`.${apex}`) ? name.slice(0, -(apex.length + 1)) : name;
+}
+
+function RecordCard({
+  rec,
+  apex,
+}: {
+  rec: { type: string; name: string; value: string; label: string };
+  apex: string;
+}) {
+  // Name is the host (subdomain) — what Cloudflare and most providers want in their Name field.
+  const host = hostOf(rec.name, apex);
+  const valueLabel = rec.type === "TXT" ? "Content" : rec.type === "CNAME" ? "Target" : "Value";
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/40 p-3">
+      <div className="mb-2">
+        <span className="rounded bg-background px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+          {rec.type}
+        </span>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Field label="Name" value={host} />
+        <Field label={valueLabel} value={rec.value} />
+      </div>
+      {rec.type === "CNAME" && (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          On Cloudflare, set <span className="font-medium">Proxy status</span> to{" "}
+          <span className="font-medium">DNS only</span> (grey cloud).
+        </p>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/40 px-3 py-2">
-      <div className="min-w-0">
-        <div className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/80">{label}</div>
-        <div className="overflow-x-auto whitespace-nowrap font-mono text-[12px] text-foreground/90">{value}</div>
-      </div>
+    <div className="flex items-center gap-2">
+      <span className="w-12 shrink-0 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+        {label}
+      </span>
+      <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded bg-background px-2 py-1 font-mono text-[12px] text-foreground/90">
+        {value}
+      </code>
       <Button
         variant="outline"
         size="xs"
         className="shrink-0"
+        aria-label={`Copy ${label}`}
         onClick={async () => {
           if (await copyText(value)) {
             setCopied(true);
