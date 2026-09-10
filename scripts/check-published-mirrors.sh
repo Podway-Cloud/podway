@@ -18,6 +18,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 FAIL=0
 note() { printf '  %s\n' "$*"; }
 bad()  { printf '  DRIFT: %s\n' "$*" >&2; FAIL=1; }
+# Shared with oss-mirror.sh: the paths NEVER exported to the public mirror. A HEAD that is ahead of
+# the mirror ONLY in these files is not drift — the mirror correctly has nothing to sync.
+source "$ROOT/scripts/oss-exclude-paths.sh"
 
 # Read published files through the API, NOT raw.githubusercontent.com.
 #
@@ -70,9 +73,30 @@ if [ -z "$MIR_SHA" ] || [ -z "$SRC_SHA" ]; then
   note "source mirror: could not determine its last synced commit — skipped"
 elif [ "${SRC_SHA#"$MIR_SHA"}" != "$SRC_SHA" ] || [ "${MIR_SHA#"$SRC_SHA"}" != "$MIR_SHA" ]; then
   note "source mirror synced at $MIR_SHA == HEAD $SRC_SHA"
+elif ! git -C "$ROOT" rev-parse -q --verify "$MIR_SHA^{commit}" >/dev/null 2>&1; then
+  # Can't resolve the mirror's recorded sha (rebased/unknown history) — can't PROVE the gap is
+  # benign, so report drift the safe way rather than swallow a real one.
+  bad "source mirror last synced $MIR_SHA — not resolvable from HEAD ($SRC_SHA); the sync may be failing"
 else
-  BEHIND="$(git -C "$ROOT" rev-list --count "$MIR_SHA..HEAD" 2>/dev/null || echo '?')"
-  bad "source mirror last synced $MIR_SHA — HEAD is $SRC_SHA ($BEHIND ahead); the sync workflow is failing or has not run"
+  # HEAD is ahead of the mirror marker. But is any EXPORTED file actually different? The commits
+  # since MIR_SHA may touch ONLY excluded (ops/internal) paths — then the mirror's no-op is CORRECT
+  # and this is not drift (e.g. a scripts/incus/* commit, false-alarmed the daily run 2026-09-10).
+  # Report drift ONLY when an exported file changed — the real "sync is failing" case this guards.
+  exported_changed=0
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    excluded=0
+    for ex in "${EXCLUDES[@]}"; do
+      case "$f" in "$ex" | "$ex"/*) excluded=1; break ;; esac
+    done
+    [ "$excluded" -eq 0 ] && { exported_changed=1; break; }
+  done < <(git -C "$ROOT" diff --name-only "$MIR_SHA..HEAD" 2>/dev/null)
+  if [ "$exported_changed" -eq 1 ]; then
+    BEHIND="$(git -C "$ROOT" rev-list --count "$MIR_SHA..HEAD" 2>/dev/null || echo '?')"
+    bad "source mirror last synced $MIR_SHA — HEAD is $SRC_SHA ($BEHIND ahead) with EXPORTED changes; the sync workflow is failing or has not run"
+  else
+    note "source mirror at $MIR_SHA; HEAD $SRC_SHA is ahead only in excluded (ops/internal) files — nothing to export, in sync"
+  fi
 fi
 
 [ "$FAIL" -eq 0 ] && echo "  all published artifacts match source" || echo "  PUBLISHED ARTIFACTS HAVE DRIFTED" >&2

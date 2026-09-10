@@ -16,28 +16,10 @@ PUBLIC_REMOTE="${OSS_PUBLIC_REMOTE:-https://github.com/Podway-Cloud/podway.git}"
 PUSH=0
 [ "${1:-}" = "--push" ] && PUSH=1
 
-# ── The exclude-list: infra topology, ops, internal planning, secrets. Everything NOT here is
-# published. Keep this SHORT and infra-only — when in doubt, a path is public. Refine during dry-run.
-EXCLUDES=(
-  # infra topology — Fly app configs + fleet/deploy/box orchestration (the ops moat)
-  "apps/web/fly.toml" "packages/gateway/fly.toml"
-  "smoke/fly.toml" "scripts/db-backup"
-  "scripts/deploy-app.sh" "scripts/incus"
-  # ops runbooks reveal infra topology
-  "docs/runbooks"
-  # internal planning / GTM / business
-  "0asks.md" "0audit.md" "docs/strategy" "docs/plans"
-  # internal agent/dev-workflow instructions (reference prod DB, the box, deploy procedures)
-  "CLAUDE.md" ".claude"
-  # internal release + infra tooling (mirror scripts, DB migration between hosts)
-  "scripts/migrate-db-neon-to-fly.sh" "scripts/publish-relay-mirror.sh"
-  # PRIVATE workflows only — the deploy/build/mirror CI references managed infra. The public
-  # lint/test workflow (.github/workflows/public-ci.yml) is NOT excluded — it ships to the mirror.
-  ".github/workflows/ci.yml" ".github/workflows/selfhost-images.yml" ".github/workflows/oss-mirror.yml"
-  ".github/workflows/relay-mirror.yml"
-  # never mirror agent-internal + env files
-  ".git" ".env" ".env.local" ".env.production"
-)
+# The exclude-list — infra topology, ops, internal planning, secrets — is shared with
+# scripts/check-published-mirrors.sh (its drift check treats a HEAD ahead ONLY in these paths as
+# in-sync). ONE source of truth so the two never disagree; see the file for the paths + the rationale.
+source "$ROOT/scripts/oss-exclude-paths.sh"
 
 REF="${OSS_REF:-HEAD}"   # CI sets this to the pushed main; local runs use committed HEAD.
 echo "== staging OSS tree → $STAGE (from $(git -C "$ROOT" rev-parse --short "$REF")) =="
