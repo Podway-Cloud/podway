@@ -1,6 +1,7 @@
 import "server-only";
 import {
   PodService,
+  BillingService,
   DrizzlePodStore,
   DrizzleSecretStore,
   SecretVault,
@@ -234,6 +235,11 @@ export function getPodService(): PodService {
   });
   ensureProvisioner();
   return svc;
+}
+
+/** The billing service (Phase 2). Cloud-only; every caller also gates on `stripeConfigured()`. */
+export function getBillingService(): BillingService {
+  return new BillingService(createAppDb());
 }
 
 /**

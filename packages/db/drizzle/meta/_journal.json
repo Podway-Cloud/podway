@@ -421,6 +421,20 @@
       "when": 1788400500000,
       "tag": "0059_pod_size_ladder",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1788400600000,
+      "tag": "0060_billing_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1788400700000,
+      "tag": "0061_credit_grants",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ import { getPostHogClient } from "./posthog-server";
 import type { MetricsSnapshot, PodIssue } from "@podway/shared";
 import type { PodLiveSignals, ClaudeSettings } from "@podway/control-plane";
 import { requireUser, editionOss } from "./session";
+import { syncOwnerBilling } from "./billing-actions";
 import { harnessEnabled } from "./agent-harness";
 import QRCode from "qrcode";
 import { requireApprovedUser } from "./access";
@@ -354,6 +355,7 @@ export async function launchPod(
       ref: ref ?? undefined,
     });
     if (!editionOss()) await recordAttributedUserEvent(user.id, "pod_created", rec.id);
+    await syncOwnerBilling(user.id); // new pod → a subscription item at its size price
     // Fire-and-forget, and NOT awaited inside this try. The pod exists by now: an
     // awaited flush that rejects would be caught below and reported as "launch
     // failed" for a pod that was successfully created, and with flushAt:1 it also
@@ -798,6 +800,8 @@ export async function resizePod(slug: string, size: string): Promise<ActionResul
     await getPodService().startPodResize(user.id, slug, size as never, {
       ramCap: isAdmin(user.email) || editionOss() ? Infinity : ACCOUNT_RAM_GB,
     });
+    await syncOwnerBilling(user.id); // new size → item price updates (Stripe prorates)
+
   } catch (e) {
     log.error("resize_pod_failed", { userId: user.id, podId: slug, size, err: e });
     return { error: message(e) };
@@ -843,6 +847,8 @@ export async function wakePod(slug: string): Promise<ActionResult> {
     await getPodService().wake(user.id, slug, {
       ramCap: isAdmin(user.email) || editionOss() ? Infinity : ACCOUNT_RAM_GB,
     });
+    await syncOwnerBilling(user.id); // running again → back to its size price
+
   } catch (e) {
     log.error("wake_failed", { userId: user.id, podId: slug, err: e });
     revalidatePath("/dashboard");
@@ -857,6 +863,8 @@ export async function sleepPod(slug: string): Promise<ActionResult> {
   const user = await requireUser();
   try {
     await getPodService().sleep(user.id, slug);
+    await syncOwnerBilling(user.id); // suspended → drops to the $1 item
+
   } catch (e) {
     log.error("sleep_failed", { userId: user.id, podId: slug, err: e });
     revalidatePath("/dashboard");
@@ -984,6 +992,7 @@ export async function destroyPod(slug: string): Promise<ActionResult> {
     teardown.then(() => "done" as const, () => "failed" as const),
     new Promise<"pending">((r) => setTimeout(() => r("pending"), 1500)),
   ]);
+  await syncOwnerBilling(user.id); // pod gone → its subscription item is removed
   revalidatePath("/dashboard");
   if (quick === "failed") return { error: "Couldn't remove the pod — it stays marked as removing; try again shortly." };
 }

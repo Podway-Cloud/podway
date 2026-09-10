@@ -681,3 +681,43 @@ export const customDomains = pgTable(
   },
   (t) => [uniqueIndex("custom_domains_hostname_idx").on(t.hostname)],
 );
+
+/**
+ * Per-owner billing account (Phase 2, size-based-pod-pricing). One row per user, created lazily when
+ * they first reach billing. Holds the Stripe customer id and OUR credit ledger balance (cents) — the
+ * signup + referral credit we grant, which we also push to Stripe's customer balance so it auto-applies
+ * to invoices. `hasCard` mirrors "a default payment method is on file" for quick UI reads (the card
+ * itself lives only in Stripe). Cloud only.
+ */
+export const billingAccounts = pgTable("billing_accounts", {
+  ownerId: text("owner_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  stripeCustomerId: text("stripe_customer_id"),
+  creditCents: integer("credit_cents").notNull().default(0),
+  hasCard: boolean("has_card").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+/**
+ * Credit grants (Phase 2c) — an append-only audit of every credit we gave, and the double-grant guard.
+ * We ALSO push each grant to Stripe's customer balance (negative = credit, auto-applied to invoices);
+ * this table is our own record + the idempotency key. `reason` is one-time-per-owner for the signup
+ * credit; referral grants (later) will key per-referral. `creditCents` on billing_accounts is the
+ * running mirror for quick UI reads.
+ */
+export const creditGrants = pgTable(
+  "credit_grants",
+  {
+    id: text("id").primaryKey(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    cents: integer("cents").notNull(),
+    /** 'signup' | 'referral_referred' | 'referral_referrer:<referredOwnerId>' */
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("credit_grants_owner_reason_idx").on(t.ownerId, t.reason)],
+);

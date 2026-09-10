@@ -21,6 +21,7 @@
     "@podway/provider": "workspace:*",
     "@podway/shared": "workspace:*",
     "drizzle-orm": "^0.45.2",
+    "stripe": "^22.6.2",
     "unique-names-generator": "^4.7.1"
   },
   "devDependencies": {

@@ -5,6 +5,9 @@ import { getPodService } from "@/lib/pod-service";
 import { editionOss } from "@/lib/session";
 import DashboardPage from "@/components/dashboard-page";
 import { Button } from "@/components/ui/button";
+import AddCardButton from "@/components/add-card-dialog";
+import ReferralLink from "@/components/referral-link";
+import { getBillingSummary, getInvoices } from "@/lib/billing-actions";
 import { POD_TIERS, type PodSize } from "@podway/shared/tiers";
 import { priceForRamGb, tierForRamGb, SUSPENDED_USD, SIGNUP_CREDIT_USD } from "@/lib/pricing-catalog";
 
@@ -33,8 +36,10 @@ export default async function BillingPage() {
     };
   });
   const monthlyTotal = lines.reduce((s, l) => s + l.usd, 0);
-  // Placeholder credit — the real ledger arrives with the Stripe integration (Phase 2).
-  const creditRemaining = SIGNUP_CREDIT_USD;
+  // Real billing state when Stripe is configured; null falls back to the pre-billing placeholders.
+  const billing = await getBillingSummary();
+  const creditRemaining = billing ? Math.round(billing.creditCents / 100) : SIGNUP_CREDIT_USD;
+  const invoices = billing ? await getInvoices() : [];
 
   return (
     <DashboardPage backHref="/dashboard" backLabel="Pods" title="Billing">
@@ -46,11 +51,17 @@ export default async function BillingPage() {
           <Tile label="Next invoice" value="—" sub="Set up billing to start" />
         </div>
 
-        {/* Payment method — placeholder */}
+        {/* Payment method — live once Stripe is configured, else a placeholder. */}
         <Section title="Payment method" desc="Add a card to keep your pods running past your free credit.">
           <div className="flex items-center justify-between gap-3">
-            <span className="text-[13.5px] text-muted-foreground">No card on file</span>
-            <Button variant="outline" size="sm" disabled title="Coming soon">Add card</Button>
+            <span className="text-[13.5px] text-muted-foreground">
+              {billing?.hasCard ? "Card on file" : "No card on file"}
+            </span>
+            {billing ? (
+              <AddCardButton hasCard={billing.hasCard} />
+            ) : (
+              <Button variant="outline" size="sm" disabled title="Coming soon">Add card</Button>
+            )}
           </div>
         </Section>
 
@@ -79,12 +90,45 @@ export default async function BillingPage() {
           )}
         </Section>
 
-        {/* Referral — placeholder */}
+        {/* Invoices — live once Stripe is configured. */}
+        {billing && (
+          <Section title="Invoices" desc="Your past charges. Each one opens the full receipt from Stripe.">
+            {invoices.length === 0 ? (
+              <p className="py-1 text-[13.5px] text-muted-foreground">No invoices yet.</p>
+            ) : (
+              <ul className="flex flex-col">
+                {invoices.map((inv) => (
+                  <li key={inv.id} className="flex items-center justify-between gap-3 border-t border-border/60 py-2.5 text-[13.5px] first:border-t-0">
+                    <span className="min-w-0">
+                      {inv.url ? (
+                        <a href={inv.url} target="_blank" rel="noreferrer" className="font-medium hover:underline">
+                          {inv.number ?? "Invoice"}
+                        </a>
+                      ) : (
+                        <span className="font-medium">{inv.number ?? "Invoice"}</span>
+                      )}
+                      <span className="ml-2 text-muted-foreground">
+                        {new Date(inv.created * 1000).toLocaleDateString()} · {inv.status}
+                      </span>
+                    </span>
+                    <span className="tabular-nums font-medium">${(inv.amountCents / 100).toFixed(2)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+        )}
+
+        {/* Referral — live link once billing is on. */}
         <Section title="Refer a friend" desc="Give them $10, get $10 once they keep a paid pod for a month.">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-[13.5px] text-muted-foreground">Your referral link appears here once billing is live.</span>
-            <Button variant="outline" size="sm" disabled title="Coming soon">Get link</Button>
-          </div>
+          {billing ? (
+            <ReferralLink code={user.id} />
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[13.5px] text-muted-foreground">Your referral link appears here once billing is live.</span>
+              <Button variant="outline" size="sm" disabled title="Coming soon">Get link</Button>
+            </div>
+          )}
         </Section>
 
         <p className="text-[12px] text-muted-foreground">
