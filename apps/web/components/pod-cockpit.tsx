@@ -1926,25 +1926,6 @@ export default function PodCockpit(props: PodCockpitProps) {
             ["Slug", <span key="s" className="font-mono text-[12.5px]">{slug}</span>],
             ["Environment", environmentName],
             ["Created", ago(createdAt)],
-            // Only shown once Podway has actually done something (an update, resize,
-            // repair) — the empty "nobody has changed this" row was noise, and it
-            // truncated to an ellipsis. When present it's real transparency: the owner
-            // sees what WE did to their pod.
-            ...(adminActions.length > 0
-              ? [
-                  [
-                    "Podway activity",
-                    <span key="aa" className="flex flex-col items-end gap-0.5 text-right">
-                      {adminActions.slice(0, 3).map((a) => (
-                        <span key={a.at} className="text-[12.5px]">
-                          Podway did {a.action} · {ago(a.at)}
-                        </span>
-                      ))}
-                    </span>,
-                  ] as [string, React.ReactNode],
-                ]
-              : []),
-            ["Claude login", props.authedAt ? "Signed in" : "Not yet"],
           ].map(([label, value]) => (
             <div
               key={label as string}
@@ -1967,19 +1948,6 @@ export default function PodCockpit(props: PodCockpitProps) {
               Replay walkthrough
             </button>
           </div>
-          {previewUrl && (
-            <div className="flex items-center justify-between gap-4 border-t border-border/60 py-3.5 text-sm">
-              <span className="font-medium">Preview URL</span>
-              <a
-                className="min-w-0 truncate text-right text-[var(--link-accent)] hover:underline"
-                href={previewUrl}
-                target="_blank"
-                rel="noopener"
-              >
-                {previewUrl.replace(/^https?:\/\//, "")}
-              </a>
-            </div>
-          )}
           {skills.length > 0 && (
             <div className="flex items-start justify-between gap-4 border-t border-border/60 py-3.5 text-sm">
               <span className="shrink-0 font-medium">Skills</span>
