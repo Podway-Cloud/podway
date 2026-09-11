@@ -10,15 +10,12 @@ import {
   makePkce,
   makeState,
   OAUTH_CALLBACK_PATH,
+  CF_OAUTH_COOKIE,
+  safeReturnPath,
 } from "@/lib/cloudflare-oauth";
 
-export const CF_OAUTH_COOKIE = "cf_oauth";
-
-/** Same-origin return paths only — never an absolute/`//host` URL (open-redirect guard). */
-export function safeReturnPath(p: string | null | undefined): string {
-  if (typeof p !== "string" || !p.startsWith("/") || p.startsWith("//")) return "/dashboard";
-  return p;
-}
+// CF_OAUTH_COOKIE + safeReturnPath moved to cloudflare-oauth.ts: a "use server" file may export ONLY
+// async functions, so a const and a sync helper can't be exported from here (breaks `next build`).
 
 /**
  * Start "Connect Cloudflare": authorize the caller for the pod, then stash a signed-by-httpOnly-cookie

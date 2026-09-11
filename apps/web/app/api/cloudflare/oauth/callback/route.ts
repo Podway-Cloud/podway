@@ -3,8 +3,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createLogger } from "@podway/shared/log";
 import { getCurrentUser, editionOss } from "@/lib/session";
-import { exchangeCodeForToken, OAUTH_CALLBACK_PATH } from "@/lib/cloudflare-oauth";
-import { CF_OAUTH_COOKIE, safeReturnPath } from "@/lib/cloudflare-connect-actions";
+import { exchangeCodeForToken, OAUTH_CALLBACK_PATH, CF_OAUTH_COOKIE, safeReturnPath } from "@/lib/cloudflare-oauth";
 import { customDomainService } from "@/lib/custom-domain-service";
 import { writeCustomDomainRecords } from "@/lib/cloudflare-dns";
 

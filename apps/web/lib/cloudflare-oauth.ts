@@ -26,6 +26,18 @@ const TOKEN_URL = "https://dash.cloudflare.com/oauth2/token";
 /** The path Cloudflare redirects back to; must match the OAuth client's registered redirect URI. */
 export const OAUTH_CALLBACK_PATH = "/api/cloudflare/oauth/callback";
 
+/** Name of the short-lived httpOnly cookie carrying the PKCE verifier + CSRF state + slug/host. Lives
+ * here (a `server-only`, non-`"use server"` module) so both the start action and the callback route
+ * can import it — a `"use server"` file may export ONLY async functions, so this const cannot live in
+ * cloudflare-connect-actions.ts. */
+export const CF_OAUTH_COOKIE = "cf_oauth";
+
+/** Same-origin return paths only — never an absolute/`//host` URL (open-redirect guard). */
+export function safeReturnPath(p: string | null | undefined): string {
+  if (typeof p !== "string" || !p.startsWith("/") || p.startsWith("//")) return "/dashboard";
+  return p;
+}
+
 /** Available only when BOTH the client id and secret are set. Without them the wizard hides the button
  * and the manual DNS records stay the universal fallback — shipping never breaks an unconfigured env. */
 export function cloudflareOAuthConfigured(): boolean {
