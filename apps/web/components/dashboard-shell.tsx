@@ -52,8 +52,8 @@ export default function DashboardShell({
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
 
-  // Keeps the shell matched to the real viewport — see use-app-height for why dvh alone is not
-  // enough on iOS after a bfcache restore.
+  // Nudges iOS to recompute the shell's CSS `100dvh` after a bfcache/tab-return (the one case dvh
+  // goes stale). The normal case is pure CSS — see use-app-height.
   useAppHeight();
 
   // Keep a focused input ABOVE the on-screen keyboard on mobile. The shell is a fixed, transformed
@@ -133,19 +133,14 @@ export default function DashboardShell({
   return (
     // bg-background/text-foreground so the whole dashboard re-themes (the <body> keeps the legacy
     // --bg for the landing). Identical to the body in podway, so no visual change there.
-    // Pinned to the viewport (position: fixed), exactly like the terminal's `.term-wrap`, NOT a
-    // normal-flow box. A flow box whose height goes stale-tall after an iOS bfcache/tab-return
-    // overflows the body, the body scrolls, and the top strands above the fold (the owner's
-    // "shifted up, top cropped, dead space at the bottom" report, 2026-09-07 → still 2026-09-09).
-    // Anchored at top:0 the top can never be cropped, and overflow-hidden + a fixed shell means the
-    // body has nothing to scroll; only <main> inside scrolls. `--app-h` + `--app-top` (see
-    // use-app-height) track the VISUAL viewport: the height shrinks and the shell shifts down with
-    // the on-screen keyboard, so there's no dead band at the bottom and no cropped top — the same
-    // approach the pod terminal uses. translateY(--app-top) keeps the fixed shell over the visible
-    // area (offsetTop is 0 with no keyboard, so desktop is unaffected).
+    // Pinned to the viewport (position: fixed; top:0), overflow-hidden so the body never scrolls —
+    // only <main> inside scrolls. Height is pure CSS `100dvh` (the DYNAMIC viewport height iOS resizes
+    // with the address bar): no JS measurement, so nothing to go stale. useAppHeight() only nudges a
+    // recompute after a bfcache/tab-return, which is the one case iOS's dvh misses. This replaced the
+    // old JS-computed --app-h + translateY (which kept going stale and hid inputs under the keyboard).
     <div
-      className="fixed inset-x-0 top-0 flex h-[var(--app-h,100dvh)] overflow-hidden bg-background text-foreground"
-      style={{ transform: "translateY(var(--app-top, 0px))" }}
+      id="app-shell"
+      className="fixed inset-x-0 top-0 flex h-[100dvh] overflow-hidden bg-background text-foreground"
     >
       {/* Mobile top bar */}
       <header className="fixed inset-x-0 top-0 z-30 flex h-[60px] items-center gap-3 border-b border-border bg-card px-3 md:hidden">
@@ -192,7 +187,7 @@ export default function DashboardShell({
           sticky `top` inside — the cockpit tab strip asked for 60px and landed at 136px (measured
           2026-09-07), leaving a 76px band where the page heading sat half-hidden behind it. */}
       <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 sm:px-8 md:pt-7">
-        <div className="pb-20 pt-[76px] md:pt-0">
+        <div className="pb-6 pt-[76px] md:pt-0">
         {children}
         </div>
       </main>
