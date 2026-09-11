@@ -311,6 +311,54 @@
   .footer { align-items: flex-start; flex-direction: column; gap: 8px; }
 }
 
+/* ---- pricing ---------------------------------------------------------------------------- */
+/* Sits on the page ground between the #101518 trust band and the final CTA. Cards reuse the
+   panel/line/radius treatment of .trustGrid + .changeCard; the "Most popular" chip echoes the
+   mono-uppercase tag language used on .podNodeTags; the CTA reuses .primaryCta. */
+.pricingBand { padding: 84px 0; }
+.pricingGrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.pricingCard { position: relative; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 20px 18px 18px; }
+.pricingCardFeatured { border-color: rgba(77, 130, 255, .55); box-shadow: 0 0 0 1px rgba(77, 130, 255, .24), 0 18px 44px rgba(0, 0, 0, .22); }
+.pricingTagPopular,
+.pricingTagLight { position: absolute; top: -10px; left: 16px; border-radius: 999px; padding: 4px 9px; font-family: var(--font-mono); font-size: 9px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
+.pricingTagPopular { background: var(--blue); color: #fff; }
+.pricingTagLight { border: 1px solid var(--line); background: var(--panel-strong); color: var(--lp-muted); }
+.pricingCard h3 { font-size: 16px; font-weight: 640; }
+.pricingPrice { display: flex; align-items: baseline; gap: 4px; margin-top: 8px; }
+.pricingPrice strong { font-size: 28px; font-weight: 730; letter-spacing: 0; }
+.pricingPrice span { color: var(--lp-muted); font-size: 13px; }
+.pricingBlurb { min-height: 50px; margin-top: 8px; color: #8b979c; font-size: 12.5px; line-height: 1.5; }
+.pricingSpecs { display: grid; gap: 5px; margin: 14px 0 0; border-top: 1px solid var(--line); padding-top: 13px; }
+.pricingSpecs > div { display: flex; justify-content: space-between; font-size: 12.5px; }
+.pricingSpecs dt { color: #717e84; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.pricingSpecs dd { margin: 0; color: var(--text); font-weight: 600; }
+.pricingFooter { display: grid; grid-template-columns: 1.2fr .8fr; gap: 28px; margin-top: 28px; border-top: 1px solid var(--line); padding-top: 30px; }
+.pricingIncludes h3 { color: var(--lp-muted); font-family: var(--font-mono); font-size: 11px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.pricingIncludes ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 22px; margin: 16px 0 0; padding: 0; list-style: none; }
+.pricingIncludes li { display: flex; align-items: center; gap: 9px; color: #c7d0d3; font-size: 13.5px; }
+.pricingIncludes li svg { width: 16px; height: 16px; flex: none; color: var(--green); }
+.pricingAside { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.pricingCredit { color: var(--lp-muted); font-size: 14px; }
+.pricingCredit strong { color: var(--text); }
+.pricingPause { color: #8b979c; font-size: 13px; line-height: 1.55; }
+
+@media (max-width: 900px) {
+  .pricingGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .pricingFooter { grid-template-columns: 1fr; gap: 26px; }
+}
+
+@media (max-width: 700px) {
+  .pricingBand { padding: 66px 0 70px; }
+  .pricingGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pricingIncludes ul { grid-template-columns: 1fr; }
+  .pricingAside .primaryCta { width: 100%; }
+}
+
+@media (max-width: 500px) {
+  .pricingGrid { grid-template-columns: 1fr; }
+  .pricingBlurb { min-height: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .landing *,
   .landing *::before,

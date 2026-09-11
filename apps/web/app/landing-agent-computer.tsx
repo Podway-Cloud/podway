@@ -3,6 +3,7 @@ import Link from "next/link";
 import {
   ArrowUpRight,
   Boxes,
+  Check,
   Eye,
   FlaskConical,
   MonitorSmartphone,
@@ -21,6 +22,12 @@ import GithubMark from "@/components/github-mark";
 import LandingAccountLink from "@/components/landing-account-link";
 import LandingFooter from "@/components/landing-footer";
 import LandingPodNetwork from "./landing-pod-network";
+import {
+  PRICING_TIERS,
+  INCLUDED_FEATURES,
+  SIGNUP_CREDIT_USD,
+  SUSPENDED_USD,
+} from "@/lib/pricing-catalog";
 
 export default async function AgentComputerLanding({
   user: suppliedUser,
@@ -43,6 +50,7 @@ export default async function AgentComputerLanding({
           <a href="#why">Why Podway</a>
           <a href="#workspace">How it works</a>
           <a href="#trust">Safety</a>
+          <a href="#pricing">Pricing</a>
           <Link href="/docs">Docs</Link>
           {user ? <LandingAccountLink user={user} /> : <Link href="/signin">Sign in</Link>}
         </nav>
@@ -241,6 +249,66 @@ export default async function AgentComputerLanding({
               <h3>You keep full access</h3>
               <p>Open the browser terminal whenever you want to inspect, debug, or recover the workspace.</p>
             </article>
+          </div>
+        </div>
+      </section>
+
+      <section className={styles.pricingBand} id="pricing">
+        <div className={styles.shell}>
+          <div className={styles.sectionHeading}>
+            <div>
+              <p className={styles.eyebrow}>Simple, flat pricing</p>
+              <h2>Keep your agent running from ${PRICING_TIERS[0].monthlyUsd}/month.</h2>
+            </div>
+            <p>Pick a size and pay one price a month. No usage meters, no bandwidth charges, no surprise bills.</p>
+          </div>
+          <div className={styles.pricingGrid}>
+            {PRICING_TIERS.map((t) => (
+              <article
+                key={t.id}
+                className={`${styles.pricingCard} ${t.tag === "default" ? styles.pricingCardFeatured : ""}`}
+              >
+                {t.tag === "default" && <span className={styles.pricingTagPopular}>Most popular</span>}
+                {t.tag === "light" && <span className={styles.pricingTagLight}>Light</span>}
+                <h3>{t.name}</h3>
+                <p className={styles.pricingPrice}>
+                  <strong>${t.monthlyUsd}</strong>
+                  <span>/mo</span>
+                </p>
+                <p className={styles.pricingBlurb}>{t.blurb}</p>
+                <dl className={styles.pricingSpecs}>
+                  <div><dt>RAM</dt><dd>{t.ramGb} GB</dd></div>
+                  <div><dt>vCPU</dt><dd>{t.vcpu} burst</dd></div>
+                  <div><dt>Disk</dt><dd>{t.diskGb} GB</dd></div>
+                </dl>
+              </article>
+            ))}
+          </div>
+          <div className={styles.pricingFooter}>
+            <div className={styles.pricingIncludes}>
+              <h3>Every pod includes</h3>
+              <ul>
+                {INCLUDED_FEATURES.map((f) => (
+                  <li key={f}><Check aria-hidden /> {f}</li>
+                ))}
+              </ul>
+            </div>
+            <div className={styles.pricingAside}>
+              <p className={styles.pricingCredit}>
+                <strong>${SIGNUP_CREDIT_USD} in free credit</strong> when you add a card.
+              </p>
+              <p className={styles.pricingPause}>
+                Suspend a pod anytime and it drops to ${SUSPENDED_USD}/mo while we keep your disk safe.
+              </p>
+              <TrackedLink
+                className={styles.primaryCta}
+                href={primaryHref}
+                eventName="landing_primary_cta"
+                item="agent-computer-pricing"
+              >
+                {primaryLabel}
+              </TrackedLink>
+            </div>
           </div>
         </div>
       </section>
