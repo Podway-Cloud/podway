@@ -153,7 +153,8 @@ export default function PodCardList({
     : cards.filter((c) => {
         const l = live[c.slug];
         if (!c.updateReady || c.updating || l?.updating) return false;
-        if (claimed.includes(c.slug)) return false; // already handed to a running bulk update
+        if (c.queued) return false; // server already scheduled this one behind a batch — don't re-count it
+        if (claimed.includes(c.slug)) return false; // already handed to a running bulk update (this session)
         if ((l?.status ?? c.status) !== "running") return false;
         if (c.autoUpdate === "off") return false;
         if (c.t3Control) return false; // T3 drives the session — auto-update would interrupt it (excl. T3)
@@ -215,9 +216,12 @@ export default function PodCardList({
 
   function confirmBulkUpdate() {
     setBulkMsg(null);
+    // Close the modal RIGHT AWAY, before the server round-trip — leaving it open in a "Starting…"
+    // busy state made its footer buttons flash/overlap the dialog as it later dismissed (owner,
+    // 2026-09-11). Progress shows in the `bulkMsg` toast instead.
+    setBulkOpen(false);
     startBulk(async () => {
       const r = await updateIdlePods();
-      setBulkOpen(false);
       if (!("error" in r)) setClaimed((prev) => [...new Set([...prev, ...r.slugs])]);
       setBulkMsg(
         "error" in r

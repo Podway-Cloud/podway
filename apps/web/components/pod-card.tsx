@@ -331,7 +331,9 @@ export default function PodCard({
                   invitation to act, and inviting a click on an update that is already coming — and whose
                   cockpit now refuses — is exactly the confusion this change exists to remove. */}
               {!updating && queued && status === "running" && (
-                <span className="shrink-0 rounded-md bg-warning/15 px-1.5 py-0.5 text-[11px] font-semibold text-warning">
+                // NOT warning/orange — the update is already scheduled and coming, so this is
+                // informational (no action needed), unlike the orange "Update available" invite below.
+                <span className="shrink-0 rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                   Update queued
                 </span>
               )}

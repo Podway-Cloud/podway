@@ -56,6 +56,26 @@ export default function DashboardShell({
   // enough on iOS after a bfcache restore.
   useAppHeight();
 
+  // Keep a focused input ABOVE the on-screen keyboard on mobile. The shell is a fixed, transformed
+  // container (see the shell div's translateY), which suppresses iOS Safari's native "scroll the
+  // focused field into view" — so a tapped input in the lower half ended up UNDER the keyboard
+  // (owner, 2026-09-11). After the keyboard has animated in (~300ms), if the visual viewport has
+  // shrunk (keyboard is open), scroll the field to the centre of the visible area ourselves.
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!t || typeof t.matches !== "function" || !t.matches("input, textarea, [contenteditable]")) return;
+      window.setTimeout(() => {
+        const vv = window.visualViewport;
+        // Only when the keyboard is actually open (viewport notably shorter) and the field is still focused.
+        if (!vv || vv.height >= window.innerHeight * 0.9 || document.activeElement !== t) return;
+        t.scrollIntoView({ block: "center", behavior: "smooth" });
+      }, 300);
+    };
+    document.addEventListener("focusin", onFocusIn);
+    return () => document.removeEventListener("focusin", onFocusIn);
+  }, []);
+
   useEffect(() => {
     if (userId) {
       posthog.identify(userId, { name: userName });
