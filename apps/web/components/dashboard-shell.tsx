@@ -7,7 +7,6 @@ import { usePathname } from "next/navigation";
 import { LayoutGrid, Boxes, SquarePlus, Settings, UserCheck, Users, ArrowLeft, Menu, HardDrive, Sparkles, ChartNoAxesCombined, Globe, Radio, TriangleAlert, CreditCard } from "lucide-react";
 import UserMenu from "@/components/user-menu";
 import { cn } from "@/lib/utils";
-import { useAppHeight } from "@/lib/use-app-height";
 
 /**
  * Icons live here (a client component) and are referenced by name, because a
@@ -51,10 +50,6 @@ export default function DashboardShell({
 }) {
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
-
-  // Nudges iOS to recompute the shell's CSS `100dvh` after a bfcache/tab-return (the one case dvh
-  // goes stale). The normal case is pure CSS — see use-app-height.
-  useAppHeight();
 
   // Keep a focused input ABOVE the on-screen keyboard on mobile. The shell is a fixed, transformed
   // container (see the shell div's translateY), which suppresses iOS Safari's native "scroll the
@@ -134,13 +129,15 @@ export default function DashboardShell({
     // bg-background/text-foreground so the whole dashboard re-themes (the <body> keeps the legacy
     // --bg for the landing). Identical to the body in podway, so no visual change there.
     // Pinned to the viewport (position: fixed; top:0), overflow-hidden so the body never scrolls —
-    // only <main> inside scrolls. Height is pure CSS `100dvh` (the DYNAMIC viewport height iOS resizes
-    // with the address bar): no JS measurement, so nothing to go stale. useAppHeight() only nudges a
-    // recompute after a bfcache/tab-return, which is the one case iOS's dvh misses. This replaced the
-    // old JS-computed --app-h + translateY (which kept going stale and hid inputs under the keyboard).
+    // only <main> inside scrolls. Height is pure CSS `100svh` — the SMALL viewport height, a STATIC
+    // value. Because the body never scrolls, iOS Safari's URL bar never auto-hides, so the visible
+    // viewport stays at that small height permanently; svh matches it exactly and — being static —
+    // cannot go stale after a bfcache/tab-return, which is the whole "dead band at the bottom" bug.
+    // (`100dvh` here still went stale on the owner's iPhone; `--app-h` JS-measurement did too — svh
+    // is the fix because it needs no recompute at all.)
     <div
       id="app-shell"
-      className="fixed inset-x-0 top-0 flex h-[100dvh] overflow-hidden bg-background text-foreground"
+      className="fixed inset-x-0 top-0 flex h-[100svh] overflow-hidden bg-background text-foreground"
     >
       {/* Mobile top bar */}
       <header className="fixed inset-x-0 top-0 z-30 flex h-[60px] items-center gap-3 border-b border-border bg-card px-3 md:hidden">

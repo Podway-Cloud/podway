@@ -5,16 +5,17 @@ import { login } from "./helpers";
  * Owner report (iPhone, 2026-09): returning to a page left open a while, you can't scroll to the top
  * and there's an empty band at the bottom; a refresh fixes it.
  *
- * Cause: the shell height was chased in JS (`--app-h`), which kept going stale on iOS after a bfcache
- * restore. The fix (2026-09-11) is pure CSS `height: 100dvh` on the fixed `#app-shell` — the dynamic
- * viewport height iOS resizes natively — with a JS nudge ONLY for the bfcache edge (use-app-height).
+ * Cause: the shell height was chased in JS (`--app-h`), then set to `100dvh` — both kept going stale
+ * on iOS after a bfcache restore. The fix (2026-09-11) is pure CSS `height: 100svh` on the fixed
+ * `#app-shell` — the SMALL (static) viewport height. Because the body never scrolls, Safari's URL bar
+ * never auto-hides, so svh matches the visible viewport permanently AND can't go stale (no JS at all).
  *
  * WHAT THIS TEST CAN AND CANNOT DO: the iOS bfcache staleness itself is NOT reproducible in headless
- * Chromium (it recomputes dvh correctly), so this pins the MECHANISM: the shell is a single fixed
- * `100dvh` box that fills the viewport and contains its own scroll (the body never scrolls). Whether
- * that cures the iPhone is an OWNER check, recorded as one — not implied by a green test.
+ * Chromium, so this pins the MECHANISM: the shell is a single fixed viewport-height box that fills the
+ * viewport and contains its own scroll (the body never scrolls). Whether that cures the iPhone is an
+ * OWNER check, recorded as one — not implied by a green test.
  */
-test.describe("mobile: the shell is a single fixed 100dvh box", () => {
+test.describe("mobile: the shell is a single fixed 100svh box", () => {
   test("#app-shell fills the viewport and tracks its height", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await login(page, "approved");
