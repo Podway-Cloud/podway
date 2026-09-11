@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, Loader2 } from "lucide-react";
+import { Check, Cloud, Copy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { copyText } from "@/lib/clipboard";
 import { listCustomDomains, addCustomDomain, removeCustomDomain, recheckCustomDomain, type CustomDomainView } from "@/lib/custom-domain-actions";
+import { startCloudflareConnect } from "@/lib/cloudflare-connect-actions";
 
 /**
  * The custom-domain wizard (add-custom-domains). Enter a domain → we show the exact DNS records to
@@ -14,8 +16,10 @@ import { listCustomDomains, addCustomDomain, removeCustomDomain, recheckCustomDo
  * issue HTTPS automatically and reflect it here + on the Settings row. One domain per pod (v1); the
  * field prefills the current domain, editable — saving a different one replaces it.
  */
-export default function CustomDomainWizard({ slug }: { slug: string }) {
+export default function CustomDomainWizard({ slug, cloudflareEnabled = false }: { slug: string; cloudflareEnabled?: boolean }) {
   const qc = useQueryClient();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: domains } = useQuery({
     queryKey: ["custom-domains", slug],
     queryFn: () => listCustomDomains(slug),
@@ -30,9 +34,42 @@ export default function CustomDomainWizard({ slug }: { slug: string }) {
   const value = host ?? existing?.hostname ?? "";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["custom-domains", slug] });
   const showRecords = existing && value.trim().toLowerCase() === existing.hostname;
+
+  // Message the "Connect Cloudflare" callback bounced back with (?cf=…). On success we refetch so the
+  // records the flow just wrote start verifying without a manual re-check.
+  const cf = searchParams.get("cf");
+  useEffect(() => {
+    if (cf === "ok") refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cf]);
+  const cfMessage: { text: string; tone: "success" | "error" } | null =
+    cf === "ok"
+      ? { text: "Cloudflare records added — verifying now.", tone: "success" }
+      : cf === "notzone"
+        ? { text: "That domain isn't on the Cloudflare account you picked. Add the records below by hand.", tone: "error" }
+        : cf === "scope"
+          ? { text: "Cloudflare didn't grant DNS access. Try again, or add the records below by hand.", tone: "error" }
+          : cf === "declined"
+            ? { text: "Cloudflare connect was cancelled. You can add the records below by hand.", tone: "error" }
+            : cf === "badstate" || cf === "error"
+              ? { text: "Cloudflare connect didn't complete. Add the records below by hand.", tone: "error" }
+              : null;
+
+  async function connectCloudflare() {
+    if (!existing) return;
+    setError(null);
+    setConnecting(true);
+    const r = await startCloudflareConnect(slug, existing.hostname, pathname);
+    if ("url" in r) window.location.href = r.url; // leave the app for Cloudflare's consent screen
+    else {
+      setError(r.error);
+      setConnecting(false);
+    }
+  }
 
   async function save() {
     setError(null);
@@ -115,6 +152,32 @@ export default function CustomDomainWizard({ slug }: { slug: string }) {
             Add these records at <span className="font-medium text-foreground">your</span> DNS provider. We verify
             &amp; issue HTTPS automatically.
           </p>
+
+          {cfMessage && (
+            <p className={`text-[13px] ${cfMessage.tone === "success" ? "text-success" : "text-destructive"}`}>
+              {cfMessage.text}
+            </p>
+          )}
+
+          {/* One-click for the common case: the domain is on Cloudflare → we add the records after consent. */}
+          {cloudflareEnabled && existing.status !== "active" && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-sky-400/40 bg-sky-400/[0.06] px-3 py-2.5">
+              <span className="text-[13px] text-foreground/90">
+                On Cloudflare? Connect it and we add these records for you.
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={connectCloudflare}
+                disabled={connecting || busy}
+                className="shrink-0 border-sky-400/50 bg-sky-400/[0.06] text-sky-300 hover:bg-sky-400/10"
+              >
+                {connecting ? <Loader2 className="size-3.5 animate-spin" /> : <Cloud className="size-3.5" />}
+                Connect Cloudflare
+              </Button>
+            </div>
+          )}
+
           {existing.records.map((rec) => (
             <RecordCard key={rec.type + rec.name} rec={rec} apex={apexOf(existing.hostname)} />
           ))}

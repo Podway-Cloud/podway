@@ -6,6 +6,7 @@ import { getPodService } from "@/lib/pod-service";
 import { ControlError } from "@podway/control-plane";
 import DashboardPage from "@/components/dashboard-page";
 import CustomDomainWizard from "@/components/custom-domain-wizard";
+import { cloudflareOAuthConfigured } from "@/lib/cloudflare-oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export default async function DomainPage({ params }: { params: Promise<{ slug: s
 
   return (
     <DashboardPage backHref={`/dashboard/pods/${slug}?tab=settings`} backLabel={name} title="Custom domain">
-      <CustomDomainWizard slug={slug} />
+      <CustomDomainWizard slug={slug} cloudflareEnabled={cloudflareOAuthConfigured()} />
     </DashboardPage>
   );
 }

@@ -1,11 +1,11 @@
 "use server";
 
-import { createAppDb } from "@podway/db";
-import { CustomDomainService, FlyCertIssuer, noCertIssuer, type CustomDomainRecord, type DnsRecord } from "@podway/control-plane";
+import { type CustomDomainRecord, type DnsRecord } from "@podway/control-plane";
 import { requireApprovedUser } from "@/lib/access";
 import { editionOss } from "@/lib/session";
 import { getPodService } from "@/lib/pod-service";
 import { customDomainsProvisioned } from "@/lib/custom-domain-config";
+import { customDomainService } from "@/lib/custom-domain-service";
 
 /**
  * Server actions for custom domains (add-custom-domains). Cloud-only — every action gates on
@@ -13,22 +13,7 @@ import { customDomainsProvisioned } from "@/lib/custom-domain-config";
  * targets (the CNAME host + anycast IP the wizard tells owners to point at) come from env; they're
  * provisioned as infra (design.md) and default to sensible placeholders until that edge exists.
  */
-function service(): CustomDomainService {
-  // Certificates come from Fly, which already issues and renews one per hostname on the gateway
-  // app (it does exactly that for gw.podway.cloud and the preview wildcard). Without a token we
-  // fall back to the no-op issuer, so a misconfigured deploy can never report a domain as live.
-  const token = process.env.FLY_API_TOKEN;
-  const app = process.env.PODWAY_DOMAIN_EDGE_APP ?? "podway-gateway";
-  return new CustomDomainService(
-    createAppDb(),
-    {
-      cnameTarget: process.env.PODWAY_DOMAIN_CNAME_TARGET ?? "",
-      anycastIp: process.env.PODWAY_DOMAIN_ANYCAST_IP ?? "",
-    },
-    undefined,
-    token ? new FlyCertIssuer(app, token) : noCertIssuer,
-  );
-}
+const service = customDomainService;
 
 async function assertOwnedPod(slug: string): Promise<string> {
   const user = await requireApprovedUser();
