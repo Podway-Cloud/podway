@@ -9,11 +9,15 @@
  */
 import Stripe from "stripe";
 import { randomUUID } from "node:crypto";
-import { billingAccounts, creditGrants, user, eq, sql, type Database } from "@podway/db";
-import { POD_TIERS, SUSPENDED_USD, type PodSize } from "@podway/shared";
+import { billingAccounts, creditGrants, user, eq, and, desc, sql, type Database } from "@podway/db";
+import { POD_TIERS, SUSPENDED_USD, SIGNUP_CREDIT_CENTS, type PodSize } from "@podway/shared";
 
-/** The signup credit granted once a card is on file (cents). Advertised as ~$15. */
-export const SIGNUP_CREDIT_CENTS = 1500;
+/**
+ * The signup credit granted once a card is on file (cents). Advertised as ~$15. The value now lives
+ * in `@podway/shared` so the customer-facing `SIGNUP_CREDIT_USD` (web pricing catalog) derives from
+ * the SAME number — re-exported here so existing `@podway/control-plane` consumers are unchanged.
+ */
+export { SIGNUP_CREDIT_CENTS };
 
 /** Referral credit each side gets ($10). Referred: on card-add. Referrer: on the referred account's
  * first real payment, once that account is ~30 days old. */
@@ -69,7 +73,20 @@ const EMPTY = (ownerId: string): BillingAccount => ({
 });
 
 export class BillingService {
-  constructor(private readonly db: Database) {}
+  /**
+   * `stripeClient` is an OPTIONAL injected Stripe client — production leaves it undefined and uses
+   * the shared lazy `getStripe()` (unchanged behavior). Tests inject a fake so the Stripe-facing
+   * methods can be exercised without real keys or network. Never used to reach LIVE Stripe.
+   */
+  constructor(
+    private readonly db: Database,
+    private readonly stripeClient?: Stripe,
+  ) {}
+
+  /** The Stripe client for this instance: the injected one (tests) or the shared lazy singleton. */
+  private stripe(): Stripe {
+    return this.stripeClient ?? getStripe();
+  }
 
   /** The owner's billing row, or an empty default (never null) — the UI reads it directly. */
   async getAccount(ownerId: string): Promise<BillingAccount> {
@@ -92,7 +109,7 @@ export class BillingService {
     const existing = await this.getAccount(ownerId);
     if (existing.stripeCustomerId) return existing.stripeCustomerId;
 
-    const customer = await getStripe().customers.create({
+    const customer = await this.stripe().customers.create({
       email: email ?? (await this.emailFor(ownerId)),
       metadata: { ownerId },
     });
@@ -118,7 +135,7 @@ export class BillingService {
 
   async createSetupIntent(ownerId: string, email?: string): Promise<{ clientSecret: string; customerId: string }> {
     const customerId = await this.ensureCustomer(ownerId, email);
-    const intent = await getStripe().setupIntents.create({
+    const intent = await this.stripe().setupIntents.create({
       customer: customerId,
       payment_method_types: ["card"],
       usage: "off_session", // we charge the saved card later, unattended (monthly)
@@ -158,7 +175,7 @@ export class BillingService {
     if (inserted.length === 0) return false; // already granted for this reason
 
     const customerId = await this.ensureCustomer(ownerId);
-    await getStripe().customers.createBalanceTransaction(customerId, {
+    await this.stripe().customers.createBalanceTransaction(customerId, {
       amount: -cents, // negative = credit toward future invoices
       currency: "usd",
       description: `Podway credit: ${reason}`,
@@ -230,7 +247,7 @@ export class BillingService {
    * `secret` is the endpoint's signing secret (STRIPE_WEBHOOK_SECRET; passed so tests can inject one). */
   verifyEvent(rawBody: string | Buffer, signature: string, secret = process.env.STRIPE_WEBHOOK_SECRET): Stripe.Event {
     if (!secret) throw new Error("STRIPE_WEBHOOK_SECRET is not set");
-    return getStripe().webhooks.constructEvent(rawBody, signature, secret);
+    return this.stripe().webhooks.constructEvent(rawBody, signature, secret);
   }
 
   /**
@@ -269,23 +286,146 @@ export class BillingService {
     }
   }
 
-  /** The owner's recent invoices for the billing page. Empty when there's no Stripe customer yet. */
+  /** The owner's recent invoices for the billing page. Empty when there's no Stripe customer yet.
+   * Exposes BOTH `amountDueCents` and `amountPaidCents` — the UI shows what was actually PAID (the
+   * amount after any credit was applied), not the pre-credit amount due. */
   async listInvoices(
     ownerId: string,
     limit = 12,
-  ): Promise<{ id: string; number: string | null; amountCents: number; status: string; created: number; url: string | null }[]> {
+  ): Promise<
+    {
+      id: string;
+      number: string | null;
+      amountCents: number;
+      amountDueCents: number;
+      amountPaidCents: number;
+      status: string;
+      created: number;
+      url: string | null;
+    }[]
+  > {
     if (!stripeConfigured()) return [];
     const acct = await this.getAccount(ownerId);
     if (!acct.stripeCustomerId) return [];
-    const list = await getStripe().invoices.list({ customer: acct.stripeCustomerId, limit });
+    const list = await this.stripe().invoices.list({ customer: acct.stripeCustomerId, limit });
     return list.data.map((inv) => ({
       id: inv.id ?? "",
       number: inv.number ?? null,
+      // `amountCents` kept for back-compat (== amount_due); prefer amountPaidCents for display.
       amountCents: inv.amount_due,
+      amountDueCents: inv.amount_due,
+      amountPaidCents: inv.amount_paid,
       status: inv.status ?? "unknown",
       created: inv.created,
       url: inv.hosted_invoice_url ?? null,
     }));
+  }
+
+  // ---- billing page reads (card, credit history, referral status, next charge) -----------------
+
+  /** The card brand/last4/expiry for the owner's DEFAULT payment method, or null when there's no
+   * Stripe customer or no card on file. Reads Stripe (never creates a customer). Guarded — a Stripe
+   * hiccup returns null (the UI shows the "no card" state) rather than throwing. */
+  async getPaymentMethod(
+    ownerId: string,
+  ): Promise<{ brand: string; last4: string; expMonth: number; expYear: number } | null> {
+    if (!stripeConfigured()) return null;
+    const acct = await this.getAccount(ownerId);
+    if (!acct.stripeCustomerId) return null;
+    try {
+      const stripe = this.stripe();
+      // Prefer the customer's invoice-settings default PM; fall back to the first saved card.
+      const customer = await stripe.customers.retrieve(acct.stripeCustomerId);
+      let pmId: string | null = null;
+      if (customer && !("deleted" in customer && customer.deleted)) {
+        const dflt = (customer as Stripe.Customer).invoice_settings?.default_payment_method;
+        pmId = typeof dflt === "string" ? dflt : (dflt?.id ?? null);
+      }
+      if (!pmId) {
+        const list = await stripe.paymentMethods.list({ customer: acct.stripeCustomerId, type: "card", limit: 1 });
+        pmId = list.data[0]?.id ?? null;
+      }
+      if (!pmId) return null;
+      const pm = await stripe.paymentMethods.retrieve(pmId);
+      const card = pm.card;
+      if (!card) return null;
+      return { brand: card.brand, last4: card.last4, expMonth: card.exp_month, expYear: card.exp_year };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Detach the owner's default payment method (all saved cards) and clear the has-card mirror. No-op
+   * when Stripe is off or there's no customer. Idempotent — detaching an already-gone card is fine. */
+  async detachPaymentMethod(ownerId: string): Promise<void> {
+    if (!stripeConfigured()) return;
+    const acct = await this.getAccount(ownerId);
+    if (!acct.stripeCustomerId) return;
+    const stripe = this.stripe();
+    const list = await stripe.paymentMethods.list({ customer: acct.stripeCustomerId, type: "card", limit: 100 });
+    for (const pm of list.data) {
+      await stripe.paymentMethods.detach(pm.id).catch(() => undefined);
+    }
+    await this.setHasCard(ownerId, false);
+  }
+
+  /** The owner's credit-grant history (signup + referral), newest first — read straight from our
+   * ledger table (no Stripe call). Always safe to call. */
+  async listCreditGrants(
+    ownerId: string,
+  ): Promise<{ id: string; cents: number; reason: string; created: number }[]> {
+    const rows = await this.db
+      .select({ id: creditGrants.id, cents: creditGrants.cents, reason: creditGrants.reason, createdAt: creditGrants.createdAt })
+      .from(creditGrants)
+      .where(eq(creditGrants.ownerId, ownerId))
+      .orderBy(desc(creditGrants.createdAt));
+    return rows.map((r) => ({ id: r.id, cents: r.cents, reason: r.reason, created: Math.floor(r.createdAt.getTime() / 1000) }));
+  }
+
+  /** Referral status for the owner's Referral tab: how many accounts they've referred (`joined`),
+   * how many referrer payouts have matured/paid (`earned`, with the summed cents), and the rest still
+   * pending (`pending`). Pure DB reads — the referred count comes from `user.ref`, the earned payouts
+   * from our own `credit_grants` ledger (reason `referral_referrer:<id>`). */
+  async getReferralStatus(
+    ownerId: string,
+  ): Promise<{ joined: number; pending: number; earned: number; earnedCents: number }> {
+    // Accounts this owner referred: their `user.ref` names this owner (excluding a self-ref).
+    const referred = await this.db
+      .select({ id: user.id })
+      .from(user)
+      .where(and(eq(user.ref, ownerId), sql`${user.id} <> ${ownerId}`));
+    const joined = referred.length;
+    // Matured referrer payouts we actually received (idempotent per referred account).
+    const grants = await this.db
+      .select({ cents: creditGrants.cents, reason: creditGrants.reason })
+      .from(creditGrants)
+      .where(eq(creditGrants.ownerId, ownerId));
+    const payouts = grants.filter((g) => g.reason.startsWith("referral_referrer:"));
+    const earned = payouts.length;
+    const earnedCents = payouts.reduce((s, g) => s + g.cents, 0);
+    const pending = Math.max(0, joined - earned);
+    return { joined, pending, earned, earnedCents };
+  }
+
+  /** When the owner's next charge lands (unix seconds), read from their live Stripe subscription's
+   * current period end — or null when there's no customer/subscription or Stripe is off. Best-effort
+   * and defensive about where Stripe keeps `current_period_end` across API versions (subscription
+   * top-level vs. subscription item); returns null rather than throwing. */
+  async getNextChargeDate(ownerId: string): Promise<number | null> {
+    if (!stripeConfigured()) return null;
+    const acct = await this.getAccount(ownerId);
+    if (!acct.stripeCustomerId) return null;
+    try {
+      const subs = await this.stripe().subscriptions.list({ customer: acct.stripeCustomerId, status: "all", limit: 1 });
+      const sub = subs.data.find((s) => s.status !== "canceled" && s.status !== "incomplete_expired");
+      if (!sub) return null;
+      const topLevel = (sub as unknown as { current_period_end?: number }).current_period_end;
+      if (typeof topLevel === "number") return topLevel;
+      const itemEnd = (sub.items?.data?.[0] as unknown as { current_period_end?: number } | undefined)?.current_period_end;
+      return typeof itemEnd === "number" ? itemEnd : null;
+    } catch {
+      return null;
+    }
   }
 
   // ---- 2b: subscriptions (reconcile pod lifecycle → Stripe) --------------------------------------
@@ -305,7 +445,7 @@ export class BillingService {
     const acct = await this.getAccount(ownerId);
     if (!acct.hasCard) return { skipped: "no-card" }; // never create a charge before a card is on file
 
-    const stripe = getStripe();
+    const stripe = this.stripe();
     const customerId = await this.ensureCustomer(ownerId);
     const prices = await this.ensurePrices();
 
@@ -375,7 +515,7 @@ export class BillingService {
    */
   async ensurePrices(): Promise<Map<string, string>> {
     if (this._prices) return this._prices;
-    const stripe = getStripe();
+    const stripe = this.stripe();
     const wanted: { key: string; lookup: string; label: string; cents: number }[] = [];
     for (const size of Object.keys(POD_TIERS) as PodSize[]) {
       wanted.push({

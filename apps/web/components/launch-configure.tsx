@@ -17,6 +17,8 @@ import SizePicker from "@/components/size-picker";
 import HostResourceChooser, { type HostCapacity } from "@/components/host-resource-chooser";
 import { openSupportChat } from "@/lib/support-chat";
 import { GithubRepoField } from "@/components/github-repo-field";
+import AddCardButton from "@/components/add-card-dialog";
+import { SIGNUP_CREDIT_USD } from "@/lib/pricing-catalog";
 import { DEFAULT_POD_SIZE, POD_TIERS, type PodSize } from "@podway/shared/tiers";
 import type { DeclaredSecret } from "@/lib/environments";
 import type { EnvPair } from "@/lib/env-paste";
@@ -85,6 +87,9 @@ export default function LaunchConfigure({
   initialName,
   deeplink = false,
   refSource,
+  billingEnabled = false,
+  creditCents = 0,
+  hasCard = false,
 }: {
   env: string;
   secrets: DeclaredSecret[];
@@ -118,6 +123,12 @@ export default function LaunchConfigure({
   /** Attribution source active for this launch (deeplink-onboarding) — copied onto the created
    * pod by launchPod. Plumbing only; never shown as a form field. */
   refSource?: string;
+  /** Cloud cost-at-create (billing-ux): whether Stripe billing is configured, the owner's current
+   * credit balance (cents), and whether a card is on file — used by the Review step's cost card to
+   * show what's charged now. All default to the "off/none" state (OSS + billing-off safe). */
+  billingEnabled?: boolean;
+  creditCents?: number;
+  hasCard?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -724,6 +735,52 @@ export default function LaunchConfigure({
                   </>
                 )}
               </dl>
+
+              {/* Cost-at-create (billing-ux) — cloud only. Shows the chosen size's price against the
+                  owner's free credit so "what happens when I click Create" is never a surprise. */}
+              {!oss && (() => {
+                const price = POD_TIERS[size].monthlyUsd;
+                const credit = creditCents / 100;
+                const monthsCovered = price > 0 ? Math.floor(credit / price) : 0;
+                const chargedNow = Math.max(0, price - credit);
+                return (
+                  <div className="flex flex-col gap-2.5 rounded-lg border border-border/60 bg-white/[0.02] p-3.5">
+                    <div className="flex items-center justify-between text-[13.5px]">
+                      <span className="text-muted-foreground">{POD_TIERS[size].label} pod</span>
+                      <span className="tabular-nums font-medium">${price}<span className="text-[11px] font-normal text-muted-foreground">/mo</span></span>
+                    </div>
+                    {billingEnabled && (
+                      <div className="flex items-center justify-between text-[13.5px]">
+                        <span className="text-muted-foreground">Your credit</span>
+                        <span className="tabular-nums font-medium text-success">${credit % 1 === 0 ? credit : credit.toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between border-t border-border/60 pt-2.5 text-[14px] font-semibold">
+                      <span>Charged now</span>
+                      <span className="tabular-nums">${chargedNow % 1 === 0 ? chargedNow : chargedNow.toFixed(2)}</span>
+                    </div>
+                    {!billingEnabled ? (
+                      <p className="text-[12.5px] text-muted-foreground">
+                        Nothing is charged yet — payments are coming soon. Prices are shown so you can plan.
+                      </p>
+                    ) : hasCard ? (
+                      <p className="text-[12.5px] text-muted-foreground">
+                        {monthsCovered >= 1
+                          ? <>Your ${credit % 1 === 0 ? credit : credit.toFixed(2)} credit covers ~{monthsCovered} month{monthsCovered === 1 ? "" : "s"}. We bill your card only when credit runs out.</>
+                          : <>We bill your card ${price}/mo, less any remaining credit.</>}
+                      </p>
+                    ) : (
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-[12.5px] text-muted-foreground">
+                          Add a card to get ${SIGNUP_CREDIT_USD} free and keep this pod running.
+                        </p>
+                        <div className="shrink-0"><AddCardButton hasCard={false} /></div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {error && <p className="text-sm text-destructive">{error}</p>}
               {!launchable && !error && (
                 <p className="text-[13px] text-muted-foreground">

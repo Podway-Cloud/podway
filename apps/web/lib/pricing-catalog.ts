@@ -4,7 +4,7 @@
  * truth for size + price — and this file only adds display metadata (blurb, tag) and the marketing
  * copy (signup credit). Cloud only; self-host has no per-pod price.
  */
-import { POD_TIERS, POD_SIZES, SUSPENDED_USD, type PodSize } from "@podway/shared/tiers";
+import { POD_TIERS, POD_SIZES, SUSPENDED_USD, SIGNUP_CREDIT_CENTS, type PodSize } from "@podway/shared/tiers";
 
 export type { PodSize };
 export { SUSPENDED_USD };
@@ -21,8 +21,10 @@ export interface PricingTier {
   tag?: "default" | "light";
 }
 
-/** Signup credit granted once a card is on file (advertised figure). */
-export const SIGNUP_CREDIT_USD = 15;
+/** Signup credit granted once a card is on file (advertised figure). DERIVED from the single
+ * source of truth (`SIGNUP_CREDIT_CENTS` in `@podway/shared`) so the advertised dollars and the
+ * cents actually granted by the control-plane can never drift apart. */
+export const SIGNUP_CREDIT_USD = SIGNUP_CREDIT_CENTS / 100;
 
 const META: Record<PodSize, { blurb: string; tag?: "default" | "light" }> = {
   mini: { tag: "light", blurb: "Bots, static sites, small scripts." },

@@ -28,6 +28,46 @@ export async function getInvoices() {
   return getBillingService().listInvoices(user.id);
 }
 
+/** The owner's default card (brand/last4/expiry), or null when billing is off / no card on file. */
+export async function getPaymentMethod() {
+  if (billingOff()) return null;
+  const user = await requireUser();
+  return getBillingService().getPaymentMethod(user.id);
+}
+
+/** Remove (detach) the owner's card. No-op when billing is off. Best-effort; refresh reflects it. */
+export async function removeCard(): Promise<{ ok: boolean; error?: string }> {
+  if (billingOff()) return { ok: false, error: "Billing isn't enabled." };
+  const user = await requireUser();
+  try {
+    await getBillingService().detachPaymentMethod(user.id);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Couldn't remove the card." };
+  }
+}
+
+/** Credit-grant history (signup + referral) for the Overview tab. Empty when billing is off. */
+export async function getCreditGrants() {
+  if (billingOff()) return [];
+  const user = await requireUser();
+  return getBillingService().listCreditGrants(user.id);
+}
+
+/** Referral status (joined / pending / earned) for the Referral tab. Zeros when billing is off. */
+export async function getReferralStatus() {
+  if (billingOff()) return { joined: 0, pending: 0, earned: 0, earnedCents: 0 };
+  const user = await requireUser();
+  return getBillingService().getReferralStatus(user.id);
+}
+
+/** When the next charge lands (unix seconds), or null when billing is off / no subscription. */
+export async function getNextChargeDate(): Promise<number | null> {
+  if (billingOff()) return null;
+  const user = await requireUser();
+  return getBillingService().getNextChargeDate(user.id);
+}
+
 /**
  * Begin the add-card flow: a Stripe SetupIntent whose client secret the browser's Stripe Elements
  * uses to save the card WITHOUT the number touching our servers. Returns the publishable key too

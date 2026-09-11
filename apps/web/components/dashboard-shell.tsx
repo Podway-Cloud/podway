@@ -118,9 +118,15 @@ export default function DashboardShell({
     // overflows the body, the body scrolls, and the top strands above the fold (the owner's
     // "shifted up, top cropped, dead space at the bottom" report, 2026-09-07 → still 2026-09-09).
     // Anchored at top:0 the top can never be cropped, and overflow-hidden + a fixed shell means the
-    // body has nothing to scroll; only <main> inside scrolls. `--app-h` (see use-app-height) keeps
-    // the height exact so there's no dead band at the bottom either.
-    <div className="fixed inset-x-0 top-0 flex h-[var(--app-h,100dvh)] overflow-hidden bg-background text-foreground">
+    // body has nothing to scroll; only <main> inside scrolls. `--app-h` + `--app-top` (see
+    // use-app-height) track the VISUAL viewport: the height shrinks and the shell shifts down with
+    // the on-screen keyboard, so there's no dead band at the bottom and no cropped top — the same
+    // approach the pod terminal uses. translateY(--app-top) keeps the fixed shell over the visible
+    // area (offsetTop is 0 with no keyboard, so desktop is unaffected).
+    <div
+      className="fixed inset-x-0 top-0 flex h-[var(--app-h,100dvh)] overflow-hidden bg-background text-foreground"
+      style={{ transform: "translateY(var(--app-top, 0px))" }}
+    >
       {/* Mobile top bar */}
       <header className="fixed inset-x-0 top-0 z-30 flex h-[60px] items-center gap-3 border-b border-border bg-card px-3 md:hidden">
         <button

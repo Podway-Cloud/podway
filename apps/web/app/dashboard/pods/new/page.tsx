@@ -8,6 +8,7 @@ import HideSupportChat from "@/components/hide-support-chat";
 import { isAdmin } from "@/lib/access-rules";
 import { editionOss } from "@/lib/session";
 import { harnessEnabled } from "@/lib/agent-harness";
+import { getBillingSummary } from "@/lib/billing-actions";
 import { ACCOUNT_RAM_GB } from "@podway/shared/tiers";
 import { sanitizeRef } from "@podway/shared";
 
@@ -51,6 +52,10 @@ export default async function NewPodPage({
   // size step can show free capacity instead of cloud tiers. null in cloud (unused there).
   const oss = editionOss();
   const capacity = oss ? await hostCapacity() : null;
+  // Cloud cost-at-create (billing-ux): show the chosen size's price against the owner's free credit
+  // on the Review step. `getBillingSummary()` is null when billing is off — then the wizard shows the
+  // advertised signup-credit figure and no card prompt. Self-host has no per-pod price.
+  const billing = oss ? null : await getBillingSummary();
 
   return (
     <DashboardPage
@@ -75,6 +80,9 @@ export default async function NewPodPage({
         initialName={initialName}
         deeplink={deeplink}
         refSource={ref ?? undefined}
+        billingEnabled={billing !== null}
+        creditCents={billing?.creditCents ?? 0}
+        hasCard={billing?.hasCard ?? false}
       />
     </DashboardPage>
   );

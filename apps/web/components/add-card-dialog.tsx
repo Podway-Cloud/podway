@@ -13,6 +13,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { startAddCard, markCardSaved } from "@/lib/billing-actions";
+import { SIGNUP_CREDIT_USD } from "@/lib/pricing-catalog";
 
 /** loadStripe returns a promise; cache one per publishable key so Elements isn't re-created. */
 const stripeCache = new Map<string, Promise<Stripe | null>>();
@@ -60,6 +61,14 @@ export default function AddCardButton({ hasCard }: { hasCard: boolean }) {
               Your card is stored securely by Stripe — the number never touches Podway.
             </DialogDescription>
           </DialogHeader>
+          {!hasCard && (
+            <p
+              role="note"
+              className="rounded-lg border border-success/35 bg-success/10 px-3 py-2 text-[12.5px] text-success"
+            >
+              ${SIGNUP_CREDIT_USD} free credit activates once your card is saved.
+            </p>
+          )}
           {error ? (
             <p className="text-[13.5px] text-destructive">{error}</p>
           ) : loading || !setup ? (

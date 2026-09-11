@@ -46,6 +46,14 @@ export function priceForSize(size: PodSize): number {
 export const SUSPENDED_USD = 1;
 
 /**
+ * The one-time signup credit granted once a card is on file (cents). This is the SINGLE source of
+ * truth for the "$15 free" figure — both the control-plane grant (`SIGNUP_CREDIT_CENTS` re-exported
+ * from billing) and the customer-facing dollar figure (`SIGNUP_CREDIT_USD` in the web pricing
+ * catalog) derive from it, so the advertised amount and the amount actually granted can never drift.
+ */
+export const SIGNUP_CREDIT_CENTS = 1500;
+
+/**
  * Per-account RAM budget (GB) — the pre-billing abuse limit that replaced the old "slot" budget
  * (size-based-pod-pricing). A running pod counts its size's RAM against it; a SUSPENDED pod frees it.
  * Default 16 GB (≈ four Mediums, or one XL); `PODWAY_ACCOUNT_RAM_GB` overrides it without a deploy.
