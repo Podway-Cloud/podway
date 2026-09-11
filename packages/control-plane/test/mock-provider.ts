@@ -256,6 +256,15 @@ export class MockProvider implements SandboxProvider {
     return { login: "octocat" };
   }
 
+  /** Agent secret-requests, per pod — settable in tests. */
+  secretReqs = new Map<string, { key: string; description: string; at: string }[]>();
+  async secretRequests(id: string): Promise<{ key: string; description: string; at: string }[]> {
+    return this.secretReqs.get(id) ?? [];
+  }
+  async removeSecretRequest(id: string, key: string): Promise<void> {
+    this.secretReqs.set(id, (this.secretReqs.get(id) ?? []).filter((r) => r.key !== key));
+  }
+
   /** Test helper: force a status (simulate out-of-band change). */
   forceStatus(id: string, status: PodStatus): void {
     const p = this.pods.get(id);

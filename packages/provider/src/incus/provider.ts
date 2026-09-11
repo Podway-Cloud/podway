@@ -1150,6 +1150,23 @@ export class IncusProvider implements SandboxProvider {
     }
   }
 
+  async removeSecretRequest(id: string, key: string): Promise<void> {
+    const ip = await this.instanceIp(id);
+    if (!ip) throw new ProviderError(`pod ${id} has no address (not running?)`, "transient");
+    const res = await fetch(
+      `http://${ip}:${this.config.agentPort}/secret-request/${encodeURIComponent(key)}`,
+      { method: "DELETE", signal: AbortSignal.timeout(8000) },
+    );
+    // 404 = pod-agent predates the DELETE route; the request stays until the pod is updated.
+    if (res.status === 404) {
+      throw new ProviderError(
+        "This pod needs updating before a secret request can be dismissed — click Update in Settings, then try again.",
+        "invalid",
+      );
+    }
+    if (!res.ok) throw new ProviderError("dismissing the secret request failed on the pod", "transient");
+  }
+
   async clearGithubToken(id: string): Promise<void> {
     const ip = await this.instanceIp(id);
     if (!ip) throw new ProviderError(`pod ${id} has no address (not running?)`, "transient");

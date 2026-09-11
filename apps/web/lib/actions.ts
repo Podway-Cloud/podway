@@ -910,6 +910,19 @@ export async function getPodSecretRequests(
   }
 }
 
+/** Dismiss (clear) one secret request the agent made from inside the pod — the owner
+ * decides they won't provide it. Symmetric to the agent's `podway secrets withdraw`.
+ * Owner-gated; low-stakes and reversible (the agent can re-request). */
+export async function dismissSecretRequest(slug: string, key: string): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    await getPodService().dismissSecretRequest(user.id, slug, key);
+  } catch (e) {
+    log.error("dismiss_secret_request_failed", { userId: user.id, podId: slug, key, err: e });
+    return { error: message(e) };
+  }
+}
+
 /** Dismiss a pod's incident banner (OOM/crash) DURABLY — server-side, so it stays
  * dismissed across devices and reloads, not just this browser. Owner-gated. */
 export async function dismissPodIncident(slug: string, eventId: string): Promise<ActionResult> {

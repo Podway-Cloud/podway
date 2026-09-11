@@ -111,6 +111,11 @@ export interface SandboxProvider {
    * never values) — so the dashboard can render them as inputs. Non-throwing: a pod
    * that is down or has none returns an empty list. */
   secretRequests(id: string): Promise<{ key: string; description: string; at: string }[]>;
+  /** Remove one secret request on the pod — the owner's "Dismiss" (symmetric to the
+   * agent's `podway secrets withdraw`). Idempotent: dismissing a key that isn't
+   * requested is a no-op success. Throws only if the pod is unreachable or too old to
+   * have the endpoint (so the owner gets an honest "needs updating" message). */
+  removeSecretRequest(id: string, key: string): Promise<void>;
   setGithubToken(id: string, token: string): Promise<{ login: string }>;
   /** The connected user's repositories, listed with the pod's OWN gh credentials
    * (no token reaches the web). For the cockpit's "add GitHub → choose repo" flow. */

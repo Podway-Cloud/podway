@@ -104,15 +104,15 @@ export default function GithubConnect({ slug }: { slug: string }) {
           {connected ? (
             connected && workRepo ? (
               <>
-                <div className="text-[12.5px] text-muted-foreground">
-                  Working on{" "}
-                  <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{workRepo}</code>
-                </div>
                 {login ? (
-                  <div className="mt-0.5 text-[12.5px] text-muted-foreground">
+                  <div className="text-[12.5px] text-muted-foreground">
                     <GithubHandle login={login} />
                   </div>
                 ) : null}
+                <div className={`text-[12.5px] text-muted-foreground${login ? " mt-0.5" : ""}`}>
+                  Working on{" "}
+                  <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{workRepo}</code>
+                </div>
               </>
             ) : (
               <div className="text-[12.5px] text-muted-foreground">

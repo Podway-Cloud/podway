@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import posthog from "posthog-js";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Boxes, SquarePlus, Settings, UserCheck, Users, ArrowLeft, Menu, HardDrive, Sparkles, ChartNoAxesCombined, Globe, Radio, TriangleAlert } from "lucide-react";
+import { LayoutGrid, Boxes, SquarePlus, Settings, UserCheck, Users, ArrowLeft, Menu, HardDrive, Sparkles, ChartNoAxesCombined, Globe, Radio, TriangleAlert, CreditCard } from "lucide-react";
 import UserMenu from "@/components/user-menu";
 import { cn } from "@/lib/utils";
 import { useAppHeight } from "@/lib/use-app-height";
@@ -14,7 +14,7 @@ import { useAppHeight } from "@/lib/use-app-height";
  * Server Component layout can't pass a function/component across the boundary.
  * Add a nav icon here, then reference it by key from a layout's NavItem.
  */
-const ICONS = { LayoutGrid, Boxes, SquarePlus, Settings, UserCheck, Users, ArrowLeft, HardDrive, Sparkles, ChartNoAxesCombined, Globe, Radio, TriangleAlert } as const;
+const ICONS = { LayoutGrid, Boxes, SquarePlus, Settings, UserCheck, Users, ArrowLeft, HardDrive, Sparkles, ChartNoAxesCombined, Globe, Radio, TriangleAlert, CreditCard } as const;
 
 export interface NavItem {
   href: string;

@@ -590,6 +590,12 @@ export class FakeProvider implements SandboxProvider {
     return (id ? this.scripted(id).secretRequests : undefined) ?? this.secretRequestList;
   }
 
+  /** Owner "Dismiss" (symmetric to the agent's `podway secrets withdraw`): drop a request
+   * from the in-memory list. Idempotent — dismissing an absent key is a no-op success. */
+  async removeSecretRequest(_id: string, key: string): Promise<void> {
+    this.secretRequestList = this.secretRequestList.filter((r) => r.key !== key);
+  }
+
   /** Records the last-injected secrets so e2e can assert the injection path ran. */
   lastSecrets?: Record<string, string>;
   async injectSecrets(id: string, secrets: Record<string, string>): Promise<void> {

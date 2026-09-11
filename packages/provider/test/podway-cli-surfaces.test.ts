@@ -119,6 +119,23 @@ describe("podway secrets — self-correcting guidance (regression: agent tried a
   it("points an unknown subcommand at 'secrets request' too", () => {
     expect(runFail(["secrets", "frobnicate"])).toMatch(/secrets request KEY/);
   });
+
+  // `withdraw` retracts a request this pod made — the agent-side counterpart to the owner's
+  // Dismiss. The happy path needs a live pod-agent (a DELETE to :8080), so here we cover the
+  // no-agent input-validation surface, which runs entirely in the CLI before any curl.
+  it("withdraw with no key prints its own usage", () => {
+    expect(runFail(["secrets", "withdraw"])).toMatch(/usage: podway secrets withdraw <KEY>/);
+  });
+
+  it("withdraw rejects a non-UPPER_SNAKE_CASE key before hitting the agent", () => {
+    expect(runFail(["secrets", "withdraw", "lower_case"])).toMatch(/UPPER_SNAKE_CASE/);
+    expect(runFail(["secrets", "withdraw", "HAS-DASH"])).toMatch(/UPPER_SNAKE_CASE/);
+  });
+
+  it("the secrets usage line advertises withdraw", () => {
+    // An unknown subcommand prints the usage; it must now mention `withdraw KEY`.
+    expect(runFail(["secrets", "frobnicate"])).toMatch(/withdraw KEY/);
+  });
 });
 
 describe("podway link — hand the user a GitHub URL, not a dead pod path", () => {

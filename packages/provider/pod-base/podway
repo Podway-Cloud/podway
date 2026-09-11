@@ -378,18 +378,36 @@ cmd_secrets_request() {
   echo "  ${url:-https://podway.cloud/dashboard/pods/${slug:-your-pod}?tab=secrets}"
 }
 
+# Retract a request this pod made earlier — the agent decided it no longer needs the
+# secret, so the pending ask should stop showing in the owner's dashboard. Symmetric to
+# `request`. Idempotent: withdrawing a key that was never requested (or already satisfied)
+# is a no-op success, not an error — the pod-agent's DELETE handler returns ok either way.
+cmd_secrets_withdraw() {
+  local key="${1:-}"
+  [ -n "$key" ] || die "usage: podway secrets withdraw <KEY>"
+  case "$key" in [A-Z]*) ;; *) die "key must be UPPER_SNAKE_CASE (start with a letter), e.g. OPENAI_API_KEY" ;; esac
+  case "$key" in *[!A-Z0-9_]*) die "key must be UPPER_SNAKE_CASE, e.g. OPENAI_API_KEY" ;; esac
+  local port="${PODWAY_AGENT_PORT:-8080}"
+  curl -fsS -m 8 -X DELETE \
+    "http://127.0.0.1:${port}/secret-request/${key}" >/dev/null \
+    || die "could not withdraw the request (is the pod-agent up?)"
+  echo "withdrew the request for '$key' — it no longer shows in the owner's dashboard."
+}
+
 cmd_secrets() {
   case "${1:-list}" in
     list) cmd_secrets_list ;;
     get) shift; cmd_secrets_get "${1:-}" ;;
     env) cmd_secrets_env ;;
     request) shift; cmd_secrets_request "$@" ;;
+    withdraw|retract|cancel) shift; cmd_secrets_withdraw "${1:-}" ;;
     set|add|put|create)
       die "there is no 'podway secrets $1' — a pod cannot write its own secrets (only the owner can, in the dashboard).
 To ask the owner for one, use:  podway secrets request KEY \"why it's needed\"
 That records the request AND prints the dashboard link to hand them." ;;
-    *) die "usage: podway secrets <list | get KEY | env | request KEY [why]>
-To ask the owner for a secret, use:  podway secrets request KEY \"why\"" ;;
+    *) die "usage: podway secrets <list | get KEY | env | request KEY [why] | withdraw KEY>
+To ask the owner for a secret, use:  podway secrets request KEY \"why\"
+To retract a request you made, use: podway secrets withdraw KEY" ;;
   esac
 }
 
@@ -970,7 +988,7 @@ case "${1:-info}" in
     echo "              | fetch get <url> | fetch plan <domain>"
     echo "              | fetch report <domain> <rung> <outcome>"
     echo "              | relay status"
-    echo "              | secrets list | secrets get KEY | secrets env | secrets request KEY [why]"
+    echo "              | secrets list | secrets get KEY | secrets env | secrets request KEY [why] | secrets withdraw KEY"
     echo "              | schedule list | schedule add --name … --at HH:MM [--tz IANA] [--days mon,wed|weekdays] --do \"…\" | schedule remove ID"
     echo "              | startup list | startup add --do \"…\" [--slug NAME] [--port N] | startup restart|stop|start SLUG | startup remove SLUG"
     echo "              | dev restart | dev stop | dev start | dev disable | dev enable | dev logs [N] | dev status  (the SUPERVISED dev server — never hand-kill it; 'disable' if this pod serves its own :3000)"

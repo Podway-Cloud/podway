@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Eye, EyeOff, Copy, Check, Download } from "lucide-react";
+import { Eye, EyeOff, Copy, Check, Download, X } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { qk } from "@/lib/query-keys";
 import {
@@ -9,6 +9,7 @@ import {
   clearPodSecret,
   revealPodSecret,
   revealAllPodSecrets,
+  dismissSecretRequest,
 } from "@/lib/actions";
 import { apiGet } from "@/lib/api-fetch";
 import { Button } from "@/components/ui/button";
@@ -143,6 +144,18 @@ export default function SecretsPanel({ slug }: { slug: string }) {
     });
   };
 
+  // Dismiss an agent secret-request the owner won't fill. Low-stakes and reversible (the
+  // agent can re-request), so no confirm — a plain click that clears it on the pod, then
+  // refreshes. Mirrors the agent's own `podway secrets withdraw`.
+  const dismissRequest = (key: string) => {
+    setError(null);
+    start(async () => {
+      const r = await dismissSecretRequest(slug, key);
+      if (r?.error) setError(r.error);
+      else await invalidate();
+    });
+  };
+
   const clear = async (key: string, declared: boolean) => {
     const verb = declared ? "Clear" : "Delete";
     const ok = await confirm({
@@ -219,6 +232,20 @@ export default function SecretsPanel({ slug }: { slug: string }) {
       return;
     }
     setError(null);
+    // A SINGLE pasted variable fills the add-a-variable form's Name + Value directly, so it's
+    // reviewed and saved with the normal single-secret Add — no bulk "Save all" block for one var
+    // (owner call). Two or more still stage for review below.
+    if (valid.length === 1) {
+      const { key, value } = valid[0]!;
+      setNewKey(key);
+      setNewVal(value);
+      setNotice(
+        `Filled the form with ${key} — review and Add` +
+          (invalid > 0 ? ` (${invalid} invalid line${invalid === 1 ? "" : "s"} skipped)` : "") +
+          ".",
+      );
+      return;
+    }
     setStaged((cur) => {
       const byKey = new Map(cur.map((p) => [p.key, p.value]));
       for (const p of valid) byKey.set(p.key, p.value);
@@ -337,6 +364,16 @@ export default function SecretsPanel({ slug }: { slug: string }) {
                     onClick={() => save(req.key)}
                   >
                     Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={pending}
+                    aria-label={`Dismiss request for ${req.key}`}
+                    title="Dismiss — the agent can re-request"
+                    onClick={() => dismissRequest(req.key)}
+                  >
+                    <X className="size-3.5" />
                   </Button>
                 </div>
               </li>

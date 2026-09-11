@@ -2537,6 +2537,15 @@ export class PodService {
     return this.providerFor(rec.provider).secretRequests(id);
   }
 
+  /** Dismiss one agent secret-request on the owner's pod (the dashboard's "Dismiss",
+   * symmetric to the agent's `podway secrets withdraw`). Owner-scoped, so one owner
+   * cannot clear another's requests. Idempotent at the pod: dismissing a key that isn't
+   * requested is a no-op success. */
+  async dismissSecretRequest(ownerId: string, id: string, key: string): Promise<void> {
+    const rec = await this.owned(ownerId, id);
+    await this.providerFor(rec.provider).removeSecretRequest(id, key);
+  }
+
   /** Install a GitHub token (from the web device flow) into the owner's pod. */
   async setGithubToken(ownerId: string, id: string, token: string): Promise<{ login: string }> {
     const rec = await this.owned(ownerId, id);

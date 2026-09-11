@@ -21,12 +21,34 @@ by name and reason (never a value) so it surfaces in the pod's secrets UI as an 
 owner SHALL be able to add an arbitrary environment variable to a running pod, not only the declared
 ones. A request SHALL carry only a key and a description, and SHALL disappear once its secret is set.
 
+A pending request SHALL be retractable from either side: the agent MAY withdraw its own request
+(`podway secrets withdraw KEY`), and the owner MAY dismiss it from the secrets panel ("Dismiss"). Both
+resolve to removing the request on the pod and are idempotent — retracting a key that is not requested
+(or already satisfied) is a no-op success, not an error. Dismiss is low-stakes and reversible: the
+agent can re-request the same key afterwards.
+
+The owner's dismiss is a provider capability implemented in BOTH editions: the cloud (Incus) provider
+and the self-host `LocalProvider` each call the pod-agent's remove endpoint; a pod too old to have that
+endpoint reports an honest "needs updating" error rather than silently succeeding.
+
 #### Scenario: The agent asks for a secret it needs
 
 - **WHEN** the agent runs `podway secrets request OPENAI_API_KEY "for the summariser"`
 - **THEN** the pod's secrets panel shows `OPENAI_API_KEY` with that reason as an input to fill, and the
   request carries no value
 - **AND** once the owner sets `OPENAI_API_KEY`, the request no longer appears
+
+#### Scenario: The agent withdraws a request it no longer needs
+
+- **WHEN** the agent runs `podway secrets withdraw OPENAI_API_KEY` for a key it previously requested
+- **THEN** the request is removed on the pod and no longer appears in the secrets panel
+- **AND** withdrawing a key that was never requested is a no-op success, not an error
+
+#### Scenario: The owner dismisses an agent's request
+
+- **WHEN** the owner clicks "Dismiss" next to a pending agent request in the secrets panel
+- **THEN** the control plane (owner-scoped) removes that request on the pod and the panel refreshes without it
+- **AND** the agent can request the same key again later, which surfaces it anew
 
 #### Scenario: The owner adds a variable the environment never declared
 

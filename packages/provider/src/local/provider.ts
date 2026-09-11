@@ -583,6 +583,20 @@ export class LocalProvider implements SandboxProvider {
     return r ?? [];
   }
 
+  async removeSecretRequest(id: string, key: string): Promise<void> {
+    // The pod-agent's DELETE handler is idempotent (removing an absent key returns ok),
+    // so a dismiss on a request that's already gone is a harmless no-op. A pod too old to
+    // have the route answers 404 → surface an honest "needs updating" message.
+    const r = await this.agentJson(id, `/secret-request/${encodeURIComponent(key)}`, "DELETE");
+    if (r.__status === 404) {
+      throw new ProviderError(
+        "This pod needs updating before a secret request can be dismissed — update it, then try again.",
+        "invalid",
+      );
+    }
+    if (r.__status !== 200) throw new ProviderError("dismissing the secret request failed on the pod", "transient");
+  }
+
   async sendAgentInput(id: string, agent: string, text: string): Promise<void> {
     const ok = await this.agentPost(id, "/agent/input", { agent, text });
     if (!ok) throw new ProviderError("agent input failed (pod unreachable?)", "transient");

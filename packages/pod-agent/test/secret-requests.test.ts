@@ -38,11 +38,24 @@ describe("secret requests", () => {
     expect(() => addRequest(path, "HAS-DASH", "", "t")).toThrow();
   });
 
-  it("drops a satisfied request", () => {
+  it("drops a satisfied (or withdrawn) request", () => {
     addRequest(path, "A_KEY", "", "t");
     addRequest(path, "B_KEY", "", "t");
     removeRequest(path, "A_KEY");
     expect(readRequests(path).map((r) => r.key)).toEqual(["B_KEY"]);
+  });
+
+  it("withdrawing a key that isn't requested is a no-op success", () => {
+    addRequest(path, "A_KEY", "", "t");
+    expect(() => removeRequest(path, "NOT_ASKED")).not.toThrow();
+    // the other request is untouched
+    expect(readRequests(path).map((r) => r.key)).toEqual(["A_KEY"]);
+  });
+
+  it("withdrawing from an absent file is a no-op success (idempotent)", () => {
+    // no addRequest first — the file does not exist yet
+    expect(() => removeRequest(path, "ANYTHING")).not.toThrow();
+    expect(readRequests(path)).toEqual([]);
   });
 
   it("ignores corrupt or non-array file contents", () => {

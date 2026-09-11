@@ -119,6 +119,9 @@ class DisabledProvider implements SandboxProvider {
   async secretRequests() {
     return [];
   }
+  async removeSecretRequest(): Promise<never> {
+    return this.nope();
+  }
   async setGithubToken() {
     return this.nope();
   }
