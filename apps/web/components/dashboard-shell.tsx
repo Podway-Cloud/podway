@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { LayoutGrid, Boxes, SquarePlus, Settings, UserCheck, Users, ArrowLeft, Menu, HardDrive, Sparkles, ChartNoAxesCombined, Globe, Radio, TriangleAlert, CreditCard } from "lucide-react";
 import UserMenu from "@/components/user-menu";
 import { cn } from "@/lib/utils";
+import { useAppHeight } from "@/lib/use-app-height";
 
 /**
  * Icons live here (a client component) and are referenced by name, because a
@@ -51,11 +52,14 @@ export default function DashboardShell({
   const pathname = usePathname();
   const [drawer, setDrawer] = useState(false);
 
-  // Keep a focused input ABOVE the on-screen keyboard on mobile. The shell is a fixed, transformed
-  // container (see the shell div's translateY), which suppresses iOS Safari's native "scroll the
-  // focused field into view" — so a tapped input in the lower half ended up UNDER the keyboard
-  // (owner, 2026-09-11). After the keyboard has animated in (~300ms), if the visual viewport has
-  // shrunk (keyboard is open), scroll the field to the centre of the visible area ourselves.
+  // Re-fit the 100svh shell after a bfcache/tab-return (the frozen render iOS restores at a stale
+  // height — the "dead band on a stale page"). No-op unless actually stale. See use-app-height.
+  useAppHeight();
+
+  // Keep a focused input ABOVE the on-screen keyboard on mobile. iOS Safari's native "scroll the
+  // focused field into view" is unreliable inside our fixed shell's own scroller, so a tapped input
+  // in the lower half could end up UNDER the keyboard (owner, 2026-09-11). After the keyboard has
+  // animated in (~300ms), if the visual viewport has shrunk (keyboard open), scroll it to centre.
   useEffect(() => {
     const onFocusIn = (e: FocusEvent) => {
       const t = e.target as HTMLElement | null;
