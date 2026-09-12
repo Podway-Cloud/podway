@@ -55,8 +55,19 @@ export default function ClaudeSigninWizard({
     queryFn: () => getPodAuthUrl(slug),
     refetchInterval: 3_000,
   });
-  const authUrl = agent?.authUrl ?? rowAuthUrl ?? null;
+  const polledAuthUrl = agent?.authUrl ?? rowAuthUrl ?? null;
   const authed = agent?.authed ?? false;
+
+  // STICKY sign-in link. The link is scraped from the pod's `claude /login` screen, but the moment the
+  // owner APPROVES in the browser the pod advances past that screen, so the poll stops returning a URL —
+  // which used to bounce the wizard back to "Getting the sign-in link…" and HIDE the paste box right when
+  // the owner has the code in hand (velsa, 2026-09-12, "we fixed that flow 20 times"). Remember the last
+  // URL we saw and keep showing the sign-in step from it, so the paste box stays put through approval.
+  const [seenAuthUrl, setSeenAuthUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (polledAuthUrl && polledAuthUrl !== seenAuthUrl) setSeenAuthUrl(polledAuthUrl);
+  }, [polledAuthUrl, seenAuthUrl]);
+  const authUrl = polledAuthUrl ?? seenAuthUrl;
 
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
