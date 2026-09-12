@@ -266,6 +266,26 @@ export function landingPreviewPath(variant: LandingVariant): string {
   return `/preview/landing/${variant}`;
 }
 
+/** Operator-facing name + one-line pitch per landing, for the admin experiments panel. */
+export const LANDING_VARIANT_META: Record<LandingVariant, { name: string; pitch: string }> = {
+  outcomes: {
+    name: "Outcomes",
+    pitch: "Leads with what people ship on Podway — outcomes over mechanics.",
+  },
+  "agent-computer": {
+    name: "Agent computer",
+    pitch: "Positions Podway as the always-on computer a coding agent runs on.",
+  },
+  "agent-home": {
+    name: "Agent home",
+    pitch: "Frames Podway as a real cloud home the agent knows how to operate.",
+  },
+  selfhost: {
+    name: "Self-host",
+    pitch: "The self-hosted admin, promoted to the homepage when pinned.",
+  },
+};
+
 export function isCrawler(userAgent: string | null): boolean {
   if (!userAgent) return false;
   return /bot|crawler|spider|slurp|bingpreview|facebookexternalhit|linkedinbot|twitterbot|whatsapp|discordbot/i.test(

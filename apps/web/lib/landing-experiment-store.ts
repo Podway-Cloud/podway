@@ -705,4 +705,120 @@ export async function isSelfhostHomepageEnabled(): Promise<boolean> {
   return runtime.status === "stopped" && runtime.pinnedVariant === "selfhost";
 }
 
+/**
+ * Pin the default landing WITHOUT changing the run status (unlike `pinExperimentVariant`,
+ * which stops the experiment as it pins). Writes only the runs row's `pinnedVariant`.
+ * When the experiment is stopped, middleware/`page.tsx` resolve `/` to this variant; while
+ * active it is the control/canonical target of the frozen split. Keyed by the active experiment.
+ */
+export async function setPinnedDefault(
+  actorUserId: string,
+  variant: string,
+  experimentId: string = ACTIVE_LANDING_EXPERIMENT.id,
+  db = createAppDb(),
+): Promise<ExperimentRuntime> {
+  const definition = definitionFor(experimentId);
+  if (!isVariantForExperiment(definition, variant)) throw new Error("Unknown landing variant");
+  await ensureRun(db, definition);
+  await db
+    .update(landingExperimentRuns)
+    .set({ pinnedVariant: variant, updatedBy: actorUserId, updatedAt: new Date() })
+    .where(eq(landingExperimentRuns.experimentId, experimentId));
+  return getExperimentRuntime(db, experimentId);
+}
+
+/**
+ * Toggle the running experiment on/off. Writes only the runs row's `status` (and the
+ * matching `stoppedAt` bookkeeping); it leaves the pinned default untouched, so stopping
+ * keeps the current default serving `/`.
+ */
+export async function setRunningStatus(
+  actorUserId: string,
+  running: boolean,
+  experimentId: string = ACTIVE_LANDING_EXPERIMENT.id,
+  db = createAppDb(),
+): Promise<ExperimentRuntime> {
+  const definition = definitionFor(experimentId);
+  await ensureRun(db, definition);
+  const now = new Date();
+  await db
+    .update(landingExperimentRuns)
+    .set({
+      status: running ? "active" : "stopped",
+      stoppedAt: running ? null : now,
+      updatedBy: actorUserId,
+      updatedAt: now,
+    })
+    .where(eq(landingExperimentRuns.experimentId, experimentId));
+  return getExperimentRuntime(db, experimentId);
+}
+
+export interface LandingPanelVariant {
+  variant: LandingVariant;
+  /** Eligible exposures (the conversion-rate denominator). */
+  visitors: number;
+  /** Primary-metric conversions for the variant. */
+  conversions: number;
+  /** This variant is the control for uplift/confidence (the resolved default). */
+  isControl: boolean;
+  /** This variant is the currently pinned default. */
+  isDefault: boolean;
+}
+
+export interface LandingPanelData {
+  experimentId: string;
+  label: string;
+  status: ExperimentRuntimeStatus;
+  deliveryMode: LandingDeliveryMode;
+  pinnedVariant: LandingVariant | null;
+  fallbackVariant: LandingVariant;
+  /** The variant `/` resolves to when stopped: `pinnedVariant ?? fallbackVariant`. */
+  servedVariant: LandingVariant;
+  variants: readonly LandingVariant[];
+  allocation: Readonly<Partial<Record<LandingVariant, number>>>;
+  primaryMetric: LandingExperimentEvent;
+  totalVisitors: number;
+  rows: LandingPanelVariant[];
+}
+
+/**
+ * Everything the admin panel needs in one call: the runtime (status + pinned default), the
+ * frozen definition (variants, allocation, primary metric, fallback), and the per-variant
+ * measured report (visitors + conversions). Reuses `getExperimentDetail` so the numbers match
+ * the detail page exactly.
+ */
+export async function getPanelData(
+  experimentId: string = ACTIVE_LANDING_EXPERIMENT.id,
+  db = createAppDb(),
+): Promise<LandingPanelData | null> {
+  const detail = await getExperimentDetail(experimentId, db);
+  if (!detail) return null;
+  const definition = definitionFor(experimentId);
+  const servedVariant = detail.pinnedVariant ?? definition.fallbackVariant;
+  const rows: LandingPanelVariant[] = definition.variants.map((variant) => {
+    const report = detail.variants[variant]!;
+    return {
+      variant,
+      visitors: report.exposureDenominator,
+      conversions: report.funnel[definition.primaryMetric],
+      isControl: variant === servedVariant,
+      isDefault: detail.pinnedVariant === variant,
+    };
+  });
+  return {
+    experimentId: definition.id,
+    label: definition.label,
+    status: detail.status,
+    deliveryMode: definition.deliveryMode,
+    pinnedVariant: detail.pinnedVariant,
+    fallbackVariant: definition.fallbackVariant,
+    servedVariant,
+    variants: definition.variants,
+    allocation: definition.allocation,
+    primaryMetric: definition.primaryMetric,
+    totalVisitors: rows.reduce((sum, row) => sum + row.visitors, 0),
+    rows,
+  };
+}
+
 export const LANDING_FUNNEL_EVENTS = FUNNEL;
