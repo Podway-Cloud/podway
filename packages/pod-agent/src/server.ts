@@ -144,6 +144,10 @@ function gateLabel(gate: GateKind): string {
  * owner-scoped on the pod's volume. */
 const TERMINAL_LOG = "/home/dev/.podway-terminal.log";
 const TERMINAL_LOG_CAP = 1_000_000; // ~1MB; truncated to the last half when exceeded
+/** How long the one-time "conversation was reset" notice stays up after a fresh-session reset before it
+ * self-retires (the agent having stayed healthy). Long enough to be seen on a normal check, short enough
+ * that it can't nag for days on a 24/7 pod that never overflows again (velsa, 2026-09-13). */
+const CONTEXT_RESET_NOTICE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 
 export interface AgentServerOptions extends PtySessionOptions {
@@ -2538,7 +2542,7 @@ export class AgentServer {
     }
     return computeIssues({
       sessionAlive: this.session.isAlive,
-      agents: this.agentStates().map((a) => ({ id: a.id, window: a.window, authed: a.authed, loginExpired: a.loginExpired, needsReauth: a.needsReauth, expiresAt: a.expiresAt, stuckGate: this.menuStuck.get(a.id), contextReset: this.contextReset.get(a.id) })),
+      agents: this.agentStates().map((a) => ({ id: a.id, window: a.window, authed: a.authed, loginExpired: a.loginExpired, needsReauth: a.needsReauth, expiresAt: a.expiresAt, stuckGate: this.menuStuck.get(a.id), contextReset: this.contextReset.has(a.id) })),
       repairGaveUp: [...this.cappedTargets],
       startupMissingDir: this.startupMissingDirs(),
       disk: { usedMb: m.disk.usedMb, totalMb: m.disk.totalMb },
@@ -2800,7 +2804,11 @@ export class AgentServer {
   private readonly contextLimitTicks = new Map<string, number>();
   private readonly recoveryState = new Map<string, RecoveryState>();
   private readonly contextRecovering = new Set<string>();
-  private readonly contextReset = new Map<string, boolean>();
+  /** agentId → epoch ms of the last fresh-session reset. Drives the owner-visible "conversation was
+   * reset" notice; cleared once the agent has been healthy (not at the context limit) past
+   * {@link CONTEXT_RESET_NOTICE_TTL_MS}, so a one-time notice can't linger for days on a 24/7 pod that
+   * never overflows again (velsa, makore.app dev, 2026-09-13). */
+  private readonly contextReset = new Map<string, number>();
 
   /**
    * Self-healing backstop for stuck menus. Every tick, for each Claude window, if it shows a KNOWN
@@ -2932,6 +2940,11 @@ export class AgentServer {
       const pane = await capturePane(target, { uid: this.tmuxUid, gid: this.tmuxGid }).catch(() => "");
       if (!pane || !atContextLimit(pane)) {
         this.contextLimitTicks.delete(id);
+        // Retire the "conversation was reset" notice once the agent has been healthy past a grace window
+        // after the reset. The flag is otherwise cleared only by a LATER trimmable overflow or a pod
+        // restart, so on a healthy 24/7 pod the one-time notice lingered for days (velsa, 2026-09-13).
+        const resetAt = this.contextReset.get(id);
+        if (resetAt !== undefined && Date.now() - resetAt > CONTEXT_RESET_NOTICE_TTL_MS) this.contextReset.delete(id);
         continue;
       }
       const ticks = (this.contextLimitTicks.get(id) ?? 0) + 1;
@@ -2982,7 +2995,7 @@ export class AgentServer {
       this.log.warn("agent_context_recover_failed", { agent: agentId, err: String(e) });
       return "cooldown" as const;
     });
-    if (outcome === "reset-fresh") this.contextReset.set(agentId, true);
+    if (outcome === "reset-fresh") this.contextReset.set(agentId, Date.now());
     else if (outcome === "recovered") this.contextReset.delete(agentId);
   }
 

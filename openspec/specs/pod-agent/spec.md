@@ -980,6 +980,18 @@ never touched by recovery.
 - **THEN** the pod surfaces an informational owner note that the earlier conversation was reset, while
   making clear the work in the repository is untouched
 
+#### Scenario: The reset note is a one-time notice, not a permanent finding
+
+- **WHEN** an agent has stayed healthy (not at the context limit) for a bounded grace period after a
+  fresh-session reset
+- **THEN** the pod SHALL retire the "conversation was reset" note on its own, so a one-time notice does
+  not linger for days on a 24/7 pod that never overflows again
+- **AND** until that grace passes the note SHALL remain, so an owner who checks in has a window to see it
+
+The note previously cleared only on a LATER trimmable overflow or a pod restart, so on a healthy pod it
+was surfaced indefinitely — a working pod showing a stale "reset" finding (velsa, makore.app dev,
+2026-09-13).
+
 #### Scenario: Auto-compaction is not owner-disableable
 
 - **WHEN** a stored pod setting or a settings write tries to turn Claude Code auto-compaction off
