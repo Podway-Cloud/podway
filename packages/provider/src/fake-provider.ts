@@ -290,6 +290,11 @@ export class FakeProvider implements SandboxProvider {
     agentWaitingFor?: string;
     appListening?: boolean;
     expiresAt?: number | null;
+    /** Script the claude-code agent's LIVE sign-in URL (what the gateway scrapes from `claude /login`).
+     * The row-based `record-auth-url` path no-ops on an already-authed pod (recordAuthUrl guards on
+     * authedAt), so this is the only way to surface the paste box for a RECONNECT on a still-authed
+     * agent in the fake stack — the "Signing in… hangs" repro (velsa, 2026-09-13). */
+    claudeAuthUrl?: string | null;
     /** rc-reconnect-hardening 5.1: script the claude-code agent's RC classification directly —
      * the fake stack doesn't run the real classifier (rc-state.ts), so a test just states the
      * outcome it wants. */
@@ -314,6 +319,7 @@ export class FakeProvider implements SandboxProvider {
           agentWaitingFor?: string;
           appListening?: boolean;
           expiresAt?: number | null;
+          claudeAuthUrl?: string | null;
           rcState?: RcState;
           rcRestoreTo?: RcState;
         }
@@ -375,6 +381,9 @@ export class FakeProvider implements SandboxProvider {
                 ? rcState === "active"
                 : this.sessionUrl != null,
           ...(rcState !== undefined ? { rcState } : {}),
+          // Scriptable LIVE sign-in URL (claude-code only) — the paste-box seam for a reconnect on an
+          // already-authed agent, whose row-based auth-url injection would no-op (recordAuthUrl/authedAt).
+          ...(a === "claude-code" && scripted.claudeAuthUrl !== undefined ? { authUrl: scripted.claudeAuthUrl } : {}),
           // Scriptable login hard-expiry (drives the cockpit's "expiring soon · Reconnect" affordance).
           expiresAt: a === "claude-code" ? (scripted.expiresAt ?? null) : null,
         };

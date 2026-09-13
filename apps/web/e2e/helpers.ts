@@ -245,6 +245,9 @@ export async function scriptPodHealth(
     };
     /** Claude login hard-expiry (ms) — set within ~7d to drive the "expiring soon · Reconnect" row. */
     expiresAt?: number | null;
+    /** Claude's LIVE sign-in URL (what `claude /login` prints, gateway-scraped) — surfaces the wizard's
+     * paste box for a RECONNECT on an already-authed agent, where the row-based record-auth-url no-ops. */
+    claudeAuthUrl?: string | null;
     /** rc-reconnect-hardening 5.1: script the claude-code agent's RC lifecycle classification
      * directly (fake-provider.ts's podHealth() reads this straight through — the fake stack
      * doesn't run the real classifier), so a test can drive the cockpit through

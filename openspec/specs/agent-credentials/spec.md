@@ -129,6 +129,21 @@ The agent CLI ends a successful login on "Login successful. Press Enter to conti
 keypress nobody sends, so the window otherwise sits there indefinitely (observed after a fully-expired
 reconnect on a test pod, 2026-09-06).
 
+#### Scenario: A reconnect that renews a still-authed login closes the wizard
+
+- **WHEN** an owner reconnects an agent whose login is still valid (renewing before it dies) and submits
+  the sign-in code
+- **THEN** the sign-in wizard SHALL close back to the cockpit once the code is submitted and the login
+  reports healthy — it SHALL NOT wait for the agent to first go UNAUTHED, because a renew swaps the token
+  in place and the agent never logs out
+- **AND** a wizard loaded cold (a page refresh or a deep link into reconnect, before the agent-state poll
+  has resolved) SHALL NOT treat that still-loading frame as an unauthed gap and bounce itself shut
+
+The wizard's close rule keyed only on "saw the agent go unauthed", which never happens on a renew of a
+live token — so the reconnect succeeded (authed, not needing re-auth) while the UI sat on "Signing in…"
+forever (velsa, 2026-09-13). The decision now also closes on a submitted code landing a healthy login,
+and the rule lives in one unit-tested function (`lib/agent-signin-flow.ts`).
+
 #### Scenario: The whole reconnect path is exercised in one run
 
 - **WHEN** the reconnect behaviour is tested

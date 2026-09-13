@@ -181,6 +181,33 @@ test.describe("cockpit", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
+  test("the reconnect wizard CLOSES after the code is submitted on a still-authed agent (no 'Signing in…' hang)", async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await login(page, "approved");
+    const slug = await launchPod(page); // signed in / authed
+    // The exact shape that hung "Signing in…" forever (velsa, 2026-09-13): a reconnect on a login that is
+    // STILL authed (renewed before it died). The renew swaps the token IN PLACE, so the agent NEVER goes
+    // unauthed — the old rule waited for an unauthed gap that never came, and the wizard spun forever even
+    // though the reconnect had already succeeded (the pod was authed:true + needsReauth:false meanwhile).
+    // Surface the LIVE sign-in link (the reconnect respawns into /login; the gateway scrapes this) so the
+    // paste box appears. Scripted onto the agent's healthz — the row-based record-auth-url no-ops on an
+    // already-authed pod (recordAuthUrl guards on authedAt), which is exactly this reconnect's shape.
+    await scriptPodHealth(slug, { claudeAuthUrl: "https://claude.ai/oauth/authorize?reauth=1" });
+    await page.goto(`/dashboard/pods/${slug}?wiz=reconnect:claude-code`);
+
+    // The wizard must STAY open (not bounce to the cockpit on the initial authed frame) and reach the
+    // paste box — cold-load must not read the still-loading agent poll as an unauthed gap.
+    await page.getByPlaceholder(/Paste the code/i).fill("e2e-reauth-code");
+    await page.getByRole("button", { name: /^Connect$/i }).click();
+
+    // The fix: a submitted code on a HEALTHY login is 'done', so the wizard closes back to the cockpit
+    // instead of hanging on the spinner.
+    await expect(page.getByRole("tab", { name: /control/i })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText(/Signing in/i)).toHaveCount(0);
+  });
+
   test("the sign-in wizard surfaces the URL from the persisted pod row (fallback path)", async ({
     page,
   }) => {
