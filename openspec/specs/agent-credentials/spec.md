@@ -124,25 +124,36 @@ waited in the other one, and the cockpit sat on "Signing in…" indefinitely (te
   in their pod terminal
 - **AND** closing it SHALL be best-effort: the reconnect has already succeeded by then, so a window
   that will not close must never turn a success into a failure
+- **AND** "the login completed" SHALL be judged by the credential's HARD expiry moving forward (a fresh
+  login resets the ~30-day clock), NEVER by the credential file merely being rewritten — a still-valid
+  login refreshes its access token every few minutes, which rewrites the file without moving the hard
+  expiry, and must not be mistaken for the reconnect landing
 
 The agent CLI ends a successful login on "Login successful. Press Enter to continue…" and waits for a
 keypress nobody sends, so the window otherwise sits there indefinitely (observed after a fully-expired
-reconnect on a test pod, 2026-09-06).
+reconnect on a test pod, 2026-09-06). The file-rewrite (mtime) test retired the window ~2s into a
+still-valid reconnect — before the owner pasted the code — so the code then fell back to the running
+agent's OWN pane: it leaked into the live session and the login never completed (velsa, podway dev,
+2026-09-13). `reconnectLanded` (signals.ts) keys the retire on the hard expiry instead.
 
 #### Scenario: A reconnect that renews a still-authed login closes the wizard
 
 - **WHEN** an owner reconnects an agent whose login is still valid (renewing before it dies) and submits
   the sign-in code
-- **THEN** the sign-in wizard SHALL close back to the cockpit once the code is submitted and the login
-  reports healthy — it SHALL NOT wait for the agent to first go UNAUTHED, because a renew swaps the token
-  in place and the agent never logs out
+- **THEN** the sign-in wizard SHALL close back to the cockpit once the code is submitted AND the renewal
+  is PROVEN — the login's ill-health cleared, or its hard expiry moved forward (a fresh token) — never on
+  the agent first going UNAUTHED, because a renew swaps the token in place and the agent never logs out
+- **AND** it SHALL NOT close on a submitted code ALONE: a still-valid expiring login is healthy the whole
+  time, so closing on submit shut the wizard before the renew completed and the cockpit still showed
+  "expires soon · Reconnect", looking like nothing happened
 - **AND** a wizard loaded cold (a page refresh or a deep link into reconnect, before the agent-state poll
   has resolved) SHALL NOT treat that still-loading frame as an unauthed gap and bounce itself shut
 
 The wizard's close rule keyed only on "saw the agent go unauthed", which never happens on a renew of a
-live token — so the reconnect succeeded (authed, not needing re-auth) while the UI sat on "Signing in…"
-forever (velsa, 2026-09-13). The decision now also closes on a submitted code landing a healthy login,
-and the rule lives in one unit-tested function (`lib/agent-signin-flow.ts`).
+live token — so the reconnect succeeded while the UI sat on "Signing in…" forever; the first fix then
+closed on submit-alone, which shut it BEFORE an expiring-but-valid renew finished (velsa, podway dev,
+2026-09-13). The decision now closes only on PROOF and lives in one unit-tested function
+(`lib/agent-signin-flow.ts`: `shouldCloseSignin` / `renewConfirmed` / `expiryExtended`).
 
 #### Scenario: The whole reconnect path is exercised in one run
 

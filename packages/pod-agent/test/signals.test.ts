@@ -1,5 +1,29 @@
 import { describe, it, expect } from "vitest";
-import { parseWindowList, targetForWindows, linksFromPaneText } from "../src/signals.js";
+import { parseWindowList, targetForWindows, linksFromPaneText, reconnectLanded } from "../src/signals.js";
+
+describe("reconnectLanded — a reconnect landed only when the hard expiry moved forward", () => {
+  const now = Date.now();
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it("a fresh ~30d login over an expiring ~6d one HAS landed", () => {
+    expect(reconnectLanded(now + 6 * DAY, now + 30 * DAY)).toBe(true);
+  });
+
+  it("a routine access-token refresh (same hard expiry) has NOT landed — the mtime-bump false positive", () => {
+    // This is the exact bug: the file was rewritten (mtime bumped) but refreshTokenExpiresAt did not move.
+    expect(reconnectLanded(now + 6 * DAY, now + 6 * DAY)).toBe(false);
+    // Even a tiny forward nudge under the margin does not count as a new login.
+    expect(reconnectLanded(now + 6 * DAY, now + 6 * DAY + 60_000)).toBe(false);
+  });
+
+  it("no live credential yet = still in progress (never retire the window)", () => {
+    expect(reconnectLanded(now + 6 * DAY, null)).toBe(false);
+  });
+
+  it("no PRIOR login (first sign-in) = any credential is the new one", () => {
+    expect(reconnectLanded(null, now + 30 * DAY)).toBe(true);
+  });
+});
 
 describe("parseWindowList (cheap-tabs)", () => {
   it("parses tmux list-windows output into sorted RawWindows", () => {

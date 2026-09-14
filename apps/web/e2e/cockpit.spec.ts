@@ -181,29 +181,38 @@ test.describe("cockpit", () => {
     ).toBeVisible({ timeout: 20_000 });
   });
 
-  test("the reconnect wizard CLOSES after the code is submitted on a still-authed agent (no 'Signing in…' hang)", async ({
+  test("the reconnect wizard waits for PROOF the renew landed, then closes (no premature close, no hang)", async ({
     page,
   }) => {
     test.setTimeout(90_000);
     await login(page, "approved");
     const slug = await launchPod(page); // signed in / authed
-    // The exact shape that hung "Signing in…" forever (velsa, 2026-09-13): a reconnect on a login that is
-    // STILL authed (renewed before it died). The renew swaps the token IN PLACE, so the agent NEVER goes
-    // unauthed — the old rule waited for an unauthed gap that never came, and the wizard spun forever even
-    // though the reconnect had already succeeded (the pod was authed:true + needsReauth:false meanwhile).
-    // Surface the LIVE sign-in link (the reconnect respawns into /login; the gateway scrapes this) so the
-    // paste box appears. Scripted onto the agent's healthz — the row-based record-auth-url no-ops on an
-    // already-authed pod (recordAuthUrl guards on authedAt), which is exactly this reconnect's shape.
-    await scriptPodHealth(slug, { claudeAuthUrl: "https://claude.ai/oauth/authorize?reauth=1" });
+    // A reconnect on a still-valid EXPIRING login (velsa, podway dev, 2026-09-13): the login is healthy
+    // the WHOLE time, so closing on submit-alone shut the wizard before the renew completed and the
+    // cockpit still showed "expires soon · Reconnect". The wizard must wait for PROOF (the hard expiry
+    // jumping forward), not just a typed code.
+    const soon = Date.now() + 6 * 24 * 60 * 60 * 1000; // ~6d — the expiring baseline
+    // Script the LIVE sign-in link (row-based record-auth-url no-ops on an already-authed pod) + the
+    // near expiry the reconnect is renewing.
+    await scriptPodHealth(slug, { claudeAuthUrl: "https://claude.ai/oauth/authorize?reauth=1", expiresAt: soon });
     await page.goto(`/dashboard/pods/${slug}?wiz=reconnect:claude-code`);
 
-    // The wizard must STAY open (not bounce to the cockpit on the initial authed frame) and reach the
-    // paste box — cold-load must not read the still-loading agent poll as an unauthed gap.
+    // Stay open + reach the paste box (cold-load must not read the still-loading poll as an unauthed gap).
     await page.getByPlaceholder(/Paste the code/i).fill("e2e-reauth-code");
     await page.getByRole("button", { name: /^Connect$/i }).click();
+    await expect(page.getByText(/Signing in/i)).toBeVisible({ timeout: 20_000 });
 
-    // The fix: a submitted code on a HEALTHY login is 'done', so the wizard closes back to the cockpit
-    // instead of hanging on the spinner.
+    // Submitting the code is NOT proof: the expiry has not moved, so the wizard must HOLD — closing here
+    // is the premature-close bug.
+    await expect(page.getByRole("tab", { name: /control/i })).toHaveCount(0);
+
+    // The renew LANDS: the hard expiry jumps ~30d out (a fresh token). THAT is the proof.
+    await scriptPodHealth(slug, {
+      claudeAuthUrl: "https://claude.ai/oauth/authorize?reauth=1",
+      expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+    });
+
+    // …and now the wizard closes back to the cockpit.
     await expect(page.getByRole("tab", { name: /control/i })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText(/Signing in/i)).toHaveCount(0);
   });

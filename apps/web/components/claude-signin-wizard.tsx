@@ -7,7 +7,7 @@ import { PhaseHeader } from "@/components/phase-header";
 import { PasteCodeInput } from "@/components/paste-code-input";
 import { qk } from "@/lib/query-keys";
 import { getAgentStates, getPodAuthUrl, reconnectAgent, sendAgentSigninCode } from "@/lib/actions";
-import { shouldCloseSignin } from "@/lib/agent-signin-flow";
+import { shouldCloseSignin, renewConfirmed, expiryExtended } from "@/lib/agent-signin-flow";
 
 /**
  * Full-page takeover for Claude sign-in / reconnect (agent-control-wizards). The cockpit early-returns
@@ -108,6 +108,20 @@ export default function ClaudeSigninWizard({
   // to the card (owner, 2026-08-26). Only treat `authed` as "done" once we've seen the agent go unauthed
   // first (the reconnect landed); a plain sign-in has nothing to un-auth, so it advances immediately.
   const sawUnauthed = useRef(mode !== "reconnect");
+  // Baselines for "did the renew actually LAND?" — proof, never just "a code was typed". A still-valid
+  // expiring login is healthy the whole time, so closing on submit-alone shut the wizard before the renew
+  // completed and the cockpit still showed "expires soon · Reconnect" (velsa, podway dev, 2026-09-13).
+  // Proof is a positive change vs the wizard's opening state: the ill-health CLEARED, or the hard expiry
+  // moved FORWARD (a fresh login resets the ~30d clock).
+  const baseExpiry = useRef<number | null>(null);
+  const unhealthyEver = useRef(false);
+  const curExpiry = agent?.expiresAt ?? null;
+  useEffect(() => {
+    if (!agentsLoaded) return;
+    if (baseExpiry.current == null && curExpiry != null) baseExpiry.current = curExpiry;
+    if (loginUnhealthy) unhealthyEver.current = true;
+  }, [agentsLoaded, curExpiry, loginUnhealthy]);
+
   useEffect(() => {
     // Ignore the pre-first-poll frame: `authed` is a phantom false until the agent state loads, and
     // treating it as an unauthed gap bounces a cold-loaded reconnect wizard (see agentsLoaded above).
@@ -116,15 +130,18 @@ export default function ClaudeSigninWizard({
       sawUnauthed.current = true;
       return;
     }
-    // The close RULE lives in lib/agent-signin-flow.ts (unit-tested). Close when EITHER we saw an
-    // unauthed gap (dead-token reconnect / plain sign-in land on authed), OR the owner submitted a
-    // code (`sent`) and the login is now HEALTHY — the fix for "Signing in… hangs forever" (a reconnect
-    // on a still-authed/expiring token never goes unauthed, so the old sawUnauthed-only rule never fired
-    // even though the renew succeeded; velsa 2026-09-13, pod was authed:true + needsReauth:false).
-    if (shouldCloseSignin({ authed, loginUnhealthy, sawUnauthed: sawUnauthed.current, sent })) {
+    // The close RULE lives in lib/agent-signin-flow.ts (unit-tested). Close when EITHER we saw an unauthed
+    // gap (dead-token reconnect / plain sign-in land on authed), OR the owner submitted a code AND the
+    // renewal is PROVEN — the login's ill-health cleared, or its hard expiry jumped forward. NOT on
+    // submit alone: that closed the wizard before an expiring-but-valid renew actually completed.
+    const confirmed = renewConfirmed({
+      unhealthyCleared: unhealthyEver.current && !loginUnhealthy,
+      expiryExtended: expiryExtended(baseExpiry.current, curExpiry),
+    });
+    if (shouldCloseSignin({ authed, sawUnauthed: sawUnauthed.current, sent, renewConfirmed: confirmed })) {
       (onComplete ?? onClose)();
     }
-  }, [agentsLoaded, authed, loginUnhealthy, sent, onComplete, onClose]);
+  }, [agentsLoaded, authed, loginUnhealthy, curExpiry, sent, onComplete, onClose]);
 
   // Stall recovery. A DEAD (bare-shell) agent — e.g. after `/logout`, or a crash — produces NO
   // sign-in link, and signin mode (unlike reconnect) never restarts it, so the wizard would hang on

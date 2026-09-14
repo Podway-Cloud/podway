@@ -31,6 +31,25 @@ export function credentialState(agent: string, credsPath: string): {
   }
 }
 
+/**
+ * Has a requested reconnect actually LANDED a new login? True only when the credential's hard expiry
+ * (refreshTokenExpiresAt) has moved meaningfully FORWARD from where it was when the reconnect began —
+ * a fresh login resets the ~30-day clock. A routine access-token refresh rewrites the credential file
+ * (bumping its mtime) but does NOT move the hard expiry, so an mtime-based "did it land?" check fired
+ * within seconds and retired the sign-in window before the owner could paste the code — the code then
+ * fell back to the running agent's own pane and the login never completed (velsa, podway dev,
+ * 2026-09-13). `marginMs` only rejects jitter: a real reconnect adds WEEKS.
+ */
+export function reconnectLanded(
+  baseExpiresAt: number | null,
+  curExpiresAt: number | null,
+  marginMs = 60 * 60 * 1000, // 1h
+): boolean {
+  if (curExpiresAt == null) return false; // no live credential yet — the reconnect is still in progress
+  if (baseExpiresAt == null) return true; // there was no prior login to renew; any credential is the new one
+  return curExpiresAt > baseExpiresAt + marginMs;
+}
+
 /** The hard-expiry epoch (ms) from a credential blob, or null when the shape doesn't expose one.
  * Same fields credentialExpired reads — factored so both the expired check and the "expiring soon"
  * fault share ONE definition of where the ceiling lives. */

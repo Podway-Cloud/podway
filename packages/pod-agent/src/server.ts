@@ -18,6 +18,7 @@ import {
   capturePane,
   paneHash,
   credentialState,
+  reconnectLanded,
   sessionStateFromDisk,
   codexActivityFromDisk,
   lastAgentActivityMs,
@@ -364,7 +365,7 @@ export class AgentServer {
    * Cleared when the reconnect resolves (a new credential lands, or the flow gives up), so this can
    * never keep a stale sign-in link alive on a healthy pod.
    */
-  private readonly reconnectInFlight = new Map<string, number>();
+  private readonly reconnectInFlight = new Map<string, { startedAt: number; baseExpiry: number | null }>();
   /**
    * The tmux window a RECONNECT drives its `/login` in — never the agent's own pane.
    *
@@ -1131,7 +1132,13 @@ export class AgentServer {
             // It belongs HERE, in /agent/relogin. It was first written into /agent/restart by mistake,
             // because the anchor used to place it appears in both endpoints — so the reconnect path never
             // set it and the spinner survived every other fix (owner hit it on test:1, 2026-09-06).
-            this.reconnectInFlight.set(agent, Date.now());
+            // Capture the OLD login's hard expiry NOW (before guardCredentialsThroughLogin touches the
+            // file): the reconnect has "landed" only once a fresh login moves this forward — see
+            // reconnectLanded, which fixes the sign-in window being retired on a mere token refresh.
+            this.reconnectInFlight.set(agent, {
+              startedAt: Date.now(),
+              baseExpiry: credentialState(agent, this.credPathFor(agent)).expiresAt,
+            });
             this.agentAuthValues.delete(agent);   // never hand back a link from a previous attempt
             if (w == null) return reply(200, { ok: false, reason: "no-window" });
             const target = `${this.session.sessionName}:${w}`;
@@ -2464,31 +2471,31 @@ export class AgentServer {
       // Is the OWNER mid-reconnect on this agent? Then a credentials file existing means nothing:
       // that is the NORMAL state for renewing a login that is valid but expiring, and precisely
       // when the sign-in link must be surfaced. Window-limited so an abandoned attempt goes quiet.
-      const startedAt = this.reconnectInFlight.get(id);
+      const inflight = this.reconnectInFlight.get(id);
+      const startedAt = inflight?.startedAt;
       const reconnecting =
         startedAt != null && Date.now() - startedAt < AgentServer.RECONNECT_WINDOW_MS;
       if (startedAt != null && !reconnecting) this.reconnectInFlight.delete(id);
-      // A NEW credential landing is the reconnect succeeding: stop surfacing the link immediately
-      // rather than letting the window run out, or a dead sign-in URL stays on screen for minutes
-      // after the owner has already signed in.
-      if (reconnecting) {
-        try {
-          const st = statSync(this.credPathFor(id));
-          if (st.mtimeMs > (startedAt as number)) {
-            this.reconnectInFlight.delete(id);
-            // …and CLOSE the sign-in window. claude ends a successful login on
-            // "Login successful. Press Enter to continue…" and waits for a keypress nobody is going to
-            // send, so the window sits there forever and the owner is left with a stray `signin` tab in
-            // their pod terminal (seen after Flow B on test:1, 2026-09-06).
-            //
-            // Send the Enter it is waiting for, then kill the window: it exists only to host a login, and
-            // that login is done. Best-effort — a window that will not close must never affect the
-            // reconnect, which has already succeeded by the time we get here.
-            void this.closeSigninWindow();
-            this.agentAuthValues.delete(id);
-          }
-        } catch {
-          // no credentials file yet — the reconnect is still in progress
+      // A reconnect has LANDED only when the credential's HARD expiry moved forward — a fresh login
+      // resets the ~30-day clock. This used to key on the credential file's MTIME, but a still-valid
+      // login refreshes its access token every few minutes, rewriting the file and bumping mtime
+      // WITHOUT moving the hard expiry — so the sign-in window was retired ~2s in, before the owner
+      // pasted the code, and the code then fell back to the AGENT's own pane: it leaked into the running
+      // session and the login never completed (velsa, podway dev, 2026-09-13). Compare the expiry.
+      if (reconnecting && inflight) {
+        const cur = credentialState(id, this.credPathFor(id)).expiresAt;
+        if (reconnectLanded(inflight.baseExpiry, cur)) {
+          this.reconnectInFlight.delete(id);
+          // …and CLOSE the sign-in window. claude ends a successful login on
+          // "Login successful. Press Enter to continue…" and waits for a keypress nobody is going to
+          // send, so the window sits there forever and the owner is left with a stray `signin` tab in
+          // their pod terminal (seen after Flow B on test:1, 2026-09-06).
+          //
+          // Send the Enter it is waiting for, then kill the window: it exists only to host a login, and
+          // that login is done. Best-effort — a window that will not close must never affect the
+          // reconnect, which has already succeeded by the time we get here.
+          void this.closeSigninWindow();
+          this.agentAuthValues.delete(id);
         }
       }
       if (existsSync(this.credPathFor(id)) && !reconnecting) this.agentAuthValues.delete(id);
