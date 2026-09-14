@@ -11,7 +11,7 @@ import { harnessEnabled } from "./agent-harness";
 import QRCode from "qrcode";
 import { requireApprovedUser } from "./access";
 import { isAdmin } from "./access-rules";
-import { ACCOUNT_RAM_GB } from "@podway/shared/tiers";
+import { ACCOUNT_RAM_GB, DEFAULT_POD_SIZE, maxSize, type PodSize } from "@podway/shared/tiers";
 import { getConnectionToken } from "./github-connect";
 import { getEnvironmentDetail } from "./environments";
 import { getPodService, isProvisioningEnabled, localPreviewUrl } from "./pod-service";
@@ -320,6 +320,11 @@ export async function launchPod(
     // token (the in-pod `gh` login runs only once the pod exists), so an OSS BYO pod launches with
     // an empty ~/work and the owner connects GitHub + clones from the pod afterward.
     const detail = await getEnvironmentDetail(environmentName).catch(() => null);
+    // Apps are cloud-only: their docker-compose deploy can't run on the self-host (OSS) edition, where a
+    // pod IS a container (docker-in-docker fails). Refuse rather than launch a broken app pod there.
+    if (detail?.kind === "app" && editionOss()) {
+      return { error: "Apps aren't available on the self-host edition — they need Docker, which the self-host pod model can't provide." };
+    }
     if (detail?.byoRepo && !config?.githubRepo && !editionOss()) {
       return { error: "Pick the repository you want to work on before launching." };
     }
@@ -341,7 +346,11 @@ export async function launchPod(
       name: config?.name,
       secrets: config?.secrets,
       lifecycle: config?.lifecycle as never,
-      size: config?.size as never,
+      // Floor the size to the env's minimum server-side (defense-in-depth: a below-floor POST bypasses
+      // the picker). An app + DB stack won't run below its declared floor.
+      size: (detail?.minSize
+        ? maxSize((config?.size as PodSize) ?? DEFAULT_POD_SIZE, detail.minSize)
+        : config?.size) as never,
       // Self-host only: honored for `local` pods, ignored for cloud tiers (service enforces).
       cpus: editionOss() ? config?.cpus : undefined,
       memoryMb: editionOss() ? config?.memoryMb : undefined,

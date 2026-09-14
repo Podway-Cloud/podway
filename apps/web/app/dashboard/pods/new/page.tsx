@@ -70,6 +70,7 @@ export default async function NewPodPage({
         env={detail.name}
         secrets={detail.secrets}
         byoRepo={detail.byoRepo}
+        minSize={detail.minSize}
         agentIds={detail.agentIds}
         enabled={isProvisioningEnabled()}
         initialStep={step}

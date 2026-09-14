@@ -131,6 +131,11 @@ export const EnvironmentSchema = z
      * the user can change; `{ default, locked: true }` forces it (a Discord-bot env
      * is `{ default: always-on, locked: true }`). */
     lifecycle: LifecycleDecl.default("auto"),
+    /** The smallest pod size this env's prebuilt stack runs correctly on — the launch picker defaults
+     * to at least this and refuses below it. An app that runs a service plus its database (n8n +
+     * Postgres) needs more memory than a static workspace; a workspace omits this and launches at the
+     * global default, as today. Must name a known pod size. */
+    minSize: z.enum(["mini", "s", "m", "l", "xl"]).optional(),
     /** Default preview visibility for pods of this env. `public` = the pod's
      * preview URL is reachable by anyone with the link from launch (for envs
      * whose whole point is a shareable page — e.g. a landing). Private surfaces

@@ -4,6 +4,7 @@ import { Code2, FolderGit2 } from "lucide-react";
 import { listEnvironments, type CatalogEntry } from "@/lib/environments";
 import { LANDING_PLAYBOOKS } from "@/lib/landing-playbooks";
 import { isProvisioningEnabled } from "@/lib/pod-service";
+import { editionOss } from "@/lib/session";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,9 @@ export default async function EnvGallery() {
   const workspaces = curate(all.filter((e) => e.kind === "workspace"));
   const apps = curate(all.filter((e) => e.kind === "app"));
   const enabled = isProvisioningEnabled();
+  // Apps are CLOUD-ONLY: their docker-compose deploy can't run on the self-host (OSS) OCI-container
+  // edition (docker-in-docker fails), so hide the Apps tab entirely there.
+  const showApps = !editionOss();
 
   // Playbooks are hidden for now (owner call) — only Workspaces + Apps surface here.
   return (
@@ -54,12 +58,14 @@ export default async function EnvGallery() {
         <EnvGrid envs={workspaces} variant="workspace" enabled={enabled} emptyText="No workspaces available yet." />
       }
       apps={
-        <EnvGrid
-          envs={apps}
-          variant="app"
-          enabled={enabled}
-          emptyText="No apps available yet — self-hosted OSS apps Podway deploys and keeps up to date for you."
-        />
+        showApps ? (
+          <EnvGrid
+            envs={apps}
+            variant="app"
+            enabled={enabled}
+            emptyText="No apps available yet — self-hosted OSS apps Podway deploys and keeps up to date for you."
+          />
+        ) : undefined
       }
     />
   );

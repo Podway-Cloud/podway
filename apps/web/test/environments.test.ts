@@ -55,6 +55,8 @@ describe("listEnvironments", () => {
   it("classifies BYO Project as a workspace and keeps catalog pitches concise", async () => {
     const list = await listEnvironments(repoEnvs);
     expect(list.find((e) => e.name === "byo-project")?.kind).toBe("workspace");
+    expect(list.find((e) => e.name === "n8n")?.kind).toBe("app");
+    expect(list.find((e) => e.name === "n8n")?.minSize).toBe("s");
 
     for (const name of ["byo-project", "doc-qa", "first-10-customers", "morning-ops-robot"]) {
       const entry = list.find((e) => e.name === name);

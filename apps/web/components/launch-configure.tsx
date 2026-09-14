@@ -19,7 +19,7 @@ import { openSupportChat } from "@/lib/support-chat";
 import { GithubRepoField } from "@/components/github-repo-field";
 import AddCardButton from "@/components/add-card-dialog";
 import { SIGNUP_CREDIT_USD } from "@/lib/pricing-catalog";
-import { DEFAULT_POD_SIZE, POD_TIERS, type PodSize } from "@podway/shared/tiers";
+import { DEFAULT_POD_SIZE, POD_SIZES, POD_TIERS, maxSize, sizeAtLeast, type PodSize } from "@podway/shared/tiers";
 import type { DeclaredSecret } from "@/lib/environments";
 import type { EnvPair } from "@/lib/env-paste";
 
@@ -90,8 +90,11 @@ export default function LaunchConfigure({
   billingEnabled = false,
   creditCents = 0,
   hasCard = false,
+  minSize,
 }: {
   env: string;
+  /** The env's minimum pod size — the picker floors to it (an app + DB needs more than a workspace). */
+  minSize?: PodSize;
   secrets: DeclaredSecret[];
   byoRepo?: boolean;
   /** Agent CLI ids the env declares (multi-agent-plan.md slice 3). The picker shows
@@ -143,7 +146,8 @@ export default function LaunchConfigure({
       nameRef.current?.select();
     }
   }, [deeplink]);
-  const [size, setSize] = useState<PodSize>(DEFAULT_POD_SIZE);
+  // Floor the starting size to the env's minimum (an app + DB stack won't run on the global default).
+  const [size, setSize] = useState<PodSize>(minSize ? maxSize(DEFAULT_POD_SIZE, minSize) : DEFAULT_POD_SIZE);
   // Self-host resource limits (self-host-pod-sizing); null ⇒ unlimited, the OSS default.
   const [cpus, setCpus] = useState<number | null>(null);
   const [memoryMb, setMemoryMb] = useState<number | null>(null);
@@ -205,7 +209,7 @@ export default function LaunchConfigure({
     }
     if (draft) {
       if (typeof draft.name === "string") setName(draft.name);
-      if (draft.size) setSize(draft.size);
+      if (draft.size) setSize(minSize ? maxSize(draft.size, minSize) : draft.size);
       if (typeof draft.cpus === "number" || draft.cpus === null) setCpus(draft.cpus ?? null);
       if (typeof draft.memoryMb === "number" || draft.memoryMb === null)
         setMemoryMb(draft.memoryMb ?? null);
@@ -434,7 +438,12 @@ export default function LaunchConfigure({
                     onMemoryMb={setMemoryMb}
                   />
                 ) : (
-                  <SizePicker value={size} onChange={setSize} />
+                  <SizePicker
+                    value={size}
+                    onChange={setSize}
+                    disabledSizes={minSize ? POD_SIZES.filter((s) => !sizeAtLeast(s, minSize)) : []}
+                    note={minSize ? (s) => (!sizeAtLeast(s, minSize) ? `${POD_TIERS[minSize].label} minimum` : null) : undefined}
+                  />
                 )}
                 {!oss && (
                   <p className="text-[13px] text-muted-foreground">

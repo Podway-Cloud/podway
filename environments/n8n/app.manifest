@@ -1,0 +1,14 @@
+# n8n's per-app config for the shared app-admin engine (environments/_shared/app-admin).
+# This + compose.yaml + the kickoff charter is ALL that is n8n-specific — the engine is shared.
+APP_PROJECT=n8n
+APP_SERVICE=n8n
+APP_IMAGE_VAR=N8N_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+DB_TYPE=postgres
+DB_SERVICE=postgres
+DB_USER=n8n
+DB_NAME=n8n
+APP_DATA_VOLUMES="n8n"
+# n8n's encryption key MUST never change across upgrades or every stored credential becomes
+# undecryptable — the engine pins its hash and refuses a change.
+KEYGUARD_VAR=N8N_ENCRYPTION_KEY

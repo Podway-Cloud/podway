@@ -13,8 +13,9 @@ export default function EnvTabs({
   apps,
 }: {
   workspaces: React.ReactNode;
-  /** "Apps" — self-hosted OSS apps Podway deploys + maintains for you. */
-  apps: React.ReactNode;
+  /** "Apps" — self-hosted OSS apps Podway deploys + maintains for you. Omitted (null) on the self-host
+   * edition, where docker-compose apps can't run — the Apps tab is then hidden entirely. */
+  apps?: React.ReactNode;
 }) {
   return (
     <Tabs defaultValue="workspaces" data-testid="env-gallery">
@@ -22,16 +23,20 @@ export default function EnvTabs({
         <TabsTrigger value="workspaces" className="flex-none px-0 pb-2 text-[17px]">
           Workspaces
         </TabsTrigger>
-        <TabsTrigger value="apps" className="flex-none px-0 pb-2 text-[17px]">
-          Apps
-        </TabsTrigger>
+        {apps != null && (
+          <TabsTrigger value="apps" className="flex-none px-0 pb-2 text-[17px]">
+            Apps
+          </TabsTrigger>
+        )}
       </TabsList>
       <TabsContent value="workspaces" className="pt-5">
         {workspaces}
       </TabsContent>
-      <TabsContent value="apps" className="pt-5">
-        {apps}
-      </TabsContent>
+      {apps != null && (
+        <TabsContent value="apps" className="pt-5">
+          {apps}
+        </TabsContent>
+      )}
     </Tabs>
   );
 }

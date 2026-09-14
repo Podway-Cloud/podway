@@ -34,6 +34,8 @@ export interface CatalogEntry {
    * `playbook` = an outcome tile, currently hidden. (The former `engine` kind is normalized to
    * `workspace` on read.) */
   kind: "playbook" | "workspace" | "app";
+  /** The smallest pod size this env's stack runs on; the picker floors to it. Absent = global default. */
+  minSize?: "mini" | "s" | "m" | "l" | "xl";
   description: string;
   author: string | null;
   tags: string[];
@@ -132,6 +134,7 @@ export async function listEnvironments(root = getEnvironmentsRoot()): Promise<Ca
       name: env.name,
       title: meta.title ?? env.name,
       kind: normalizeKind(env.kind),
+      minSize: env.minSize,
       description: meta.description ?? "",
       author: meta.author ?? null,
       tags: meta.tags ?? [],
@@ -187,6 +190,7 @@ export async function getEnvironmentDetail(
     name: resolved.name,
     title: meta.title ?? resolved.name,
     kind: normalizeKind(result.value.kind),
+    minSize: result.value.minSize,
     description: meta.description ?? "",
     author: meta.author ?? null,
     tags: meta.tags ?? [],

@@ -71,6 +71,16 @@ export function isPodSize(x: unknown): x is PodSize {
   return x === "mini" || x === "s" || x === "m" || x === "l" || x === "xl";
 }
 
+/** The larger of two sizes by the mini→xl order. Used to floor a launch to an env's minimum size. */
+export function maxSize(a: PodSize, b: PodSize): PodSize {
+  return POD_SIZES.indexOf(a) >= POD_SIZES.indexOf(b) ? a : b;
+}
+
+/** Is `size` at least `floor` in the mini→xl order? */
+export function sizeAtLeast(size: PodSize, floor: PodSize): boolean {
+  return POD_SIZES.indexOf(size) >= POD_SIZES.indexOf(floor);
+}
+
 /**
  * Resolve a stored (size, diskGb) to the concrete resources a provider needs.
  * diskGb is passed through (it's the high-water mark and may be larger than the

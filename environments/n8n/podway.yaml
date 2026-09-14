@@ -5,6 +5,8 @@ name: n8n
 # Podway DEPLOYS and KEEPS UPDATED for the user. n8n is the flagship. The pod runs the app with
 # `docker compose` (Docker is baked into the cloud pod-base image); the agent is its always-on admin.
 kind: app
+# n8n runs a service + Postgres — needs ≥ Small (Mini 1GB OOMs the two-container stack).
+minSize: s
 
 metadata:
   title: "n8n"
