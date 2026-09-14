@@ -107,12 +107,14 @@ export const EnvironmentSchema = z
   .object({
     apiVersion: z.literal("podway/v0"),
     name: kebab,
-    /** Marketplace model (docs/strategy/marketplace-playbooks.md): `playbook` = an outcome tile
-     * on the demand catalog; `engine` = invisible capability substrate a playbook rides (hidden
-     * from the catalog); `app` = a self-hosted OSS app Podway deploys AND maintains for the user
-     * (the "Apps" tab — n8n, Ghost, Cal.com, …). Defaults to `playbook` so an unmarked env stays a
-     * launchable tile. */
-    kind: z.enum(["playbook", "engine", "app"]).default("playbook"),
+    /** Catalog kind. `workspace` = an open-ended coding environment shown in the catalog's
+     * "Workspaces" tab (BYO Project, Next.js Starter); `app` = a self-hosted OSS app Podway deploys
+     * AND maintains (the "Apps" tab — n8n, Ghost, Cal.com, …); `playbook` = an outcome tile, currently
+     * hidden from the catalog (owner call). `engine` is the DEPRECATED former name for `workspace`,
+     * accepted here for backward-compat and normalized to `workspace` on read (see apps/web/lib/
+     * environments.ts). Defaults to `playbook` so an unmarked env stays a (hidden) tile, not a
+     * workspace. */
+    kind: z.enum(["playbook", "engine", "workspace", "app"]).default("playbook"),
     /** Which environments/_shared/<bucket>/.claude layers to inherit, in order,
      * before the env's own .claude (which wins). `universal` = every pod;
      * `web-app` = the shadcn/frontend-design/webapp kit for the web engines.

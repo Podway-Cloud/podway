@@ -30,9 +30,10 @@ export interface CatalogEntry {
   name: string;
   /** Human display name for the catalog; falls back to `name` when unset. */
   title: string;
-  /** `playbook` = demand tile; `engine` = invisible substrate (hidden from the
-   * demand catalog). See docs/strategy/marketplace-playbooks.md. */
-  kind: "playbook" | "engine" | "app";
+  /** `workspace` = an open-ended coding env shown in the "Workspaces" tab; `app` = a self-hosted app;
+   * `playbook` = an outcome tile, currently hidden. (The former `engine` kind is normalized to
+   * `workspace` on read.) */
+  kind: "playbook" | "workspace" | "app";
   description: string;
   author: string | null;
   tags: string[];
@@ -41,6 +42,14 @@ export interface CatalogEntry {
   capability: Capability;
   /** Lifecycle policy: the env default and whether it's locked (drives the picker). */
   lifecycle: EnvLifecycle;
+}
+
+/** Canonical catalog kind. `engine` is the DEPRECATED former name for `workspace` — accepted from old
+ * / external env definitions and normalized here, so nothing downstream ever sees `engine`. Unmarked
+ * envs default to `playbook` (a hidden tile), matching the schema default. */
+function normalizeKind(raw: "playbook" | "engine" | "workspace" | "app" | undefined): "playbook" | "workspace" | "app" {
+  if (raw === "engine") return "workspace";
+  return raw ?? "playbook";
 }
 
 function normalizeLifecycle(raw: unknown): EnvLifecycle {
@@ -122,7 +131,7 @@ export async function listEnvironments(root = getEnvironmentsRoot()): Promise<Ca
     out.push({
       name: env.name,
       title: meta.title ?? env.name,
-      kind: env.kind ?? "playbook",
+      kind: normalizeKind(env.kind),
       description: meta.description ?? "",
       author: meta.author ?? null,
       tags: meta.tags ?? [],
@@ -177,7 +186,7 @@ export async function getEnvironmentDetail(
   return {
     name: resolved.name,
     title: meta.title ?? resolved.name,
-    kind: (result.value.kind ?? "playbook") as "playbook" | "engine" | "app",
+    kind: normalizeKind(result.value.kind),
     description: meta.description ?? "",
     author: meta.author ?? null,
     tags: meta.tags ?? [],

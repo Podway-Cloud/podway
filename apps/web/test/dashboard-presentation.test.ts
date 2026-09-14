@@ -21,8 +21,11 @@ describe("dashboard presentation contract", () => {
 
   it("uses customer-facing catalog labels and proof instead of internal taxonomy", () => {
     const gallery = source("components/env-gallery.tsx");
-    expect(gallery).toContain("Start playbook");
+    // Only workspaces + apps surface today (playbooks are hidden), so those are the customer-facing
+    // labels; the old "Start playbook" label was retired with that hiding.
     expect(gallery).toContain("Launch workspace");
+    expect(gallery).toContain("Launch app");
+    expect(gallery).not.toContain("Start playbook");
     expect(gallery).toContain("API key"); // the one meta kept on a card is a required secret
     // Agents are no longer labelled per-card (every env ships Claude + Codex — noise).
     expect(gallery).not.toContain('e.capability.agents.join(" + ")');

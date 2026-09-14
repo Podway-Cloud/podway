@@ -108,7 +108,7 @@ export default async function Dashboard() {
         <div className="flex flex-col items-center gap-4 rounded-2xl border border-dashed border-border p-10 text-center">
           <h2 className="text-lg font-semibold tracking-tight">No pods yet</h2>
           <p className="text-sm text-muted-foreground">
-            Choose a playbook or workspace to create your first pod.
+            Choose a workspace or app to create your first pod.
           </p>
           <Button asChild>
             <Link href="/dashboard/create">Create your first pod</Link>

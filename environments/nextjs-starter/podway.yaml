@@ -6,7 +6,7 @@ name: nextjs-starter
 # catalog and surfaced only to creators/devs. See docs/strategy/marketplace-playbooks.md.
 # (Directory rename nextjs-starter -> web-app is deferred — see the postponed
 # list in docs/plans/pre-alpha-plan.md.)
-kind: engine
+kind: workspace
 
 metadata:
   title: "Next.js Starter"

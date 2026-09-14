@@ -101,9 +101,9 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
             <p className="text-sm text-muted-foreground">
               {envGone ? (
                 <>
-                  Its environment <strong>{pod.environmentName}</strong> no longer exists — it was
-                  renamed or removed, so there’s nothing to rebuild from. Delete this pod and launch a
-                  new one from the current catalog.
+                  The workspace or app it was created from (<strong>{pod.environmentName}</strong>) no
+                  longer exists — it was renamed or removed, so there’s nothing to rebuild from. Delete
+                  this pod and launch a new one from the current catalog.
                 </>
               ) : (
                 <>

@@ -11,7 +11,7 @@ import EnvTabs from "@/components/env-tabs";
 
 /**
  * The environments marketplace, split into two TABS (Workspaces is the default):
- * - Workspaces (kind: engine) — open-ended coding environments (bring your own
+ * - Workspaces (kind: workspace) — open-ended coding environments (bring your own
  *   repo, or start from a prepped stack). Visually distinct "tool" cards so they
  *   don't read like consumer playbooks.
  * - Playbooks (kind: playbook) — guided, outcome-driven engagements.
@@ -43,7 +43,7 @@ const WORKSPACE_TAG_LABELS: Record<string, string> = {
 
 export default async function EnvGallery() {
   const all = await listEnvironments();
-  const engines = curate(all.filter((e) => e.kind === "engine"));
+  const workspaces = curate(all.filter((e) => e.kind === "workspace"));
   const apps = curate(all.filter((e) => e.kind === "app"));
   const enabled = isProvisioningEnabled();
 
@@ -51,7 +51,7 @@ export default async function EnvGallery() {
   return (
     <EnvTabs
       workspaces={
-        <EnvGrid envs={engines} variant="engine" enabled={enabled} emptyText="No workspaces available yet." />
+        <EnvGrid envs={workspaces} variant="workspace" enabled={enabled} emptyText="No workspaces available yet." />
       }
       apps={
         <EnvGrid
@@ -72,7 +72,7 @@ function EnvGrid({
   emptyText,
 }: {
   envs: CatalogEntry[];
-  variant: "playbook" | "engine" | "app";
+  variant: "playbook" | "workspace" | "app";
   enabled: boolean;
   emptyText?: string;
 }) {
@@ -99,18 +99,18 @@ function EnvCard({
   enabled,
 }: {
   env: CatalogEntry;
-  variant: "playbook" | "engine" | "app";
+  variant: "playbook" | "workspace" | "app";
   enabled: boolean;
 }) {
-  const isEngine = variant === "engine";
+  const isWorkspace = variant === "workspace";
   const isApp = variant === "app";
-  // Engines (workspaces) and apps both render as plain tiles (no concept art); only playbooks
-  // are illustrated.
-  const plain = isEngine || isApp;
+  // Workspaces and apps both render as plain tiles (no concept art); only playbooks are illustrated.
+  const plain = isWorkspace || isApp;
   const media = (LANDING_PLAYBOOKS as Record<string, CardMedia>)[e.name];
   const proofPoints = DASHBOARD_PROOF_POINTS[e.name] ??
     e.tags.slice(0, 3).map((tag) => WORKSPACE_TAG_LABELS[tag] ?? tag);
-  const primaryLabel = isApp ? "Launch app" : isEngine ? "Launch workspace" : "Start playbook";
+  // Only workspaces + apps surface today (playbooks are hidden), so those are the only labels needed.
+  const primaryLabel = isApp ? "Launch app" : "Launch workspace";
   const TileIcon = e.name === "byo-project" ? FolderGit2 : Code2;
   return (
     <Card

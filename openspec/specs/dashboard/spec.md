@@ -263,13 +263,14 @@ definition and surfacing its display metadata. Each entry SHALL show a human **t
 (`metadata.title`, falling back to the kebab-case `name` when unset) rather than the raw id; the
 `name` remains the stable id used in URLs. Invalid definitions SHALL be skipped, not crash the catalog.
 
-The catalog SHALL group environments by `kind` into three tabs: **Workspaces** (`kind: engine` —
-open-ended coding environments, e.g. bring-your-own-repo), **Playbooks** (`kind: playbook` —
-guided, outcome-driven), and **Apps** (`kind: app` — a self-hosted OSS app Podway deploys and keeps
-updated for the user, e.g. n8n). **Workspaces is the default (active) tab.** All three kinds are
-launchable; workspace and app cards are rendered with a visually distinct treatment so they don't
-read as consumer playbooks. (Engine envs were previously omitted from the catalog entirely; they are
-now surfaced under Workspaces.)
+The catalog SHALL group environments by `kind`: **Workspaces** (`kind: workspace` — open-ended coding
+environments, e.g. bring-your-own-repo) and **Apps** (`kind: app` — a self-hosted OSS app Podway
+deploys and keeps updated for the user, e.g. n8n) SHALL each be their own tab; **Playbooks**
+(`kind: playbook` — guided, outcome-driven) are hidden from the catalog for now (owner call).
+**Workspaces is the default (active) tab.** Workspace and app cards are rendered with a visually
+distinct treatment so they don't read as consumer playbooks. The former `kind: engine` is the
+deprecated name for `workspace` and SHALL be accepted and normalized to `workspace` on read, so
+existing env definitions keep working.
 
 The page SHALL frame both options as ways to create a pod without promising that the agent is
 already authenticated or that an app preview is already running. Catalog cards SHALL use concise

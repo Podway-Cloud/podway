@@ -5,7 +5,7 @@ name: byo-project
 # guided orientation makes the workspace safe to enter, but the ongoing job is not
 # a finite outcome playbook. Contributing to someone ELSE's repo via PR remains the
 # separate OSS-contribution playbook (docs/strategy/oss-contribution-playbook.md).
-kind: engine
+kind: workspace
 
 metadata:
   title: "BYO Project"
