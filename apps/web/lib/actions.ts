@@ -6,7 +6,7 @@ import { getPostHogClient } from "./posthog-server";
 import type { MetricsSnapshot, PodIssue } from "@podway/shared";
 import type { PodLiveSignals, ClaudeSettings } from "@podway/control-plane";
 import { requireUser, editionOss } from "./session";
-import { syncOwnerBilling } from "./billing-actions";
+import { syncOwnerBilling } from "./billing-sync";
 import { harnessEnabled } from "./agent-harness";
 import QRCode from "qrcode";
 import { requireApprovedUser } from "./access";

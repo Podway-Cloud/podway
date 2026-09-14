@@ -56,6 +56,22 @@ user. Signed-in but unapproved users SHALL be shown a pending state, not the pro
 - **THEN** the action itself SHALL require an approved user and refuse to provision — the approval
   check SHALL NOT rely solely on the page gate
 
+#### Scenario: Every resource-CREATING or money-moving action enforces approval, not just provisioning
+
+- **WHEN** a signed-in but unapproved user directly invokes a Server Action that creates external
+  state or moves money without a pre-existing owned resource — starting a card-on-file flow, marking
+  a card saved (which grants signup/referral credit), or any other create/spend action
+- **THEN** that action SHALL require an approved user, the same as pod provisioning — an action that
+  only reads or mutates a resource the caller must already OWN may gate on sign-in alone, since a
+  pod-less unapproved user owns nothing to act on
+- **AND** an internal helper that takes a caller-supplied owner id (e.g. reconciling a billing
+  subscription for an arbitrary owner) SHALL NOT be a directly-invocable Server Action — it SHALL live
+  in a server-only module, never exported from a `"use server"` file, so it cannot be POSTed against
+  another owner's account
+
+These are inert while billing is unconfigured, but open the moment Stripe is enabled — the pre-alpha
+window this gate exists for (audit H2 residual, 2026-09-14).
+
 ### Requirement: Admin approval page
 
 An admin-only page SHALL list users (pending first) and let an admin approve or revoke access.

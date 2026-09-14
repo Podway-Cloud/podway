@@ -9,16 +9,48 @@ import { fileURLToPath } from "node:url";
  * — launchPod — MUST gate on requireApprovedUser (not bare requireUser), or an authenticated-
  * but-unapproved user can provision pods straight past the invite gate.
  */
-const src = readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "lib", "actions.ts"),
-  "utf8",
-);
+const libDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "lib");
+const src = readFileSync(path.join(libDir, "actions.ts"), "utf8");
+const billingActions = readFileSync(path.join(libDir, "billing-actions.ts"), "utf8");
+const billingSync = readFileSync(path.join(libDir, "billing-sync.ts"), "utf8");
+
+/** Slice one `export async function <name>(` body out of a source string. */
+function fnBody(source: string, name: string): string {
+  const start = source.indexOf(`export async function ${name}`);
+  expect(start, `${name} must exist`).toBeGreaterThan(-1);
+  const rest = source.slice(start);
+  return rest.slice(0, rest.indexOf("\n}\n") + 2);
+}
 
 describe("server-action approval gate (H2)", () => {
   it("launchPod gates on requireApprovedUser, not bare requireUser", () => {
-    const body = src.slice(src.indexOf("export async function launchPod"));
-    const fn = body.slice(0, body.indexOf("\n}\n") + 2);
+    const fn = fnBody(src, "launchPod");
     expect(fn).toContain("requireApprovedUser()");
     expect(fn).not.toMatch(/const user = await requireUser\(\)/);
+  });
+
+  // Billing mutations are inert while Stripe is unconfigured, but open the moment billing goes live —
+  // exactly the pre-alpha window. They CREATE Stripe state / grant CREDIT, so an unapproved user must
+  // not reach them (audit H2 residual, 2026-09-14).
+  it("startAddCard (creates Stripe SetupIntent) gates on requireApprovedUser", () => {
+    const fn = fnBody(billingActions, "startAddCard");
+    expect(fn).toContain("requireApprovedUser()");
+    expect(fn).not.toMatch(/await requireUser\(\)/);
+  });
+
+  it("markCardSaved (grants signup/referral credit) gates on requireApprovedUser", () => {
+    const fn = fnBody(billingActions, "markCardSaved");
+    expect(fn).toContain("requireApprovedUser()");
+    expect(fn).not.toMatch(/await requireUser\(\)/);
+  });
+
+  it("syncOwnerBilling (takes a caller-supplied ownerId) is NOT a directly-invocable action", () => {
+    // It must not be exported from a "use server" module — that exposed it as a POST anyone could call
+    // against ANY owner's Stripe account. It lives in billing-sync.ts (server-only, no "use server").
+    expect(billingActions).not.toMatch(/export async function syncOwnerBilling/);
+    expect(billingSync).toContain('import "server-only"');
+    // No "use server" DIRECTIVE line (a mid-comment mention is fine).
+    expect(billingSync).not.toMatch(/^\s*["']use server["'];?\s*$/m);
+    expect(billingSync).toMatch(/export async function syncOwnerBilling/);
   });
 });

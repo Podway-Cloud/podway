@@ -1,8 +1,10 @@
 "use server";
 
 import { requireUser, editionOss } from "./session";
-import { getBillingService, getPodService } from "./pod-service";
+import { requireApprovedUser } from "./access";
+import { getBillingService } from "./pod-service";
 import { stripeConfigured, stripePublishableKey } from "@podway/control-plane";
+import { syncOwnerBilling } from "./billing-sync";
 
 /** Billing is a cloud concept, and only usable once Stripe is configured. */
 function billingOff(): boolean {
@@ -77,7 +79,9 @@ export async function startAddCard(): Promise<{ clientSecret: string; pubKey: st
   if (billingOff()) return { error: "Billing isn't enabled." };
   const pubKey = stripePublishableKey();
   if (!pubKey) return { error: "Card payments aren't fully configured yet." };
-  const user = await requireUser();
+  // requireApprovedUser, not requireUser: creating Stripe customer/SetupIntent state is a mutation an
+  // unapproved user must not reach (pre-alpha security audit H2).
+  const user = await requireApprovedUser();
   try {
     const { clientSecret } = await getBillingService().createSetupIntent(user.id, user.email);
     return { clientSecret, pubKey };
@@ -90,7 +94,9 @@ export async function startAddCard(): Promise<{ clientSecret: string; pubKey: st
  * webhook is the authoritative confirmation). */
 export async function markCardSaved(): Promise<void> {
   if (billingOff()) return;
-  const user = await requireUser();
+  // requireApprovedUser, not requireUser: this grants signup/referral CREDIT (money) — an unapproved
+  // user must not be able to self-grant it (pre-alpha security audit H2).
+  const user = await requireApprovedUser();
   const billing = getBillingService();
   await billing.setHasCard(user.id, true);
   // First card on file → grant the one-time signup credit + the referred-side referral credit (both
@@ -98,22 +104,4 @@ export async function markCardSaved(): Promise<void> {
   await billing.grantSignupCredit(user.id).catch(() => undefined);
   await billing.grantReferralReferred(user.id).catch(() => undefined);
   await syncOwnerBilling(user.id);
-}
-
-/**
- * Reconcile the owner's Stripe subscription to their current pods (2b). BEST-EFFORT: a Stripe hiccup
- * must never fail the pod action that triggered it — the reconcile is idempotent and self-heals on the
- * next call. No-op unless billing is on and a card is on file (syncSubscription guards that too).
- */
-export async function syncOwnerBilling(ownerId: string): Promise<void> {
-  if (billingOff()) return;
-  try {
-    const pods = await getPodService().listPods(ownerId);
-    await getBillingService().syncSubscription(
-      ownerId,
-      pods.map((p) => ({ podId: p.id, size: p.size, status: p.status })),
-    );
-  } catch (e) {
-    console.error("[billing] subscription sync failed (non-fatal):", e instanceof Error ? e.message : e);
-  }
 }
