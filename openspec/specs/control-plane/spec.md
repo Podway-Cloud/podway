@@ -172,42 +172,56 @@ as explicit, owner-scoped operations that delegate to the provider and update th
 - **THEN** the control plane SHALL NOT suspend it automatically (a self-host pod runs on the owner's
   own machine, where an automatic `docker stop` would surprise them and kill their agent)
 
-### Requirement: An account has a slot budget
+### Requirement: An account has a RAM budget, higher once a card is on file
 
-Each account has a fixed **slot budget**. A pod occupies slots by size — memory ÷ 4 GB, so
-**Small = 1, Medium = 2, Large = 4** — and the budget is spent the same whether it is four small
-pods, two mediums, one large, or a mix. The default budget is 4 slots.
+Each account has a **RAM budget** (GB) — the ceiling on total running-pod RAM. A pod spends its
+size's reserved memory (Mini 1 · Small 2 · Medium 4 · Large 8 · XL 16 GB) against it, so the budget
+is spent the same whether it is many small pods or one large one.
 
-A pod occupies its slots UNLESS it is **suspended** — a suspended pod has released its compute, so
-those slots are free for another pod (and resuming it needs them back). error/gone pods hold none.
+A pod spends budget UNLESS it is **suspended** — a suspended pod has released its compute, so its RAM
+is free for another pod (and resuming it needs it back). error/gone pods hold none.
+
+The budget SHALL depend on whether the account has a card on file, because a carded account pays per
+pod beyond its free credit and so must not be hard-blocked at the free-tier ceiling:
+
+- **No card** (or Stripe not configured): the free-tier budget (`ACCOUNT_RAM_GB`, default 16 GB).
+- **Card on file:** the higher carded budget (`CARDED_RAM_GB`, default 64 GB) — a generous ceiling
+  that still guards against a runaway bill from a mistake, not a hard product limit.
+- **Admin or self-host:** unbounded.
 
 Launching, resuming, or resizing-UP a pod SHALL be **refused before any side effect** when it would
-push the account's used slots past its budget; the refusal SHALL be a distinct, surfaced error (not a
-generic failure) that tells the owner to suspend a pod or contact support for more. The budget is
-per-account and one account's pods SHALL NOT count against another's. Callers MAY exempt an account
-(an unbounded budget) — admins are exempt so they can run the fleet.
+push the account's used RAM past its budget; the refusal SHALL be a distinct, surfaced error (not a
+generic failure) that tells the owner how much free RAM remains and to suspend a pod (or, for a
+cardless account, add a card) for more. The budget is per-account and one account's pods SHALL NOT
+count against another's.
 
 #### Scenario: A launch that would exceed the budget is refused with no side effect
 
-- **WHEN** an owner at their slot budget launches another pod
-- **THEN** the launch SHALL be refused with a slot-limit error and no pod record SHALL be written
+- **WHEN** an owner at their RAM budget launches another pod
+- **THEN** the launch SHALL be refused with a RAM-budget error and no pod record SHALL be written
 
-#### Scenario: Suspending frees slots; resuming needs them back
+#### Scenario: Adding a card raises the budget so a paying user can create a pod
 
-- **WHEN** an owner suspends a pod, its slots become available for a new pod; and **WHEN** they later
-  resume a suspended pod whose freed slots have since been taken
-- **THEN** the new pod SHALL be allowed, and the resume SHALL be refused with a slot-limit error until
-  enough slots are free
+- **WHEN** a cardless owner is at the free-tier budget, then adds a card
+- **THEN** their budget SHALL rise to the carded budget, and a launch that fits the higher budget
+  SHALL be allowed
+
+#### Scenario: Suspending frees RAM; resuming needs it back
+
+- **WHEN** an owner suspends a pod, its RAM becomes available for a new pod; and **WHEN** they later
+  resume a suspended pod whose freed RAM has since been taken
+- **THEN** the new pod SHALL be allowed, and the resume SHALL be refused with a RAM-budget error until
+  enough RAM is free
 
 #### Scenario: A resize that would exceed the budget is refused
 
 - **WHEN** an owner resizes a running pod UP to a size that would not fit their remaining budget
-- **THEN** the resize SHALL be refused with a slot-limit error and the pod SHALL be left unchanged
+- **THEN** the resize SHALL be refused with a RAM-budget error and the pod SHALL be left unchanged
 
 #### Scenario: Exempt (admin) accounts are unbounded
 
 - **WHEN** an exempt account launches, resumes, or resizes pods
-- **THEN** the slot budget SHALL NOT limit it
+- **THEN** the RAM budget SHALL NOT limit it
 
 ### Requirement: Lifecycle policy selection
 

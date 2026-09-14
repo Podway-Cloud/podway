@@ -5,11 +5,10 @@ import { getPodService, isProvisioningEnabled, hostCapacity } from "@/lib/pod-se
 import LaunchConfigure from "@/components/launch-configure";
 import DashboardPage from "@/components/dashboard-page";
 import HideSupportChat from "@/components/hide-support-chat";
-import { isAdmin } from "@/lib/access-rules";
 import { editionOss } from "@/lib/session";
 import { harnessEnabled } from "@/lib/agent-harness";
 import { getBillingSummary } from "@/lib/billing-actions";
-import { ACCOUNT_RAM_GB } from "@podway/shared/tiers";
+import { accountRamCapGb } from "@/lib/account-limits";
 import { sanitizeRef } from "@podway/shared";
 
 export const dynamic = "force-dynamic";
@@ -46,8 +45,10 @@ export default async function NewPodPage({
   const initialName = deeplink ? (presetName || `my ${detail.title}`) : undefined;
   const ref = sanitizeRef(rawRef);
   // The account's RAM budget (GB), so the wizard can show the cost + free memory and block a
-  // launch that won't fit BEFORE the user fills everything in. Admins are unbounded.
-  const ram = await getPodService().accountRamUsage(user.id, ACCOUNT_RAM_GB);
+  // launch that won't fit BEFORE the user fills everything in. Admins are unbounded; a user WITH a
+  // card gets the higher carded budget (they pay per pod beyond their free credit).
+  const ramCap = await accountRamCapGb(user.id, user.email);
+  const ram = await getPodService().accountRamUsage(user.id, ramCap);
   // Self-host: the real Docker host's CPU/RAM + what running pods have reserved, so the
   // size step can show free capacity instead of cloud tiers. null in cloud (unused there).
   const oss = editionOss();
@@ -74,7 +75,7 @@ export default async function NewPodPage({
         agentIds={detail.agentIds}
         enabled={isProvisioningEnabled()}
         initialStep={step}
-        ram={{ used: ram.usedGb, cap: ACCOUNT_RAM_GB, unlimited: isAdmin(user.email) || oss }}
+        ram={{ used: ram.usedGb, cap: ramCap, unlimited: ramCap === Infinity }}
         oss={oss}
         t3Enabled={harnessEnabled("t3")}
         capacity={capacity}

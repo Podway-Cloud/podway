@@ -10,8 +10,8 @@ import { syncOwnerBilling } from "./billing-sync";
 import { harnessEnabled } from "./agent-harness";
 import QRCode from "qrcode";
 import { requireApprovedUser } from "./access";
-import { isAdmin } from "./access-rules";
-import { ACCOUNT_RAM_GB, DEFAULT_POD_SIZE, maxSize, type PodSize } from "@podway/shared/tiers";
+import { DEFAULT_POD_SIZE, maxSize, type PodSize } from "@podway/shared/tiers";
+import { accountRamCapGb } from "@/lib/account-limits";
 import { getConnectionToken } from "./github-connect";
 import { getEnvironmentDetail } from "./environments";
 import { getPodService, isProvisioningEnabled, localPreviewUrl } from "./pod-service";
@@ -360,7 +360,7 @@ export async function launchPod(
       agentApiKey: config?.agentApiKey,
       githubToken,
       // Account slot budget — admins are exempt (they run the fleet).
-      ramCap: isAdmin(user.email) || editionOss() ? Infinity : ACCOUNT_RAM_GB,
+      ramCap: await accountRamCapGb(user.id, user.email),
       ref: ref ?? undefined,
     });
     if (!editionOss()) await recordAttributedUserEvent(user.id, "pod_created", rec.id);
@@ -807,7 +807,7 @@ export async function resizePod(slug: string, size: string): Promise<ActionResul
     // Detached: it returns as soon as the pod is marked in-flight, so the cockpit
     // can render "Resizing…" and poll for progress instead of hanging on the action.
     await getPodService().startPodResize(user.id, slug, size as never, {
-      ramCap: isAdmin(user.email) || editionOss() ? Infinity : ACCOUNT_RAM_GB,
+      ramCap: await accountRamCapGb(user.id, user.email),
     });
     await syncOwnerBilling(user.id); // new size → item price updates (Stripe prorates)
 
@@ -854,7 +854,7 @@ export async function wakePod(slug: string): Promise<ActionResult> {
   const user = await requireUser();
   try {
     await getPodService().wake(user.id, slug, {
-      ramCap: isAdmin(user.email) || editionOss() ? Infinity : ACCOUNT_RAM_GB,
+      ramCap: await accountRamCapGb(user.id, user.email),
     });
     await syncOwnerBilling(user.id); // running again → back to its size price
 
