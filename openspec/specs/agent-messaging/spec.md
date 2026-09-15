@@ -130,6 +130,13 @@ SHALL NOT be interpolated into the injected turn or any shell-executed command.
 - **WHEN** a pending message exists for a running pod whose agent can take a turn
 - **THEN** the framed injection SHALL deliver it once, and a later poll SHALL NOT re-inject it
 
+#### Scenario: A routed message is delivered without waiting for the recipient's own poll
+
+- **WHEN** the control plane routes a message to a running recipient while reconciling the SENDER
+- **THEN** it SHALL also attempt delivery to that recipient in the SAME pass — so a message crosses one
+  reconcile cycle rather than two (the sender's drain then the recipient's deliver) — while still
+  deferring for a busy recipient and remaining at-most-once
+
 #### Scenario: Busy or shell pane defers delivery
 
 - **WHEN** a pending message exists but the recipient's session is a shell or on a blocking dialog

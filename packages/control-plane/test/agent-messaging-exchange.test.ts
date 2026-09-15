@@ -59,6 +59,35 @@ describe("agent-messaging drain + routing", () => {
     expect(await msgs.pendingFor("u", beta.id)).toHaveLength(1);
   });
 
+  it("delivers to a routed recipient in the SAME reconcile pass (deliver-on-route)", async () => {
+    // Latency win: a message used to cross TWO ~90s sweeps (the sender's drain, then the recipient's
+    // own deliver). Now, right after routing, the sender's pass ALSO delivers to the recipient — so a
+    // message lands within one cycle instead of two. Here we reconcile ONLY the sender and expect the
+    // recipient's message to be delivered (pending cleared) without ever reconciling the recipient.
+    const alpha = await svc.launchPod("u", "nextjs-starter");
+    const beta = await svc.launchPod("u", "nextjs-starter");
+    await svc.provisionPending();
+
+    let outbox: OutboxLine[] = [{ id: "m1", to: beta.id, body: "regenerate the sitemap" }];
+    provider.execHandler = (script: string) => {
+      if (script.includes("msg-outbox.jsonl.draining")) {
+        const out = outbox.map((l) => JSON.stringify(l)).join("\n");
+        outbox = []; // mv + rm cleared it
+        return out;
+      }
+      if (script.includes("list-windows")) return "0"; // one window
+      if (script.includes("INBOX=")) return "SUBMIT:1"; // the delivery script submitted a turn
+      if (script.includes("capture-pane")) return "ready\n❯ "; // an idle, ready pane
+      return "";
+    };
+
+    // Reconcile ONLY the sender.
+    await svc.reconcile(alpha.id);
+
+    // The recipient's message was delivered in that same pass — no reconcile of beta needed.
+    expect(await msgs.pendingFor("u", beta.id)).toHaveLength(0);
+  });
+
   it("bounces an over-long message (doesn't wedge the batch) and still routes the rest", async () => {
     // The bug this pins (2026-08-25): a >4000-char body throws `InvalidMessage` at route time, which
     // the drain treated as TRANSIENT → never confirmed → re-failed every poll → the poisoned batch

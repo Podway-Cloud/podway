@@ -179,14 +179,15 @@ describe("agent-messaging delivery on reconcile", () => {
     await svc.provisionPending();
     const { injects } = wire({ [alpha.id]: [{ id: "m1", to: beta.id, body: "regenerate the sitemap" }] });
 
-    await svc.reconcile(alpha.id); // drains + routes
-    expect(await msgs.pendingFor("u", beta.id)).toHaveLength(1);
-
-    await svc.reconcile(beta.id); // wakes beta, delivers (SUBMIT:1)
+    // Deliver-on-route: the sender's reconcile drains, routes AND delivers to a ready recipient in
+    // the same pass — so it's already delivered, not left pending for beta's own cycle.
+    await svc.reconcile(alpha.id);
     expect(await msgs.pendingFor("u", beta.id)).toHaveLength(0);
     expect(injects()).toBe(1);
 
-    await svc.reconcile(beta.id); // nothing pending → no re-inject
+    // beta's own reconcile finds nothing pending → no re-inject (at-most-once holds).
+    await svc.reconcile(beta.id);
+    expect(await msgs.pendingFor("u", beta.id)).toHaveLength(0);
     expect(injects()).toBe(1);
   });
 
@@ -194,15 +195,15 @@ describe("agent-messaging delivery on reconcile", () => {
     const alpha = await svc.launchPod("u", "nextjs-starter");
     const beta = await svc.launchPod("u", "nextjs-starter");
     await svc.provisionPending();
-    // First: the inject fails to submit (stuck draft) → must stay pending.
+    // The deliver-on-route attempt in the sender's pass fails to submit (stuck draft) → must stay
+    // pending, not be marked delivered.
     const outbox = { [alpha.id]: [{ id: "m1", to: beta.id, body: "hi" }] };
     const w = wire(outbox, "SUBMIT:0");
     await svc.reconcile(alpha.id);
-    await svc.reconcile(beta.id);
     expect(await msgs.pendingFor("u", beta.id)).toHaveLength(1); // NOT lost
     expect(w.injects()).toBe(1);
 
-    // Next poll, the pane submits → delivered.
+    // A later poll whose pane submits → delivered.
     provider.execHandler = (script) => (script.includes("SUBMIT") ? "SUBMIT:1"
       : script.includes("list-windows") ? "0\n"
       : script.includes("capture-pane") ? READY : "");
@@ -216,10 +217,13 @@ describe("agent-messaging delivery on reconcile", () => {
     await svc.provisionPending();
     const { injects } = wire({ [alpha.id]: [{ id: "m1", to: beta.id, body: "later" }] });
 
-    await svc.reconcile(alpha.id);
-    await provider.sleep(beta.id); // beta suspends before it ever saw the message
+    // Suspend beta BEFORE the message is sent, so its store status is 'suspended' when alpha routes.
+    await provider.sleep(beta.id);
+    await svc.reconcile(beta.id); // sync store status → suspended (exchangeMessages skipped)
+    expect(injects()).toBe(0);
 
-    await svc.reconcile(beta.id); // suspended → exchangeMessages not run
+    // deliver-on-route sees the recipient is not running → skips it; the message is held.
+    await svc.reconcile(alpha.id);
     expect(await msgs.pendingFor("u", beta.id)).toHaveLength(1);
     expect(injects()).toBe(0);
 

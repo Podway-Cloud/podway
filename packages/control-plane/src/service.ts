@@ -1756,6 +1756,10 @@ export class PodService {
     // it — the message-id PK makes the already-recorded ones no-ops. This is what stops a "queued"
     // message being lost when the insert fails after the drain.
     let allHandled = true;
+    // Recipients that got a freshly-routed message this pass — delivered to IMMEDIATELY below
+    // instead of waiting for each recipient's OWN reconcile cycle (which halved perceived latency:
+    // a message used to cross two ~90s sweeps — the sender's drain and the recipient's deliver).
+    const routedTo = new Set<string>();
     for (const line of outbox) {
       try {
         const res = resolvePodRef(fleet, line.to);
@@ -1781,6 +1785,7 @@ export class PodService {
           body: line.body,
           createdAt: created && !Number.isNaN(created.getTime()) ? created : undefined,
         });
+        routedTo.add(res.id);
       } catch (e) {
         if (e instanceof InvalidMessage) {
           // PERMANENT failure (body too long / malformed) — it will NEVER route, so retrying only
@@ -1800,26 +1805,47 @@ export class PodService {
     // for the next pass (re-emit + PK-dedup). Nothing to ack when there was no batch.
     if (outbox.length && allHandled) await confirmDrain(prov, rec.id).catch(() => undefined);
 
-    // Delivery: this pod is running and being reconciled, so wake it with anything
-    // pending FOR it. Gated on the agent being able to take a turn — a busy/shell/dialog
-    // pane defers (nothing injected, stays pending) and a suspended recipient never
-    // reaches here (reconcile only calls us for a running pod), so it is delivered on
-    // its next wake. Mark delivered only for ids actually injected → at-most-once.
-    const inbound = await this.agentMessages.pendingFor(rec.ownerId, rec.id).catch(() => []);
-    if (inbound.length) {
-      // Name the SENDER as the owner named it. The roster is the owner's own pods, so this both
-      // reads correctly and stays within the trust boundary the delivery notice relies on.
-      const senderNames = new Map(
-        (await this.rosterFor(rec.ownerId).catch(() => [])).map((p) => [p.id, p.name] as const),
-      );
-      const delivered = await deliverMessages(prov, rec.id, inbound, senderNames).catch(
-        () => [] as string[],
-      );
-      for (const id of delivered) {
-        await this.agentMessages.markDelivered(id).catch(() => undefined);
+    // Delivery: this pod is running and being reconciled, so wake it with anything pending FOR it.
+    await this.deliverPendingTo(rec, prov);
+
+    // Deliver-on-route: a pod we JUST routed a message to shouldn't have to wait for its own
+    // reconcile cycle — attempt delivery now, in this same pass. Best-effort and idempotent: a busy
+    // recipient still defers (stays pending, delivered on its next wake), a suspended one is skipped
+    // (its wake delivers). Never the sender itself. This is the latency win, not a semantics change.
+    for (const toId of routedTo) {
+      if (toId === rec.id) continue;
+      const target = await this.store.get(toId).catch(() => null);
+      if (target && target.status === "running") {
+        await this.deliverPendingTo(target).catch(() => undefined);
       }
-      if (delivered.length) this.log.info("msg_delivered", { podId: rec.id, count: delivered.length });
     }
+  }
+
+  /**
+   * Deliver any messages pending FOR one running pod by waking its agent. Gated inside
+   * `deliverMessages` on the agent being able to take a turn — a busy/shell/dialog pane defers
+   * (nothing injected, stays pending), so it is delivered on a later pass. Marks delivered ONLY for
+   * ids actually injected → at-most-once. `prov` may be passed when the caller already resolved it;
+   * otherwise it is resolved from the pod's provider (so this works for ANY pod, not just the one
+   * being reconciled — that is what makes deliver-on-route possible).
+   */
+  private async deliverPendingTo(rec: PodRecord, prov?: SandboxProvider): Promise<void> {
+    if (!this.agentMessages) return;
+    const inbound = await this.agentMessages.pendingFor(rec.ownerId, rec.id).catch(() => []);
+    if (!inbound.length) return;
+    // Name the SENDER as the owner named it. The roster is the owner's own pods, so this both reads
+    // correctly and stays within the trust boundary the delivery notice relies on.
+    const senderNames = new Map(
+      (await this.rosterFor(rec.ownerId).catch(() => [])).map((p) => [p.id, p.name] as const),
+    );
+    const provider = prov ?? this.providerFor(rec.provider);
+    const delivered = await deliverMessages(provider, rec.id, inbound, senderNames).catch(
+      () => [] as string[],
+    );
+    for (const id of delivered) {
+      await this.agentMessages.markDelivered(id).catch(() => undefined);
+    }
+    if (delivered.length) this.log.info("msg_delivered", { podId: rec.id, count: delivered.length });
   }
 
   /** The owner's pods as addressing targets (slug + display name, self marked) — the
