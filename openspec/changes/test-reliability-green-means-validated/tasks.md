@@ -40,21 +40,21 @@
 - [ ] 2.6 New e2e — billing add-card → create pod → charge (money-in path, fake Stripe).
 
 ## Phase 3 — Cover the money and the other edition
-- [ ] 3.1 `packages/control-plane` billing WRITE tests: `grantCredit` (ledger + mirror + idempotent),
+- [x] 3.1 `packages/control-plane` billing WRITE tests: `grantCredit` (ledger + mirror + idempotent),
   referral payout maturity (`maybePayReferrer`), `handleEvent` (`invoice.paid` + `invoice.payment_failed`
   → dunning kick), `syncSubscription` — real DB + the injected fake Stripe already in `billing.test.ts`.
-- [ ] 3.2 `LocalProvider` create/exec/destroy test (mock only the Docker boundary, mirroring
+- [x] 3.2 `LocalProvider` create/exec/destroy test (mock only the Docker boundary, mirroring
   `incus-provider.test.ts`).
 - [ ] 3.3 `packages/selfhost` — `migrate-pg.mjs` idempotency test on an ephemeral real Postgres; add
   `@podway/selfhost` to `oss-check`'s package filter.
-- [ ] 3.4 `packages/shared` — a direct `isDisallowedTarget` (SSRF) table test at its source.
+- [x] 3.4 `packages/shared` — a direct `isDisallowedTarget` (SSRF) table test at its source.
 
 ## Phase 4 — Migration safety + a real-infra net (scheduled, non-blocking)
-- [ ] 4.1 `packages/db` migration-safety test: read the real `drizzle/*.sql`, assert additive-only
+- [x] 4.1 `packages/db` migration-safety test: read the real `drizzle/*.sql`, assert additive-only
   (no DROP COLUMN / NOT NULL-without-default / destructive rewrite on existing tables).
-- [ ] 4.2 Wire `check-migrations.sh` ordering dry-run into CI against ephemeral Postgres.
-- [ ] 4.3 Nightly real-pod smoke: provision→suspend→resume→destroy one real Incus pod on the box.
-- [ ] 4.4 Guard-script tests (bats/shell): `deploy-app.sh` (dirty-tree refusal, gateway-count
+- [x] 4.2 Wire `check-migrations.sh` ordering dry-run into CI against ephemeral Postgres.
+- [x] 4.3 Nightly real-pod smoke: provision→suspend→resume→destroy one real Incus pod on the box.
+- [x] 4.4 Guard-script tests (bats/shell): `deploy-app.sh` (dirty-tree refusal, gateway-count
   invariant), `pre-push`, `check-0audit.sh` (ceilings + `[no-spec]` bypass), `check-migrations.sh`.
 
 ## Cross-cutting
