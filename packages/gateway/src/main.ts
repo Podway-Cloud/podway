@@ -1,8 +1,8 @@
 import path from "node:path";
 import type { IncomingMessage } from "node:http";
-import { createAuth, getSessionUserId, notifyOps, type AuthEnv } from "@podway/auth";
+import { createAuth, getSessionUserId, notifyOps, sendDunningEmail, type AuthEnv } from "@podway/auth";
 import { verifyBridgeToken, PREVIEW_SESSION_COOKIE, BRIDGE_TOKEN_PARAM } from "@podway/auth/bridge-token";
-import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService, FlyCertIssuer } from "@podway/control-plane";
+import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService, FlyCertIssuer, BillingService, DunningService, stripeConfigured } from "@podway/control-plane";
 import { RelayRegistry } from "./relay-registry.js";
 import {
   IncusProvider,
@@ -12,7 +12,7 @@ import {
   loadIncusConfig,
   type SandboxProvider,
 } from "@podway/provider";
-import { createAppDb } from "@podway/db";
+import { createAppDb, user, eq } from "@podway/db";
 import { credKeyFromEnv } from "@podway/shared/crypto";
 import { GatewayServer } from "./server.js";
 
@@ -237,6 +237,31 @@ async function main(): Promise<void> {
       })();
     }, digestMs).unref();
     console.log(`podway-gateway warn digest every ${digestMs}ms`);
+  }
+
+  // Non-payment safety net (cloud only): a daily sweep opens/advances each delinquent account's
+  // 7-day grace clock, emails the user daily, and suspends ONLY that account's pods once grace
+  // elapses. Gated on stripeConfigured() so it never runs in dev/test or self-host (no Stripe).
+  const dunningMs = Number(process.env.PODWAY_DUNNING_SWEEP_MS ?? 24 * 60 * 60_000);
+  if (stripeConfigured() && dunningMs > 0) {
+    const billing = new BillingService(db);
+    const appUrl = (process.env.BETTER_AUTH_URL || "https://podway.cloud").replace(/\/+$/, "");
+    const dunning = new DunningService(db, billing, control, {
+      sendEmail: async ({ ownerId, daysLeft, amountDueCents, suspended }) => {
+        const rows = await db.select().from(user).where(eq(user.id, ownerId));
+        const u = rows[0];
+        if (!u?.email) return;
+        await sendDunningEmail(
+          { name: u.name, email: u.email },
+          { daysLeft, amountDueCents, suspended },
+          { billingUrl: `${appUrl}/dashboard/billing` },
+        );
+      },
+    });
+    setInterval(() => {
+      void dunning.sweep().catch((e) => console.error("dunning_sweep_failed", e));
+    }, dunningMs).unref();
+    console.log(`podway-gateway dunning sweep every ${dunningMs}ms`);
   }
 
   for (const sig of ["SIGTERM", "SIGINT"] as const) {

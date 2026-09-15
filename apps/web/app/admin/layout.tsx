@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 const NAV: NavItem[] = [
   { href: "/admin", label: "Access requests", icon: "UserCheck", exact: true },
   { href: "/admin/users", label: "Users", icon: "Users" },
+  { href: "/admin/billing", label: "Billing", icon: "CreditCard" },
   { href: "/admin/pods", label: "Pods", icon: "LayoutGrid" },
   { href: "/admin/incidents", label: "Incidents", icon: "TriangleAlert" },
   { href: "/admin/boxes", label: "Boxes", icon: "Boxes" },

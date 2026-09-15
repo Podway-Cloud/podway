@@ -83,6 +83,13 @@ export class BillingService {
     private readonly stripeClient?: Stripe,
   ) {}
 
+  /**
+   * Optional hook, wired by the gateway to the non-payment safety net: called with the ownerId when
+   * an invoice payment fails, so the dunning grace clock can start immediately rather than waiting
+   * for the next daily sweep. Best-effort — a throw here must not fail the webhook.
+   */
+  onPaymentFailed?: (ownerId: string) => Promise<void>;
+
   /** The Stripe client for this instance: the injected one (tests) or the shared lazy singleton. */
   private stripe(): Stripe {
     return this.stripeClient ?? getStripe();
@@ -281,6 +288,14 @@ export class BillingService {
         if (owner && amountPaid > 0) await this.maybePayReferrer(owner);
         return { handled: "invoice.paid" };
       }
+      case "invoice.payment_failed": {
+        // The saved card was charged and declined. Kick the non-payment safety net so the dunning
+        // grace clock starts now (the daily sweep would otherwise catch it within a day). Best-effort.
+        const cust = customerIdOf(event.data.object);
+        const owner = cust ? await this.ownerByCustomer(cust) : null;
+        if (owner && this.onPaymentFailed) await this.onPaymentFailed(owner).catch(() => undefined);
+        return { handled: "invoice.payment_failed" };
+      }
       default:
         return { handled: `ignored:${event.type}` };
     }
@@ -319,6 +334,33 @@ export class BillingService {
       created: inv.created,
       url: inv.hosted_invoice_url ?? null,
     }));
+  }
+
+  /**
+   * True when the owner has a Stripe invoice Stripe could not collect — `open`, `past_due`, or
+   * `uncollectible`. This is the "card payment failed" signal for the non-payment safety net. No
+   * customer / Stripe not configured → false (nothing owed there). Guarded: a Stripe hiccup → false.
+   */
+  async hasOpenInvoice(ownerId: string): Promise<boolean> {
+    if (!stripeConfigured()) return false;
+    const acct = await this.getAccount(ownerId);
+    if (!acct.stripeCustomerId) return false;
+    try {
+      const open = await this.stripe().invoices.list({
+        customer: acct.stripeCustomerId,
+        status: "open",
+        limit: 1,
+      });
+      if (open.data.length > 0) return true;
+      const overdue = await this.stripe().invoices.list({
+        customer: acct.stripeCustomerId,
+        status: "uncollectible",
+        limit: 1,
+      });
+      return overdue.data.length > 0;
+    } catch {
+      return false;
+    }
   }
 
   // ---- billing page reads (card, credit history, referral status, next charge) -----------------

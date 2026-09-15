@@ -198,6 +198,10 @@ export const pods = pgTable(
     // keeps the audit trail; these two are the render source of truth.
     updatingSince: timestamp("updating_since"),
     updateStage: text("update_stage"),
+    // Set when this pod was auto-suspended by the non-payment safety net (NOT a manual/owner
+    // suspend). Non-null means "suspended for non-payment" so the dunning sweep can auto-resume
+    // exactly these when the account pays, and never touches a pod the owner suspended by hand.
+    nonpaymentSuspendedAt: timestamp("nonpayment_suspended_at"),
     /**
      * "Agentic behavior" — how much this pod does on its own while its owner is away.
      *
@@ -721,3 +725,27 @@ export const creditGrants = pgTable(
   },
   (t) => [uniqueIndex("credit_grants_owner_reason_idx").on(t.ownerId, t.reason)],
 );
+
+/**
+ * Non-payment safety net — one row per account currently in a dunning grace period. An account is
+ * delinquent when it has no working payment (no card, or a failed/open Stripe invoice) AND its
+ * credit cannot cover the monthly cost of its running pods. On entering delinquency we open a row
+ * (`since` starts the grace clock), warn daily (dashboard + email, `lastNotifiedDay` makes the email
+ * idempotent), and after the grace period suspend the account's pods (`suspendedAt`). The row is
+ * DELETED when the account resolves (pays / gains enough credit); cloud-only (no rows under OSS).
+ */
+export const billingDelinquencies = pgTable("billing_delinquencies", {
+  ownerId: text("owner_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  /** When delinquency began — the grace-period clock start. */
+  since: timestamp("since").notNull().defaultNow(),
+  /** Highest grace-day (1-based) we've already emailed, so the daily reminder fires once per day. */
+  lastNotifiedDay: integer("last_notified_day").notNull().default(0),
+  /** The bill at the last check (monthly pod cost in cents) — for the banner/email copy. */
+  amountDueCents: integer("amount_due_cents").notNull().default(0),
+  /** Set once the account's pods have been suspended for non-payment; null while still in grace. */
+  suspendedAt: timestamp("suspended_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});

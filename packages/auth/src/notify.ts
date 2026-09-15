@@ -229,3 +229,57 @@ export async function sendApprovalEmail(
     reportSendFailure("gmail", { error: (e as Error)?.message ?? String(e) });
   }
 }
+
+/**
+ * The non-payment safety net's daily reminder. During the grace period it warns the user their pods
+ * will be suspended and asks them to add a card / credit; on the suspension notice (`suspended`) it
+ * tells them the pods are now suspended and how to bring them back. Same best-effort, env-gated Gmail
+ * path as the others — never throws, no-ops until Gmail is configured.
+ */
+export async function sendDunningEmail(
+  u: { name?: string | null; email: string },
+  info: { daysLeft: number; amountDueCents: number; suspended: boolean },
+  links: { billingUrl: string },
+  deps: EmailDeps = {},
+): Promise<void> {
+  const saJson = deps.saJson ?? process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  const impersonate = deps.impersonate ?? process.env.PODWAY_GMAIL_IMPERSONATE;
+  const from = deps.from ?? process.env.PODWAY_FROM_EMAIL;
+  if (!saJson || !impersonate || !from || !u.email) return;
+  const name = (u.name ?? "").trim() || "there";
+  const amount = `$${(info.amountDueCents / 100).toFixed(2)}`;
+  const f = deps.fetchImpl ?? fetch;
+  try {
+    const token = await (deps.tokenFn ?? gmailToken)(saJson, impersonate, f);
+    const subject = info.suspended
+      ? "Your Podway pods have been suspended"
+      : `Action needed: your Podway pods will be suspended in ${info.daysLeft} day${info.daysLeft === 1 ? "" : "s"}`;
+    const body = info.suspended
+      ? `Hi ${name},\n\n` +
+        `We could not collect payment for your Podway pods (${amount}/month) and your credit did ` +
+        `not cover it, so your pods have been suspended. Your data is safe — add a card or credit ` +
+        `and your pods come right back.\n\n` +
+        `Fix billing and resume:\n${links.billingUrl}\n\n— The Podway team`
+      : `Hi ${name},\n\n` +
+        `We could not charge for your Podway pods (${amount}/month) and your credit does not cover ` +
+        `it. Please add a card or credit within ${info.daysLeft} day${info.daysLeft === 1 ? "" : "s"} ` +
+        `or your pods will be suspended. Your data stays safe either way.\n\n` +
+        `Update billing:\n${links.billingUrl}\n\n— The Podway team`;
+    const message =
+      `From: ${encodeFrom(from)}\r\n` +
+      `To: ${u.email}\r\n` +
+      `Subject: ${encodeHeaderWord(subject)}\r\n` +
+      `MIME-Version: 1.0\r\n` +
+      `Content-Type: text/plain; charset="UTF-8"\r\n` +
+      `Content-Transfer-Encoding: base64\r\n\r\n` +
+      Buffer.from(body, "utf8").toString("base64");
+    const res = await f("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ raw: b64url(message) }),
+    });
+    await assertAccepted("gmail", res, { to: u.email });
+  } catch (e) {
+    reportSendFailure("gmail", { error: (e as Error)?.message ?? String(e) });
+  }
+}

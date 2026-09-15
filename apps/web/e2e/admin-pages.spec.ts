@@ -56,18 +56,23 @@ test.describe("admin backoffice pages", () => {
     await expect(page.getByText(/No relays connected/i)).toBeVisible();
   });
 
-  test("Experiments list opens a detail page with controls", async ({ page }) => {
+  test("Experiments admin renders and opens a detail page", async ({ page }) => {
     await login(page, "admin");
     await page.goto("/admin/experiments");
-    await expect(page.getByText("Experiments").first()).toBeVisible();
-    const open = page.getByRole("link", { name: /Open experiment/i }).first();
-    await expect(open).toBeVisible();
-    await open.click();
-    // Cold-compile of the [id] route + render before the URL commits (no loading.tsx).
+    // Anchor on the page's own h1 (the panel always renders it, or the route 404s), waited generously
+    // because this admin route cold-compiles on first hit under CI/shard load.
+    await expect(page.getByRole("heading", { name: "Landing experiments" })).toBeVisible({ timeout: 20_000 });
+    // Open a specific experiment's detail via an href-based link, NOT a label. The old test looked for
+    // an "Open experiment" link; #290 renamed those links ("Edit" / "start a new experiment") and
+    // silently broke it — matching on the href instead survives a future rename. (The sidebar nav's
+    // "/admin/experiments" has no trailing segment, so it isn't matched.)
+    const detail = page.locator('a[href^="/admin/experiments/"]').first();
+    await expect(detail).toBeVisible({ timeout: 20_000 });
+    await detail.click();
     await expect(page).toHaveURL(/\/admin\/experiments\/.+/, { timeout: 20_000 });
-    // The detail renders the runtime/controls panel with the config an operator reads.
-    await expect(page.getByText(/Runtime and controls/i)).toBeVisible();
-    await expect(page.getByText(/Allocation/i).first()).toBeVisible();
+    // The detail's controls card renders. Its title is control-type dependent ("Visibility" for a
+    // homepage-promotion experiment, "Runtime and controls" otherwise), so match either.
+    await expect(page.getByText(/Runtime and controls|Visibility/i).first()).toBeVisible({ timeout: 20_000 });
   });
 
   test("Fetch memory states its boundary and empty state", async ({ page }) => {

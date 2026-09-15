@@ -1,6 +1,7 @@
 import { requireApprovedUser } from "@/lib/access";
 import { editionOss } from "@/lib/session";
 import DashboardShell, { type NavItem } from "@/components/dashboard-shell";
+import DelinquencyBanner from "@/components/delinquency-banner";
 import { linkCurrentLandingAttribution } from "@/lib/landing-experiment-attribution";
 import { supportIdentityHash } from "@/lib/support-identity";
 
@@ -36,6 +37,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       supportIdentityHash={supportIdentityHash(user.id) ?? undefined}
       nav={nav}
     >
+      <DelinquencyBanner ownerId={user.id} />
       {children}
     </DashboardShell>
   );

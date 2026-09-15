@@ -4,10 +4,13 @@ export const USERS = {
   admin: { email: "admin@podway.test", password: "test-password-123", name: "Admin" },
   approved: { email: "approved@podway.test", password: "test-password-123", name: "Approved" },
   pending: { email: "pending@podway.test", password: "test-password-123", name: "Pending" },
+  // Dedicated to the non-payment safety-net e2e: that test suspends ALL of its owner's pods, so it
+  // must not share an account with any other spec.
+  billing: { email: "billing@podway.test", password: "test-password-123", name: "Billing" },
 } as const;
 
 export const ADMIN_EMAILS = USERS.admin.email;
-export const PREAPPROVE_EMAILS = `${USERS.admin.email},${USERS.approved.email}`;
+export const PREAPPROVE_EMAILS = `${USERS.admin.email},${USERS.approved.email},${USERS.billing.email}`;
 
 /**
  * Naming defaults only — NOT a connection string.

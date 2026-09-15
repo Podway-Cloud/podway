@@ -468,6 +468,7 @@ export class PodService {
       status: "provisioning",
       region: this.config.region ?? "",
       keepAwake: alwaysOn,
+      nonpaymentSuspendedAt: null,
       lifecycle,
       autoUpdate: "inherit",
       // Env-declared default (docs: first-10-customers wants a shareable landing
@@ -1337,6 +1338,53 @@ export class PodService {
     const updated = await this.store.update(id, { status: info.status });
     await this.emit(rec, "suspended", { reason: "manual" });
     return updated;
+  }
+
+  /**
+   * Suspend a pod because its owner's account is delinquent (the non-payment safety net). Marks the
+   * pod with `nonpaymentSuspendedAt` so the sweep can later resume EXACTLY these — never a pod the
+   * owner suspended by hand. Idempotent: a pod already suspended for non-payment is left as-is.
+   * By id (no owner scoping — a system action). Returns true if it suspended a running pod.
+   */
+  async suspendForNonpayment(id: string): Promise<boolean> {
+    const rec = await this.store.get(id);
+    if (!rec) return false;
+    if (rec.nonpaymentSuspendedAt) return false; // already ours
+    if (rec.status === "suspended" || rec.status === "error" || rec.status === "gone") {
+      // Not running — just mark it so a later resume knows non-payment gated it.
+      await this.store.update(id, { nonpaymentSuspendedAt: new Date().toISOString() });
+      return false;
+    }
+    await requestHandoff({ provider: this.providerFor(rec.provider), podId: id, log: this.log });
+    const info = await this.providerFor(rec.provider).sleep(id);
+    await this.store.update(id, {
+      status: info.status,
+      nonpaymentSuspendedAt: new Date().toISOString(),
+    });
+    await this.emit(rec, "suspended", { reason: "nonpayment" });
+    return true;
+  }
+
+  /**
+   * Resume a pod that the non-payment safety net suspended, once the account is no longer delinquent.
+   * No-op unless the pod carries the `nonpaymentSuspendedAt` marker, so a manually-suspended pod is
+   * never woken by this. RAM is free (the pod was just suspended), so no budget check. By id.
+   */
+  async resumeFromNonpayment(id: string): Promise<boolean> {
+    const rec = await this.store.get(id);
+    if (!rec || !rec.nonpaymentSuspendedAt) return false;
+    if (rec.status === "suspended") {
+      await this.providerFor(rec.provider).wake(id);
+      await this.store.update(id, {
+        status: "waking",
+        nonpaymentSuspendedAt: null,
+        lastActiveAt: new Date().toISOString(),
+      });
+    } else {
+      // Was marked but not actually asleep — just clear the marker.
+      await this.store.update(id, { nonpaymentSuspendedAt: null });
+    }
+    return true;
   }
 
   async setKeepAwake(ownerId: string, id: string, keepAwake: boolean): Promise<PodRecord> {

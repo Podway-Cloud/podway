@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getBillingService } from "@/lib/pod-service";
-import { stripeConfigured } from "@podway/control-plane";
+import { getBillingService, getPodService } from "@/lib/pod-service";
+import { stripeConfigured, DunningService } from "@podway/control-plane";
+import { createAppDb } from "@podway/db";
 
 // The Stripe SDK needs Node (crypto), not the edge runtime; and we must read the RAW body for
 // signature verification, so this handler never parses it as JSON.
@@ -20,6 +21,11 @@ export async function POST(req: NextRequest) {
 
   const raw = await req.text();
   const billing = getBillingService();
+  // A failed card charge starts the non-payment grace clock immediately (the gateway's daily sweep
+  // would otherwise catch it within a day). Best-effort — handleEvent guards this hook's throw.
+  billing.onPaymentFailed = async (ownerId) => {
+    await new DunningService(createAppDb(), billing, getPodService()).evaluate(ownerId);
+  };
 
   let event;
   try {

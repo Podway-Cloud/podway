@@ -174,3 +174,37 @@ returning to the user dashboard. The item matching the current route SHALL be sh
 - **WHEN** an admin activates the Back to app item
 - **THEN** they SHALL be taken to the user dashboard
 
+### Requirement: Backoffice billing console
+
+The backoffice SHALL provide a cloud-only billing console at `/admin/billing` that lists every
+user with their credit balance, whether a card is on file, their active/total pods, and their RAM
+usage against the account budget (the free budget, or the higher carded budget once a card is on
+file). The overview SHALL be built from local reads (the billing mirror + the pod store) and SHALL
+NOT make a per-user Stripe call, so it stays fast. A per-user drill-in at `/admin/billing/[id]`
+SHALL show the live billing detail — card details, invoices, the credit-grant ledger, referral
+status, next charge date, lifetime spend, and a link to the Stripe customer — and SHALL expose a
+manual action to grant credit to that user. As a cloud-only surface, both routes SHALL return
+not-found under the self-host edition. The grant-credit action SHALL be gated to admins at the
+action itself (not only by page access), and SHALL be inert when Stripe is not configured.
+
+#### Scenario: Operator sees who holds credit and who is at their RAM ceiling
+
+- **WHEN** an admin opens `/admin/billing`
+- **THEN** each user's credit, card status, pods, and RAM against their budget SHALL be shown, and
+  an account at or above its RAM budget SHALL be flagged
+
+#### Scenario: Operator grants credit to a user
+
+- **WHEN** an admin submits a positive credit amount on a user's billing drill-in and Stripe is configured
+- **THEN** the credit SHALL be applied to that user's balance and recorded in the credit-grant ledger
+
+#### Scenario: Grant credit is refused when billing is off or the amount is invalid
+
+- **WHEN** the grant action is called with Stripe unconfigured, or with a non-positive or oversized amount
+- **THEN** it SHALL refuse without changing any balance
+
+#### Scenario: Self-host has no billing console
+
+- **WHEN** the self-host edition serves `/admin/billing` or `/admin/billing/[id]`
+- **THEN** the route SHALL return not-found
+
