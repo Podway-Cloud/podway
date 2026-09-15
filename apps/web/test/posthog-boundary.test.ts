@@ -16,11 +16,14 @@ const read = (p: string) => readFileSync(path.join(process.cwd(), p), "utf8");
  * are already uploaded).
  */
 describe("analytics never records the terminal or secret values", () => {
-  it("masks inputs and the terminal in session replay config", () => {
-    const src = read("instrumentation-client.ts");
-    expect(src).toMatch(/session_recording/);
-    expect(src).toMatch(/maskAllInputs:\s*true/);
-    expect(src).toMatch(/term-wrap|ph-no-capture/);
+  it("masks inputs and the terminal in the session-replay config the client actually ships", async () => {
+    // Assert the REAL object, not a string in a file: this is what posthog.init receives.
+    const { SESSION_REPLAY_CONFIG } = await import("@/lib/posthog-replay-config");
+    expect(SESSION_REPLAY_CONFIG.maskAllInputs).toBe(true);
+    expect(SESSION_REPLAY_CONFIG.maskTextSelector).toContain("ph-no-capture");
+    expect(SESSION_REPLAY_CONFIG.maskTextSelector).toContain("term-wrap");
+    // …and that the client actually wires that config into session_recording (not a dead constant).
+    expect(read("instrumentation-client.ts")).toMatch(/session_recording:\s*SESSION_REPLAY_CONFIG/);
   });
 
   it("marks the terminal element itself, so it is masked wherever it is mounted", () => {

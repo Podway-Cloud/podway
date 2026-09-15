@@ -92,11 +92,13 @@ test.describe("admin pods table + drill-in", () => {
     const slug = await launchPod(page);
     await page.goto("/admin/pods");
     await expect(page.getByRole("cell", { name: new RegExp(slug) }).first()).toBeVisible();
-    // A sort header re-orders via ?sort=; clicking it keeps us on the table.
-    const header = page.getByRole("button", { name: /Created|Cost|Size/ }).first();
-    if (await header.count()) {
-      await header.click();
-      await expect(page).toHaveURL(/\/admin\/pods/);
-    }
+    // The sortable headers are LINKS (th > Link href="/admin/pods?sort=…"), not buttons, and
+    // "Created" is not a column — the old test targeted a non-existent button behind an
+    // `if (await …count())` guard, so it passed having tested nothing. Click a real header and
+    // assert the server-side sort actually applied. No guard: a missing header must FAIL.
+    const sizeHeader = page.getByRole("link", { name: /Size/ }).first();
+    await expect(sizeHeader).toBeVisible();
+    await sizeHeader.click();
+    await expect(page).toHaveURL(/\/admin\/pods\?sort=size/);
   });
 });

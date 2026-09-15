@@ -1,6 +1,7 @@
 import posthog from "posthog-js";
 import { scrubEventProperties } from "@/lib/analytics-scrub";
 import { CONSENT_COOKIE, readConsentFromDocument } from "@/lib/consent";
+import { SESSION_REPLAY_CONFIG } from "@/lib/posthog-replay-config";
 
 const token = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
 const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
@@ -54,9 +55,6 @@ if (!token || !host) {
       if (event?.properties) event.properties = scrubEventProperties(event.properties);
       return event;
     },
-    session_recording: {
-      maskAllInputs: true,
-      maskTextSelector: ".ph-no-capture, .term-wrap, [data-ph-mask]",
-    },
+    session_recording: SESSION_REPLAY_CONFIG,
   });
 }
