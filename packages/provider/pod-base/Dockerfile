@@ -211,8 +211,14 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # revision ALONGSIDE the baked one: the matched version still launches instantly (no
 # download), any other version installs once on demand. (makore pod report, 2026-08-16.)
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+# Bake BOTH engines: Chromium (Blink) for the common case, and WebKit so agents can catch
+# engine-level Safari/WebKit rendering diffs a pod otherwise can't test (a datacenter pod can't
+# `playwright install webkit` — egress blocks the CDN, and the owner's relay is SOCKS5 which the
+# Playwright downloader ignores; the image build box HAS egress, so bake it here). NB WebKit here
+# is the LINUX WebKit engine, NOT iOS Safari — iOS-only bugs (e.g. soft-keyboard + position:sticky)
+# still need a real device / device farm.
 RUN pip3 install --break-system-packages --no-cache-dir 'playwright==1.61.0' \
-    && python3 -m playwright install --with-deps chromium \
+    && python3 -m playwright install --with-deps chromium webkit \
     && chown -R 1000:1000 /opt/ms-playwright && chmod -R u+rwX,go+rX /opt/ms-playwright \
     && rm -rf /var/lib/apt/lists/*
 

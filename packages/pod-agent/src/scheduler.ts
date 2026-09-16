@@ -106,25 +106,34 @@ export interface SchedulerOptions {
   makeRunId?: (jobId: string) => string;
 }
 
+// The scheduler injects these as raw text into the agent's prompt (tmux), so they can't get the
+// Claude client's own envelope styling — but a clean, tagged block reads far better than the old
+// run-on paragraph. Keep the load-bearing tokens (job name, runId, the `podway schedule done`
+// commands, "Dead-man") — the dashboard/tests and the agent both key on them.
 function defaultRunTrigger(job: OpsJob, runId: string): string {
   const what = job.instructions?.trim()
-    ? `\n\nWhat to do:\n${job.instructions.trim()}`
-    : ` Run it per its definition in ~/.podway/ops-jobs.json.`;
+    ? `\n<task>\n${job.instructions.trim()}\n</task>`
+    : `\nRun it per its definition in ~/.podway/ops-jobs.json.`;
   return (
-    `Scheduled job "${job.name}" (id ${job.id}, run ${runId}).${what}\n\n` +
-    `This is a scheduled run — do the job, don't re-onboard. When you finish, CLOSE THE RUN so it ` +
-    `isn't flagged as stalled: run  \`podway schedule done ${runId}\`  (or  \`podway schedule done ` +
-    `${runId} fail\`  if it failed). Then report the result per any scheduled-run rules in your ` +
-    `environment. Closing the run is required on EVERY pod — without it the dead-man fires hours later.`
+    `<podway-scheduled-job name="${job.name}" id="${job.id}" run="${runId}">\n` +
+    `A scheduled run just fired — do the job now, don't re-onboard.\n` +
+    `${what}\n\n` +
+    `When you finish, CLOSE THE RUN (or the dead-man flags it hours later):\n` +
+    `  done:    podway schedule done ${runId}\n` +
+    `  failed:  podway schedule done ${runId} fail\n` +
+    `Then report the result per any scheduled-run rules in your environment.\n` +
+    `</podway-scheduled-job>`
   );
 }
 
 function defaultStallTrigger(run: { jobId: string; runId: string; startedAt: string }): string {
   return (
-    `Dead-man: job "${run.jobId}" (run ${run.runId}) started at ${run.startedAt} but never ` +
-    `reported back. If it already finished, just close it: \`podway schedule done ${run.runId}\`. ` +
-    `If it's stuck, finish or abandon it, then \`podway schedule done ${run.runId} fail\` and report ` +
-    `the failure per your environment's scheduled-run rules.`
+    `<podway-scheduled-job-stalled job="${run.jobId}" run="${run.runId}" started="${run.startedAt}">\n` +
+    `Dead-man: this run started but never reported back.\n` +
+    `If it already finished, just close it:   podway schedule done ${run.runId}\n` +
+    `If it's stuck, finish or abandon it, then: podway schedule done ${run.runId} fail\n` +
+    `Then report the failure per your environment's scheduled-run rules.\n` +
+    `</podway-scheduled-job-stalled>`
   );
 }
 
