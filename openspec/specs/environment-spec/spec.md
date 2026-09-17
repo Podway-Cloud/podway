@@ -2,7 +2,9 @@
 
 ## Purpose
 Defines the declarative environment definition file that specifies what a pod contains — the agent CLI, Claude configuration and permission posture, environment-supplied skills and rules, network egress policy, and non-secret variables and setup steps. It exists to give a single portable, secret-free source of truth that resolves deterministically to a pod and stays compatible with local launches.
+
 ## Requirements
+
 ### Requirement: Environment definition file
 
 An environment SHALL be described by a single `podway.yaml` file at the root of the environment
@@ -232,7 +234,6 @@ layer SHALL be expressible with off-the-shelf tooling (a Docker image or devcont
 - **THEN** the definition SHALL contain no Podway-hosting-only required field, such that the
   same directory can be built and run by standard container tooling
 
-
 ### Requirement: Environment declares web-fetch capability
 
 An environment SHALL be able to declare `capabilities.webFetch`, default OFF, opting the env into
@@ -249,3 +250,16 @@ the declaration.
 
 - **WHEN** an environment sets `capabilities.webFetch` on with a set of allowed rungs
 - **THEN** resolution SHALL preserve it and the web-fetch skill SHALL be available to that env's agent
+
+### Requirement: An environment may declare a minimum pod size
+
+An environment definition MAY declare a minimum (or recommended) pod size. When present, the value
+SHALL be one of the defined pod sizes and represents the floor at which the environment's prebuilt
+stack runs correctly (for example, an app that runs a service plus its database needs more memory than
+a static workspace). When absent, the environment carries no floor and launches at the picker's global
+default, exactly as today.
+
+#### Scenario: A declared floor validates against the known sizes
+- **WHEN** an environment definition declares a minimum size
+- **THEN** the definition validates only if that value names a known pod size; an unknown size is a
+  validation error, and an omitted floor is valid

@@ -2,7 +2,9 @@
 
 ## Purpose
 Governs launching a pod with a chosen name and the environment's declared required secrets: the launch UI blocks until required secrets are supplied, rejects undeclared keys, and drops blank values. Secret values are never echoed back and never leave the pod or database in plaintext.
+
 ## Requirements
+
 ### Requirement: Launch accepts a name and the env's required secrets
 
 Launching an environment SHALL accept an optional pod name and values for the secrets the env
@@ -145,3 +147,18 @@ persist beyond the browser tab.
 - **WHEN** a pod is successfully created from the wizard
 - **THEN** the saved draft for that environment SHALL be cleared
 
+### Requirement: The size picker honors an environment's minimum size
+
+When an environment declares a minimum pod size, the launch size picker SHALL default the pod to at
+least that size and SHALL prevent launching below it (with a clear reason). An environment with no
+declared minimum behaves exactly as today (the global default, freely adjustable).
+
+#### Scenario: The picker defaults up to the environment's floor
+- **WHEN** the owner opens the launch flow for an environment whose minimum size is above the global
+  default
+- **THEN** the size picker starts at (at least) that minimum rather than the global default
+
+#### Scenario: Below-floor launches are prevented
+- **WHEN** the owner tries to launch an environment at a size below its declared minimum
+- **THEN** the launch is prevented (or the picker disallows the below-floor choice), with a clear
+  explanation of the floor
