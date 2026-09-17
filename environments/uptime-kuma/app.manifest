@@ -1,0 +1,10 @@
+# Uptime Kuma's per-app config for the shared app-admin engine (environments/_shared/app-admin).
+# This + compose.yaml + the kickoff charter is ALL that is Uptime-Kuma-specific — the engine is shared.
+# Uptime Kuma is a SINGLE container with SQLite inside its data volume: no separate DB service
+# (DB_TYPE=none skips the engine's DB dump/restore) and no encryption key (no KEYGUARD_VAR).
+APP_PROJECT=uptime-kuma
+APP_SERVICE=uptime-kuma
+APP_IMAGE_VAR=UPTIME_KUMA_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+DB_TYPE=none
+APP_DATA_VOLUMES="kuma"

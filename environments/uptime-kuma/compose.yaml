@@ -1,0 +1,16 @@
+# The Uptime Kuma stack for an app-pod. Docker is provided by the pod image with its data-root on the
+# persistent /home/dev volume, so the named volume below (Uptime Kuma's SQLite DB + config) survives a
+# pod restart AND an image update. `restart: unless-stopped` makes docker itself bring the service back
+# on every boot — no boot hook needed. Uptime Kuma is a SINGLE container: SQLite lives inside its own
+# volume, so there is no separate database service and no encryption key to guard.
+services:
+  uptime-kuma:
+    image: ${UPTIME_KUMA_IMAGE}
+    restart: unless-stopped
+    # The cockpit preview forwards ONLY port 3000 → map Uptime Kuma's 3001 onto 3000 so the dashboard
+    # shows up on the pod's preview URL. Docker binds 0.0.0.0 by default (reachable by the preview proxy).
+    ports: [ "3000:3001" ]
+    # SQLite + config live here (survives restart + image update).
+    volumes: [ "kuma:/app/data" ]
+volumes:
+  kuma: {}

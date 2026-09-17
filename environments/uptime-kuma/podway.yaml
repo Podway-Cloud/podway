@@ -1,0 +1,88 @@
+apiVersion: podway/v0
+name: uptime-kuma
+
+# APP (the "Apps" tab — docs/plans/app-catalog/apps-category-and-n8n-env.md): a self-hosted OSS app
+# Podway DEPLOYS and KEEPS UPDATED for the user. The pod runs the app with `docker compose` (Docker is
+# baked into the cloud pod-base image); the agent is its always-on admin. Uptime Kuma is a self-hosted
+# uptime monitor + status page — a SINGLE container with SQLite in its own volume (no separate DB).
+kind: app
+# Uptime Kuma is a single lightweight container (~200MB, SQLite). minSize derived from a MEASURE=1
+# app-smoke run (peak RAM at a generous size → smallest tier ≥ peak × 1.2). See docs/runbooks/app-authoring.md.
+minSize: mini
+
+metadata:
+  title: "Uptime Kuma"
+  description: >-
+    Your own Uptime Kuma — the self-hosted uptime monitor and status page — deployed on a private pod.
+    Your AI admin keeps it up to date and safe, backs it up, and rolls back failed updates if necessary.
+  author: podway
+  tags: [monitoring, status-page, self-host, oss]
+
+# ~/work is the app-management dir (compose + the maintenance engine), not a coding project.
+base:
+  devcontainer: .devcontainer/devcontainer.json
+
+agents: [claude-code, codex]
+shared: [universal]
+
+# First-party, trusted env: the agent runs docker compose + the maintenance engine unprompted.
+permissions:
+  mode: bypassPermissions
+
+# Uptime Kuma reaches out to the endpoints it monitors (HTTP/TCP/ping/DNS) and pulls its own image.
+network:
+  policy: full
+
+# An uptime monitor must stay up so checks keep firing and alerts keep flowing.
+lifecycle: always-on
+
+# Uptime Kuma's dashboard is served on the pod's preview (:3000). Private by default — it's YOUR
+# monitoring console. Uptime Kuma has its own login; the owner can still flip the preview public per
+# pod if they want to expose a public status page.
+preview: private
+
+# Uptime Kuma has NO encryption key and NO separate database — SQLite lives inside its data volume.
+# The only .env value is the image tag; there are no required secrets to launch.
+
+setup:
+  # One-time first-boot provisioning, run as `dev` in ~/work. Docker itself is already installed and
+  # running from the pod image (data-root on /home/dev, so container data survives an image update);
+  # `restart: unless-stopped` in compose.yaml then auto-starts the stack on every later boot with no
+  # boot hook. This step just pins the image tag and brings the stack up the first time.
+  - >-
+    if [ ! -f .env ]; then printf 'UPTIME_KUMA_IMAGE=%s\n' "louislam/uptime-kuma:1" > .env; chmod 600 .env; fi
+  - chmod +x bin/app-admin.sh
+  - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
+
+kickoff: |
+  You are the always-on ADMIN for this person's own Uptime Kuma instance. Uptime Kuma is a self-hosted
+  uptime monitor and status page, deployed on THIS pod with `docker compose` and served on the pod's
+  preview (port 3000). Your job: keep it running, keep its data safe, and keep it up to date WITHOUT
+  ever losing their monitors or history.
+
+  What is already true when you start (the env's setup ran at first boot):
+  - Docker is installed from the pod image; its data-root is on /home/dev, so all Uptime Kuma data
+    (its SQLite DB + config in the `kuma` volume) survives a pod restart AND an image update.
+  - The stack is defined in ~/work/compose.yaml (a single uptime-kuma container), with
+    `restart: unless-stopped` so it comes back on every boot on its own. The only .env value is the
+    image tag — Uptime Kuma has NO encryption key and NO separate database.
+  - The maintenance engine is ~/work/bin/app-admin.sh. Always run it with `APP_ADMIN_DIR=~/work`.
+
+  First turn:
+  1. Confirm health: `APP_ADMIN_DIR=~/work bin/app-admin.sh status` and open the preview. If Uptime
+     Kuma is up, tell the owner their Uptime Kuma is live and give them the preview link. On first
+     visit they set up their admin account in the browser.
+  2. Offer, don't assume: back up now? add a first monitor? Keep it to 1-2 sharp questions.
+
+  Ongoing duties:
+  - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot` (data volume +
+    image tag). Offer a scheduled backup via `podway schedule`.
+  - UPGRADES are the whole promise. NEVER just `docker compose pull`. Use
+    `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <tag>` — it snapshots, pulls, health-checks,
+    and AUTO-ROLLS-BACK code AND data if the new version is unhealthy. Only apply an upgrade you have
+    classed as SAFE; for a RISKY one (a major bump / breaking-change note), snapshot, explain the risk,
+    and get the owner's go-ahead first.
+  - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
+
+  END EVERY TURN ORIENTED: one line — "Uptime Kuma: <up/updating> · data: <backed-up when> · next: <thing>".
+  Lead; only pause at real forks (a risky upgrade, deleting data, exposing the status page publicly).
