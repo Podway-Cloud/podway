@@ -41,9 +41,10 @@ DC="docker compose"
 # and keep the bare message in ~/.podway-progress so the pod-agent surfaces it on /healthz. No secrets.
 progress() { echo "podway-progress: $1"; printf '%s' "$1" > "${HOME:-/home/dev}/.podway-progress" 2>/dev/null || true; }
 
-health() { # wait up to 120s for the app to serve HTTP 200
+health() { # wait up to 120s for the app to answer (any 2xx/3xx — a root that REDIRECTS to a
+  # setup/login page, very common, is alive not broken; requiring exactly 200 rolled back good upgrades)
   for _ in $(seq 1 40); do
-    [ "$(curl -s -o /dev/null -w '%{http_code}' "$APP_HEALTH_URL" 2>/dev/null)" = "200" ] && return 0
+    case "$(curl -s -o /dev/null -w '%{http_code}' "$APP_HEALTH_URL" 2>/dev/null)" in 2??|3??) return 0 ;; esac
     sleep 3
   done
   return 1
@@ -136,7 +137,7 @@ case "$cmd" in
     _pull_start=$(date +%s)
     while kill -0 "$_pull_pid" 2>/dev/null; do
       _el=$(( $(date +%s) - _pull_start ))
-      _hint="$(grep -oE '[0-9]+(\.[0-9]+)?%|Downloading|Extracting|Pull complete|Waiting' "$_pull_log" 2>/dev/null | tail -1)"
+      _hint="$(grep -oE '[0-9]+(\.[0-9]+)?%|Downloading|Extracting|Pull complete|Waiting' "$_pull_log" 2>/dev/null | tail -1 || true)"
       progress "Pulling ${APP_SERVICE}… ${_el}s${_hint:+ · $_hint}"
       sleep 2
     done

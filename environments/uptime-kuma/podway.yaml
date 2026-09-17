@@ -6,8 +6,8 @@ name: uptime-kuma
 # baked into the cloud pod-base image); the agent is its always-on admin. Uptime Kuma is a self-hosted
 # uptime monitor + status page — a SINGLE container with SQLite in its own volume (no separate DB).
 kind: app
-# Uptime Kuma is a single lightweight container (~200MB, SQLite). minSize derived from a MEASURE=1
-# app-smoke run (peak RAM at a generous size → smallest tier ≥ peak × 1.2). See docs/runbooks/app-authoring.md.
+# Uptime Kuma is a single ~3.6GB image (bundles MariaDB), ~490MB RAM at rest. minSize=mini (1GB): once
+# image layers land on the persistent volume (containerd-snapshotter OFF), a 1GB pod deploys it healthy.
 minSize: mini
 
 metadata:
