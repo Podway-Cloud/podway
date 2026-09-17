@@ -347,9 +347,10 @@ export async function launchPod(
       secrets: config?.secrets,
       lifecycle: config?.lifecycle as never,
       // Floor the size to the env's minimum server-side (defense-in-depth: a below-floor POST bypasses
-      // the picker). An app + DB stack won't run below its declared floor.
+      // the picker). An app + DB stack won't run below its declared floor. When no size is chosen, an
+      // env with a minSize defaults TO that minSize (its right-size), not the generic Medium.
       size: (detail?.minSize
-        ? maxSize((config?.size as PodSize) ?? DEFAULT_POD_SIZE, detail.minSize)
+        ? maxSize((config?.size as PodSize) ?? detail.minSize, detail.minSize)
         : config?.size) as never,
       // Self-host only: honored for `local` pods, ignored for cloud tiers (service enforces).
       cpus: editionOss() ? config?.cpus : undefined,

@@ -72,6 +72,7 @@ export default async function NewPodPage({
         secrets={detail.secrets}
         byoRepo={detail.byoRepo}
         minSize={detail.minSize}
+        appName={detail.kind === "app" ? detail.title : undefined}
         agentIds={detail.agentIds}
         enabled={isProvisioningEnabled()}
         initialStep={step}

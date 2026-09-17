@@ -91,10 +91,13 @@ export default function LaunchConfigure({
   creditCents = 0,
   hasCard = false,
   minSize,
+  appName,
 }: {
   env: string;
   /** The env's minimum pod size — the picker floors to it (an app + DB needs more than a workspace). */
   minSize?: PodSize;
+  /** For a `kind: app` env, the app's display title — the launch stages show "Deploying <app>". */
+  appName?: string;
   secrets: DeclaredSecret[];
   byoRepo?: boolean;
   /** Agent CLI ids the env declares (multi-agent-plan.md slice 3). The picker shows
@@ -147,7 +150,10 @@ export default function LaunchConfigure({
     }
   }, [deeplink]);
   // Floor the starting size to the env's minimum (an app + DB stack won't run on the global default).
-  const [size, setSize] = useState<PodSize>(minSize ? maxSize(DEFAULT_POD_SIZE, minSize) : DEFAULT_POD_SIZE);
+  // An env that declares a minSize (every `kind: app`) has been sized to that tier — it's the RIGHT
+  // default, not a floor under the generic Medium. Defaulting apps to their minSize right-sizes them
+  // (Uptime Kuma → Mini, not Medium); the user can still bump up. Non-app envs default to Medium.
+  const [size, setSize] = useState<PodSize>(minSize ?? DEFAULT_POD_SIZE);
   // Self-host resource limits (self-host-pod-sizing); null ⇒ unlimited, the OSS default.
   const [cpus, setCpus] = useState<number | null>(null);
   const [memoryMb, setMemoryMb] = useState<number | null>(null);
@@ -384,7 +390,7 @@ export default function LaunchConfigure({
             <CardTitle>Creating your pod</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3.5">
-            <ProvisionStages agent={agent} />
+            <ProvisionStages agent={agent} appName={appName} />
             <p className="text-[13px] text-muted-foreground">
               A real machine with persistent storage, booting from scratch (times are approximate).
               You’ll be handed to the sign-in step automatically.

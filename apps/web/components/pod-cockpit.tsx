@@ -1424,7 +1424,13 @@ export default function PodCockpit(props: PodCockpitProps) {
                 <CardTitle>Building your machine</CardTitle>
               </CardHeader>
               <CardContent className="flex flex-col gap-3.5">
-                <ProvisionStages sinceMs={Date.now() - Date.parse(createdAt)} agent={agent} />
+                <ProvisionStages
+                  sinceMs={Date.now() - Date.parse(createdAt)}
+                  agent={agent}
+                  // While the env's own deploy is reporting progress (an app pod pulling its image),
+                  // the last stage is "Deploying <app>", not "Starting <agent>".
+                  appName={live?.setupProgress ? (envTitle ?? environmentName) : undefined}
+                />
                 {live?.setupProgress ? (
                   // The env's OWN first-boot deploy milestone (add-deploy-progress) — e.g. "Pulling
                   // n8n…" — runs DURING this creating phase (the env `setup:` block), so surface it

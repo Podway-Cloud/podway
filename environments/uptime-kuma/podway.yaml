@@ -50,7 +50,7 @@ setup:
   # `restart: unless-stopped` in compose.yaml then auto-starts the stack on every later boot with no
   # boot hook. This step just pins the image tag and brings the stack up the first time.
   - >-
-    if [ ! -f .env ]; then printf 'UPTIME_KUMA_IMAGE=%s\n' "louislam/uptime-kuma:1" > .env; chmod 600 .env; fi
+    if [ ! -f .env ]; then printf 'UPTIME_KUMA_IMAGE=%s\n' "louislam/uptime-kuma:2.5.5" > .env; chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
 

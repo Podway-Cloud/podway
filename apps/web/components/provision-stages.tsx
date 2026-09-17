@@ -15,27 +15,38 @@ import { cn } from "@/lib/utils";
  * spinner reads as "stuck". The agent is named because a Codex pod saying
  * "Starting Claude" is simply wrong.
  */
-function stages(agentName: string): { label: string; doneAt: number | null; hint?: string }[] {
+function stages(agentName: string, appName?: string): { label: string; doneAt: number | null; hint?: string }[] {
   return [
     { label: "Creating machine + volume", doneAt: 6 },
     { label: "Booting the pod", doneAt: 18 },
-    {
-      label: `Starting ${agentName}`,
-      doneAt: null,
-      hint: "First boot compiles your app and starts the agent — this can take up to a minute.",
-    },
+    // For an APP pod this open-ended stage is really the app deploying (docker pull + start), not the
+    // agent — labelling it "Starting <agent>" while "Pulling <app>…" scrolls below reads as wrong/stuck.
+    appName
+      ? {
+          label: `Deploying ${appName}`,
+          doneAt: null,
+          hint: `First launch downloads ${appName} and starts it — this can take a minute.`,
+        }
+      : {
+          label: `Starting ${agentName}`,
+          doneAt: null,
+          hint: "First boot compiles your app and starts the agent — this can take up to a minute.",
+        },
   ];
 }
 
 export default function ProvisionStages({
   sinceMs = 0,
   agent,
+  appName,
 }: {
   sinceMs?: number;
   /** Active agent id, so the last stage names the right CLI. */
   agent?: string;
+  /** When this pod is a `kind: app` env, the app's title — the last stage becomes "Deploying <app>". */
+  appName?: string;
 }) {
-  const STAGES = stages(agent === "codex" ? "Codex" : "Claude");
+  const STAGES = stages(agent === "codex" ? "Codex" : "Claude", appName);
   const [secs, setSecs] = useState(Math.floor(sinceMs / 1000));
   useEffect(() => {
     const t = setInterval(() => setSecs((s) => s + 1), 1000);

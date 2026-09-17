@@ -128,8 +128,20 @@ cmd="${1:-status}"
 case "$cmd" in
   deploy)
     check_key || exit $?
-    progress "Pulling ${APP_SERVICE}…"
-    $DC pull >/dev/null 2>&1 || true
+    # Pull in the background and tick the progress line every 2s so a slow first-pull (an app image can
+    # be hundreds of MB over the pod's egress) SHOWS movement instead of a frozen "Pulling…". Elapsed
+    # seconds always advance; a parsed layer/percent from compose's output is appended when available.
+    _pull_log="$(mktemp 2>/dev/null || echo /tmp/podway-pull.$$)"
+    ( $DC pull > "$_pull_log" 2>&1 ) & _pull_pid=$!
+    _pull_start=$(date +%s)
+    while kill -0 "$_pull_pid" 2>/dev/null; do
+      _el=$(( $(date +%s) - _pull_start ))
+      _hint="$(grep -oE '[0-9]+(\.[0-9]+)?%|Downloading|Extracting|Pull complete|Waiting' "$_pull_log" 2>/dev/null | tail -1)"
+      progress "Pulling ${APP_SERVICE}… ${_el}s${_hint:+ · $_hint}"
+      sleep 2
+    done
+    wait "$_pull_pid" 2>/dev/null || true
+    rm -f "$_pull_log" 2>/dev/null || true
     if [ "$DB_TYPE" != none ]; then $DC up -d "$DB_SERVICE"; db_ready || true; progress "Starting the database…"; fi
     $DC up -d
     if health; then progress "${APP_SERVICE} is live"; echo "DEPLOYED healthy: $(grep "^${APP_IMAGE_VAR}=" .env)"; else echo "DEPLOY UNHEALTHY" >&2; exit 1; fi ;;
