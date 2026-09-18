@@ -1,0 +1,7 @@
+# ntfy per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=ntfy
+APP_SERVICE=ntfy
+APP_IMAGE_VAR=NTFY_IMAGE
+APP_HEALTH_URL=http://localhost:3000/v1/health
+DB_TYPE=none
+APP_DATA_VOLUMES="data"

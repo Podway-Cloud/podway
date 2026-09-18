@@ -12,10 +12,11 @@ minSize: mini
 
 metadata:
   title: "Uptime Kuma"
-  description: >-
-    Your own Uptime Kuma — the self-hosted uptime monitor and status page — deployed on a private pod.
-    Your AI admin keeps it up to date and safe, backs it up, and rolls back failed updates if necessary.
+  # Short line adapted from the project's own README (github.com/louislam/uptime-kuma).
+  description: An easy-to-use monitoring tool with uptime alerts and status pages.
   author: podway
+  sourceUrl: https://github.com/louislam/uptime-kuma
+  siteUrl: https://uptime.kuma.pet
   tags: [monitoring, status-page, self-host, oss]
 
 # ~/work is the app-management dir (compose + the maintenance engine), not a coding project.

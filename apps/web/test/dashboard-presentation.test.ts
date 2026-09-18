@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { DASHBOARD_PROOF_POINTS } from "@/components/env-gallery";
+import { DASHBOARD_PROOF_POINTS } from "@/lib/catalog-tags";
 import { LANDING_PLAYBOOKS } from "@/lib/landing-playbooks";
 
 const source = (relative: string) => readFileSync(path.join(process.cwd(), relative), "utf8");
@@ -20,17 +20,16 @@ describe("dashboard presentation contract", () => {
   });
 
   it("uses customer-facing catalog labels and proof instead of internal taxonomy", () => {
-    const gallery = source("components/env-gallery.tsx");
-    // Only workspaces + apps surface today (playbooks are hidden), so those are the customer-facing
-    // labels; the old "Start playbook" label was retired with that hiding.
-    expect(gallery).toContain("Launch workspace");
-    expect(gallery).toContain("Launch app");
-    expect(gallery).not.toContain("Start playbook");
-    expect(gallery).toContain("API key"); // the one meta kept on a card is a required secret
+    const card = source("components/app-card.tsx");
+    // The whole card is the launch target now (no button, no per-card "App"/"Workspace" eyebrow):
+    // an overlay link aria-labelled "Launch <title>". That's the customer-facing action; the old
+    // "Start playbook" label and the internal App/Workspace taxonomy eyebrow were both retired.
+    expect(card).toContain("Launch ${e.title}");
+    expect(card).not.toContain('isApp ? "App" : "Workspace"');
+    expect(card).not.toContain("Start playbook");
     // Agents are no longer labelled per-card (every env ships Claude + Codex — noise).
-    expect(gallery).not.toContain('e.capability.agents.join(" + ")');
-    expect(gallery).not.toContain('e.capability.webFetch ? "web research"');
-    expect(gallery).not.toContain("e.title.charAt(0)");
+    expect(card).not.toContain('e.capability.agents.join(" + ")');
+    expect(card).not.toContain("e.title.charAt(0)");
   });
 
   it("keeps proof chips concise and consistently capitalized", () => {
@@ -72,9 +71,10 @@ describe("dashboard presentation contract", () => {
   });
 
   it("offers one details tab stop per catalog card", () => {
-    const gallery = source("components/env-gallery.tsx");
-    expect(gallery).not.toContain("aria-label={`View details for ${e.title}`}");
-    expect(gallery).toContain("<span className=\"text-[15px] font-semibold\">{e.title}</span>");
+    const card = source("components/app-card.tsx");
+    expect(card).not.toContain("aria-label={`View details for ${e.title}`}");
+    // The name is the card's title heading (and links to the app's site when set).
+    expect(card).toContain("{e.title}");
   });
 
   it("states slot usage and the support action explicitly", () => {

@@ -1,0 +1,16 @@
+# Ghost stack for an app-pod. Docker is provided by the pod image with its data-root on the
+# persistent /home/dev volume, so the named volume below survives a pod restart AND an image update.
+# `restart: unless-stopped` makes docker bring the service back on every boot — no boot hook needed.
+services:
+  ghost:
+    image: ${GHOST_IMAGE}
+    restart: unless-stopped
+    # The cockpit preview forwards ONLY port 3000 → map the app's internal 2368 onto 3000.
+    ports: [ "3000:2368" ]
+    volumes: [ "data:/var/lib/ghost/content" ]
+    environment:
+      - database__client=sqlite3
+      - database__connection__filename=/var/lib/ghost/content/data/ghost.db
+      - url=http://localhost:3000
+volumes:
+  data: {}

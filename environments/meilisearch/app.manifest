@@ -1,0 +1,7 @@
+# Meilisearch per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=meilisearch
+APP_SERVICE=meilisearch
+APP_IMAGE_VAR=MEILISEARCH_IMAGE
+APP_HEALTH_URL=http://localhost:3000/health
+DB_TYPE=none
+APP_DATA_VOLUMES="data"

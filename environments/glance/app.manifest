@@ -1,0 +1,7 @@
+# Glance per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=glance
+APP_SERVICE=glance
+APP_IMAGE_VAR=GLANCE_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+DB_TYPE=none
+APP_DATA_VOLUMES=""

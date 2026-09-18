@@ -38,6 +38,12 @@ export interface CatalogEntry {
   minSize?: "mini" | "s" | "m" | "l" | "xl";
   description: string;
   author: string | null;
+  /** The app's upstream source repo (GitHub), shown as a link on the card. Null when unset. */
+  sourceUrl: string | null;
+  /** The app's own website / live demo — the card links the app NAME here. Null when unset. */
+  siteUrl: string | null;
+  /** Logo filename under public/selfhost-apps/ (e.g. "memos.png"); null → default "<name>.svg". */
+  logo: string | null;
   tags: string[];
   /** Secrets the env declares — drives the launch dialog's required fields. */
   secrets: DeclaredSecret[];
@@ -137,6 +143,9 @@ export async function listEnvironments(root = getEnvironmentsRoot()): Promise<Ca
       minSize: env.minSize,
       description: meta.description ?? "",
       author: meta.author ?? null,
+      sourceUrl: meta.sourceUrl ?? null,
+      siteUrl: meta.siteUrl ?? null,
+      logo: meta.logo ?? null,
       tags: meta.tags ?? [],
       secrets,
       capability: {
@@ -193,6 +202,9 @@ export async function getEnvironmentDetail(
     minSize: result.value.minSize,
     description: meta.description ?? "",
     author: meta.author ?? null,
+    sourceUrl: meta.sourceUrl ?? null,
+    siteUrl: meta.siteUrl ?? null,
+    logo: meta.logo ?? null,
     tags: meta.tags ?? [],
     secrets,
     capability: {

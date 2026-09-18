@@ -68,6 +68,15 @@ export const Metadata = z.object({
   description: z.string().optional(),
   author: z.string().optional(),
   tags: z.array(z.string()).optional(),
+  /** The app's upstream source repository (e.g. the OSS project's GitHub page),
+   * shown as a link on the catalog card. Display-only — NOT a clone target (that
+   * is the top-level `repo`). Apps set this to the project users would recognise. */
+  sourceUrl: z.string().url().startsWith("https://").max(300).optional(),
+  /** The app's own website / live demo. The catalog card links the app NAME here. */
+  siteUrl: z.string().url().startsWith("https://").max(300).optional(),
+  /** Logo filename under apps/web/public/selfhost-apps/ (e.g. "memos.png"). Defaults to
+   * "<name>.svg" when unset — set it only when the icon is png/webp (no SVG on selfh.st/icons). */
+  logo: z.string().max(120).optional(),
 });
 
 /**

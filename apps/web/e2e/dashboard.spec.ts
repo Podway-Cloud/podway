@@ -11,12 +11,13 @@ test.describe("dashboard shell + cards", () => {
       "aria-selected",
       "true",
     );
-    await expect(page.getByRole("link", { name: /launch workspace/i }).first()).toBeVisible();
+    // The whole card is the launch target now (no button); its overlay link is aria-labelled "Launch <title>".
+    await expect(page.getByRole("link", { name: /^Launch / }).first()).toBeVisible();
     // Playbooks are hidden for now — only Workspaces + Apps show.
     await expect(page.getByRole("tab", { name: "Playbooks" })).toHaveCount(0);
     // Switching to Apps reveals an app launch.
     await page.getByRole("tab", { name: "Apps" }).click();
-    await expect(page.getByRole("link", { name: /launch app/i }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Launch / }).first()).toBeVisible();
   });
 
   test("pods page links launching to the create-a-pod page (no env cards mixed in)", async ({

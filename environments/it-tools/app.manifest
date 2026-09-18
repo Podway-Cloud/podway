@@ -1,0 +1,7 @@
+# IT-Tools per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=it-tools
+APP_SERVICE=it-tools
+APP_IMAGE_VAR=IT_TOOLS_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+DB_TYPE=none
+APP_DATA_VOLUMES=""

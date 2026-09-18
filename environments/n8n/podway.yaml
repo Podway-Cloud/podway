@@ -5,16 +5,18 @@ name: n8n
 # Podway DEPLOYS and KEEPS UPDATED for the user. n8n is the flagship. The pod runs the app with
 # `docker compose` (Docker is baked into the cloud pod-base image); the agent is its always-on admin.
 kind: app
-# n8n runs a service + Postgres — needs ≥ Medium. The app-smoke parity gate proved 2GB (Small) OOMs
-# during the COLD deploy (docker pull + both containers starting at once); 4GB is stable. (Was `s`.)
-minSize: m
+# n8n runs a service + Postgres. minSize=s (2GB): a tier-walk smoke on pod-base 0.8.22 (with the
+# containerd-snapshotter disk fix) passes the full smoke at 2GB and fails at 1GB. The earlier "2GB
+# OOMs → needs 4GB" was the disk-full bug (images on the tiny root disk), not RAM.
+minSize: s
 
 metadata:
   title: "n8n"
-  description: >-
-    Your own n8n — the workflow-automation platform — deployed on a private pod. Your AI admin keeps
-    it up to date and safe, backs it up, and rolls back failed updates if necessary.
+  # Short line adapted from the project's own README (github.com/n8n-io/n8n).
+  description: Workflow automation with 400+ integrations and native AI.
   author: podway
+  sourceUrl: https://github.com/n8n-io/n8n
+  siteUrl: https://n8n.io
   tags: [automation, workflows, self-host, oss, no-code]
 
 # ~/work is the app-management dir (compose + the maintenance engine), not a coding project.

@@ -1,0 +1,14 @@
+# Metabase stack for an app-pod. Docker is provided by the pod image with its data-root on the
+# persistent /home/dev volume, so the named volume below survives a pod restart AND an image update.
+# `restart: unless-stopped` makes docker bring the service back on every boot — no boot hook needed.
+services:
+  metabase:
+    image: ${METABASE_IMAGE}
+    restart: unless-stopped
+    # The cockpit preview forwards ONLY port 3000 → map the app's internal 3000 onto 3000.
+    ports: [ "3000:3000" ]
+    volumes: [ "data:/metabase-data" ]
+    environment:
+      - MB_DB_FILE=/metabase-data/metabase.db
+volumes:
+  data: {}

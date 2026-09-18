@@ -1,0 +1,7 @@
+pages:
+  - name: Home
+    columns:
+      - size: full
+        widgets:
+          - type: clock
+          - type: calendar

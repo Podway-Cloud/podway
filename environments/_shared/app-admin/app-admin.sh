@@ -30,6 +30,9 @@ SNAP_ROOT="$DIR/snapshots"
 : "${APP_SERVICE:?app.manifest must set APP_SERVICE}"
 : "${APP_IMAGE_VAR:?app.manifest must set APP_IMAGE_VAR}"
 APP_HEALTH_URL="${APP_HEALTH_URL:-http://localhost:3000/}"
+# How many 3s health probes to wait for the app to answer (default 40 = 120s). Slow first-boot apps
+# (a heavy Java image downloading deps, say) set a higher APP_HEALTH_RETRIES in their app.manifest.
+APP_HEALTH_RETRIES="${APP_HEALTH_RETRIES:-40}"
 DB_TYPE="${DB_TYPE:-none}"
 APP_DATA_VOLUMES="${APP_DATA_VOLUMES:-}"
 
@@ -43,7 +46,7 @@ progress() { echo "podway-progress: $1"; printf '%s' "$1" > "${HOME:-/home/dev}/
 
 health() { # wait up to 120s for the app to answer (any 2xx/3xx — a root that REDIRECTS to a
   # setup/login page, very common, is alive not broken; requiring exactly 200 rolled back good upgrades)
-  for _ in $(seq 1 40); do
+  for _ in $(seq 1 "$APP_HEALTH_RETRIES"); do
     case "$(curl -s -o /dev/null -w '%{http_code}' "$APP_HEALTH_URL" 2>/dev/null)" in 2??|3??) return 0 ;; esac
     sleep 3
   done

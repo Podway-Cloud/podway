@@ -1,0 +1,7 @@
+# Grafana per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=grafana
+APP_SERVICE=grafana
+APP_IMAGE_VAR=GRAFANA_IMAGE
+APP_HEALTH_URL=http://localhost:3000/api/health
+DB_TYPE=none
+APP_DATA_VOLUMES="data"

@@ -1,0 +1,7 @@
+# Memos per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=memos
+APP_SERVICE=memos
+APP_IMAGE_VAR=MEMOS_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+DB_TYPE=none
+APP_DATA_VOLUMES="data"
