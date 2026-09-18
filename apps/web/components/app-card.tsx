@@ -5,6 +5,9 @@ import Image from "next/image";
 import { Code2, FolderGit2 } from "lucide-react";
 import type { CatalogEntry } from "@/lib/environments";
 import { categoriesFor, formatStars, formatUpdated } from "@/lib/catalog-tags";
+// Import from the `./tiers` subpath, NOT the package root: the root barrel pulls in server-only
+// modules (node:fs) and breaks the client bundle. tiers.ts is pure/client-safe.
+import { priceForSize, DEFAULT_POD_SIZE } from "@podway/shared/tiers";
 
 export type CardEntry = CatalogEntry & { stars: number | null; updatedAt: string | null };
 
@@ -52,6 +55,8 @@ export default function AppCard({
   const TileIcon = e.name === "byo-project" ? FolderGit2 : Code2;
   const href = `/dashboard/pods/new?env=${encodeURIComponent(e.name)}`;
   const updated = e.updatedAt ? formatUpdated(e.updatedAt) : "";
+  // Monthly cost of the smallest pod this app runs on (the launch floors to minSize).
+  const cost = priceForSize(e.minSize ?? DEFAULT_POD_SIZE);
   return (
     // A div, not an anchor: the launch link is an absolute OVERLAY (a positioned sibling) so the whole
     // card taps to launch, while the name→site and ★→GitHub links sit above it (relative z-10) and stay
@@ -104,8 +109,9 @@ export default function AppCard({
         </div>
       </div>
 
-      {/* FOOTER: divider, then ★stars · updated · category. */}
-      {(e.stars != null || updated || categories.length > 0) && (
+      {/* FOOTER: divider, then ★stars · updated · category on the left, and the monthly cost pushed
+          to the bottom-right (from the app's minSize tier). */}
+      {(e.stars != null || updated || isApp || (!isApp && categories.length > 0)) && (
         <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-border/60 pt-3 text-xs text-muted-foreground">
           {e.sourceUrl && e.stars != null && (
             <a
@@ -127,10 +133,20 @@ export default function AppCard({
               Updated {updated}
             </span>
           )}
-          {categories.length > 0 && (
+          {/* App cards hide the category line (owner call) — the tag FILTER chips above still use them;
+              workspaces keep it. */}
+          {!isApp && categories.length > 0 && (
             <span className="inline-flex min-w-0 items-center gap-1.5">
               <TagGlyph className="size-3.5 shrink-0" />
               <span className="truncate">{categories.join(" · ")}</span>
+            </span>
+          )}
+          {isApp && (
+            <span
+              className="ml-auto shrink-0 font-medium text-foreground"
+              title="Runs on the smallest pod that fits this app; billed while it runs"
+            >
+              from ${cost}/mo
             </span>
           )}
         </div>
