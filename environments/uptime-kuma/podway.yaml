@@ -13,7 +13,9 @@ minSize: mini
 metadata:
   title: "Uptime Kuma"
   # Short line adapted from the project's own README (github.com/louislam/uptime-kuma).
-  description: An easy-to-use monitoring tool with uptime alerts and status pages.
+  description: "An easy-to-use self-hosted uptime monitor and status page."
+  descriptionLong: >-
+    Uptime Kuma monitors your websites and services over HTTP, TCP, ping and DNS, tracking uptime, response times and certificate expiry. It sends alerts to many notification services when something goes down, and can publish public status pages.
   author: podway
   sourceUrl: https://github.com/louislam/uptime-kuma
   siteUrl: https://uptime.kuma.pet

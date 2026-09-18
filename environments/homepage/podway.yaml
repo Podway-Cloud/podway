@@ -11,8 +11,9 @@ metadata:
   title: "Homepage"
   # Short line adapted from the project's own README (https://github.com/gethomepage/homepage).
   # Folded block so a description containing a ": " (colon) stays valid YAML.
-  description: >-
-    A modern, customizable startpage and dashboard for your self-hosted services.
+  description: "A customizable startpage and dashboard for your services."
+  descriptionLong: >-
+    Homepage is a modern, highly customizable startpage that gathers your self-hosted services, bookmarks and live widgets onto a single dashboard. It integrates with Docker and service APIs to show status at a glance.
   author: podway
   sourceUrl: https://github.com/gethomepage/homepage
   siteUrl: https://gethomepage.dev

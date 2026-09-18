@@ -11,8 +11,9 @@ metadata:
   title: "code-server"
   # Short line adapted from the project's own README (https://github.com/coder/code-server).
   # Folded block so a description containing a ": " (colon) stays valid YAML.
-  description: >-
-    Run VS Code in the browser, hosted on your own server.
+  description: "Run VS Code in the browser, on your own server."
+  descriptionLong: >-
+    code-server runs Visual Studio Code on a remote server and serves it to any browser. You get a full VS Code environment — extensions, terminal and settings — on your own machine, reachable from anywhere.
   author: podway
   sourceUrl: https://github.com/coder/code-server
   siteUrl: https://coder.com

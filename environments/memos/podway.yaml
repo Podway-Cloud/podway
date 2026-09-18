@@ -10,7 +10,9 @@ minSize: mini
 metadata:
   title: "Memos"
   # Short line adapted from the project's own README (https://github.com/usememos/memos).
-  description: A privacy-first, lightweight note-taking service with Markdown support.
+  description: "A privacy-first, lightweight note-taking service."
+  descriptionLong: >-
+    Memos is an open-source, self-hosted service for quickly capturing and sharing notes in plain-text Markdown. It runs from a single lightweight container and keeps your notes on your own server.
   author: podway
   sourceUrl: https://github.com/usememos/memos
   siteUrl: https://usememos.com

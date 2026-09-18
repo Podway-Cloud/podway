@@ -11,8 +11,9 @@ metadata:
   title: "Paperless-ngx"
   # Short line adapted from the project's own README (https://github.com/paperless-ngx/paperless-ngx).
   # Folded block so a description containing a ": " (colon) stays valid YAML.
-  description: >-
-    A document management system that transforms your paper documents into a searchable archive.
+  description: "Turn your paper documents into a searchable archive."
+  descriptionLong: >-
+    Paperless-ngx is a document-management system that scans, indexes and archives your physical documents as searchable PDFs. It uses OCR for full-text search and organizes files with tags, correspondents and document types.
   author: podway
   sourceUrl: https://github.com/paperless-ngx/paperless-ngx
   siteUrl: https://docs.paperless-ngx.com

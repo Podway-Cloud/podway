@@ -13,7 +13,9 @@ minSize: s
 metadata:
   title: "n8n"
   # Short line adapted from the project's own README (github.com/n8n-io/n8n).
-  description: Workflow automation with 400+ integrations and native AI.
+  description: "Workflow automation with 400+ integrations and native AI."
+  descriptionLong: >-
+    n8n is a workflow-automation platform that connects apps and services through a visual editor, combining the flexibility of code with the speed of no-code. It offers 400+ integrations and native AI capabilities, self-hosted with full control over your data.
   author: podway
   sourceUrl: https://github.com/n8n-io/n8n
   siteUrl: https://n8n.io

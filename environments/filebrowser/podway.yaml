@@ -10,7 +10,9 @@ minSize: mini
 metadata:
   title: "File Browser"
   # Short line adapted from the project's own README (https://github.com/filebrowser/filebrowser).
-  description: A web file manager for browsing, uploading and editing files in a directory.
+  description: "A web file manager for a directory on your server."
+  descriptionLong: >-
+    File Browser provides a clean web interface to browse, upload, download, preview and edit files in a directory, with user accounts and permissions. It's a simple way to reach your server's files from a browser.
   author: podway
   sourceUrl: https://github.com/filebrowser/filebrowser
   siteUrl: https://filebrowser.org

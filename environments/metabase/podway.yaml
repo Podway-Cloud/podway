@@ -11,8 +11,9 @@ metadata:
   title: "Metabase"
   # Short line adapted from the project's own README (https://github.com/metabase/metabase).
   # Folded block so a description containing a ": " (colon) stays valid YAML.
-  description: >-
-    An open-source business-intelligence tool for asking questions about your data.
+  description: "An open-source business-intelligence and analytics tool."
+  descriptionLong: >-
+    Metabase is an open-source business-intelligence tool that lets anyone ask questions about their data and build dashboards without writing SQL. It connects to your databases and turns them into shareable charts and reports.
   author: podway
   sourceUrl: https://github.com/metabase/metabase
   siteUrl: https://www.metabase.com

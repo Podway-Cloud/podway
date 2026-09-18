@@ -63,6 +63,7 @@ export default async function NewPodPage({
       backHref="/dashboard/create"
       backLabel="Create a pod"
       title={`New pod — ${detail.title}`}
+      intro={detail.kind === "app" ? detail.descriptionLong || undefined : undefined}
     >
       {/* On a phone the fixed support launcher sits on top of the wizard's sticky Next/Create
           button; hide it on small screens only (desktop keeps it). */}

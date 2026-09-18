@@ -37,6 +37,8 @@ export interface CatalogEntry {
   /** The smallest pod size this env's stack runs on; the picker floors to it. Absent = global default. */
   minSize?: "mini" | "s" | "m" | "l" | "xl";
   description: string;
+  /** Longer description (2-3 sentences) for the new-pod page; falls back to `description`. */
+  descriptionLong: string;
   author: string | null;
   /** The app's upstream source repo (GitHub), shown as a link on the card. Null when unset. */
   sourceUrl: string | null;
@@ -142,6 +144,7 @@ export async function listEnvironments(root = getEnvironmentsRoot()): Promise<Ca
       kind: normalizeKind(env.kind),
       minSize: env.minSize,
       description: meta.description ?? "",
+      descriptionLong: meta.descriptionLong ?? meta.description ?? "",
       author: meta.author ?? null,
       sourceUrl: meta.sourceUrl ?? null,
       siteUrl: meta.siteUrl ?? null,
@@ -201,6 +204,7 @@ export async function getEnvironmentDetail(
     kind: normalizeKind(result.value.kind),
     minSize: result.value.minSize,
     description: meta.description ?? "",
+    descriptionLong: meta.descriptionLong ?? meta.description ?? "",
     author: meta.author ?? null,
     sourceUrl: meta.sourceUrl ?? null,
     siteUrl: meta.siteUrl ?? null,

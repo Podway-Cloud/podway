@@ -11,8 +11,9 @@ metadata:
   title: "Wiki.js"
   # Short line adapted from the project's own README (https://github.com/requarks/wiki).
   # Folded block so a description containing a ": " (colon) stays valid YAML.
-  description: >-
-    A modern, powerful and extensible open-source wiki built on Node.js.
+  description: "A modern, open-source wiki built on Node.js."
+  descriptionLong: >-
+    Wiki.js is a powerful, extensible open-source wiki for creating and organizing documentation. It offers a rich editor, full-text search, access control and many authentication options, backed by a database.
   author: podway
   sourceUrl: https://github.com/requarks/wiki
   siteUrl: https://js.wiki

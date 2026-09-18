@@ -11,8 +11,9 @@ metadata:
   title: "ntfy"
   # Short line adapted from the project's own README (https://github.com/binwiederhier/ntfy).
   # Folded block so a description containing a ": " (colon) stays valid YAML.
-  description: >-
-    Send push notifications to your phone or desktop via simple HTTP requests.
+  description: "Send push notifications to your phone via simple HTTP."
+  descriptionLong: >-
+    ntfy is a simple, self-hosted publish-subscribe notification service: send push notifications to your phone or desktop with a plain HTTP request. It's handy for alerting yourself from scripts, cron jobs and monitoring tools.
   author: podway
   sourceUrl: https://github.com/binwiederhier/ntfy
   siteUrl: https://ntfy.sh

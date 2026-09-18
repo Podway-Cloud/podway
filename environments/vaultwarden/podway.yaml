@@ -10,7 +10,9 @@ minSize: mini
 metadata:
   title: "Vaultwarden"
   # Short line adapted from the project's own README (https://github.com/dani-garcia/vaultwarden).
-  description: A lightweight Bitwarden-compatible password-manager server written in Rust.
+  description: "A lightweight Bitwarden-compatible password-manager server."
+  descriptionLong: >-
+    Vaultwarden is an alternative implementation of the Bitwarden server written in Rust, compatible with the official Bitwarden clients. It's ideal for self-hosting a personal password manager without the resource use of the full Bitwarden stack.
   author: podway
   sourceUrl: https://github.com/dani-garcia/vaultwarden
   siteUrl: https://github.com/dani-garcia/vaultwarden/wiki

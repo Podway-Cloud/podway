@@ -16,6 +16,18 @@ import AppCard, { type CardEntry } from "@/components/app-card";
 const FEATURED_FIRST: Record<string, number> = { "byo-project": 0 };
 const featureRank = (name: string) => FEATURED_FIRST[name] ?? 99;
 
+// Apps hidden from the catalog (owner curation). They stay baked + launchable by direct ?env= link;
+// they're just not shown in the browse grid. Edit this set to show/hide an app.
+const HIDDEN_APPS = new Set([
+  "excalidraw",
+  "code-server",
+  "gitea",
+  "it-tools",
+  "filebrowser",
+  "homepage",
+  "wikijs",
+]);
+
 export default async function EnvGallery() {
   const all = await listEnvironments();
   const enabled = isProvisioningEnabled();
@@ -31,7 +43,7 @@ export default async function EnvGallery() {
   const apps: CardEntry[] = (
     await Promise.all(
       all
-        .filter((e) => e.kind === "app")
+        .filter((e) => e.kind === "app" && !HIDDEN_APPS.has(e.name))
         .map(async (e) => {
           const meta = e.sourceUrl ? await fetchRepoMeta(e.sourceUrl) : { stars: null, updatedAt: null };
           return { ...e, stars: meta.stars, updatedAt: meta.updatedAt } as CardEntry;

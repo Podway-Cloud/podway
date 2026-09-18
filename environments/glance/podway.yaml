@@ -11,8 +11,9 @@ metadata:
   title: "Glance"
   # Short line adapted from the project's own README (https://github.com/glanceapp/glance).
   # Folded block so a description containing a ": " (colon) stays valid YAML.
-  description: >-
-    A self-hosted dashboard that puts your feeds, services and info on one page.
+  description: "A self-hosted dashboard for your feeds and services."
+  descriptionLong: >-
+    Glance is a self-hosted dashboard that brings RSS feeds, weather, calendars, server stats and many other widgets onto a single fast-loading page, configured through a simple YAML file.
   author: podway
   sourceUrl: https://github.com/glanceapp/glance
   siteUrl: https://github.com/glanceapp/glance

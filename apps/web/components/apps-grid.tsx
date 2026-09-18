@@ -1,17 +1,63 @@
 "use client";
 
-import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { useEffect, useRef } from "react";
 import AppCard, { type CardEntry } from "@/components/app-card";
-import { displayTagsFor } from "@/lib/catalog-tags";
+
+const SCROLL_KEY = "catalog-apps-scroll-y";
+
+/** The nearest scrollable ancestor of `from` (the dashboard shell scrolls an inner <main>, not the
+ * window), or `window` if none. */
+function scrollContainer(from: HTMLElement | null): HTMLElement | Window {
+  let node: HTMLElement | null = from?.parentElement ?? null;
+  while (node) {
+    const oy = getComputedStyle(node).overflowY;
+    if ((oy === "auto" || oy === "scroll") && node.scrollHeight > node.clientHeight) return node;
+    node = node.parentElement;
+  }
+  return window;
+}
+function getScrollTop(c: HTMLElement | Window): number {
+  return c === window ? window.scrollY : (c as HTMLElement).scrollTop;
+}
+function setScrollTop(c: HTMLElement | Window, y: number): void {
+  if (c === window) window.scrollTo(0, y);
+  else (c as HTMLElement).scrollTop = y;
+}
 
 /**
- * The Apps tab grid: apps arrive already SORTED BY GITHUB STARS (desc) from the server, and this client
- * component adds clickable category-tag FILTERING on top. Clicking a tag narrows the grid; clicking it
- * again (or "All") clears it.
+ * The Apps tab grid: apps arrive already SORTED BY GITHUB STARS (desc) from the server. No tag filter
+ * row (owner call). On card click we save the scroll position, and restore it on mount, so returning
+ * from a launch (browser Back) lands at the same place in the grid instead of the top.
  */
 export default function AppsGrid({ apps, enabled }: { apps: CardEntry[]; enabled: boolean }) {
-  const [active, setActive] = useState<string | null>(null);
+  const ref = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    let y: number | null = null;
+    try {
+      const s = sessionStorage.getItem(SCROLL_KEY);
+      if (s) {
+        y = parseInt(s, 10);
+        sessionStorage.removeItem(SCROLL_KEY);
+      }
+    } catch {
+      /* sessionStorage may be unavailable — ignore */
+    }
+    if (y != null && !Number.isNaN(y) && y > 0) {
+      // After paint (twice), so the grid has laid out to full height before we restore.
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => setScrollTop(scrollContainer(ref.current), y as number)),
+      );
+    }
+  }, []);
+
+  const saveScroll = () => {
+    try {
+      sessionStorage.setItem(SCROLL_KEY, String(getScrollTop(scrollContainer(ref.current))));
+    } catch {
+      /* ignore */
+    }
+  };
+
   if (apps.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -19,49 +65,13 @@ export default function AppsGrid({ apps, enabled }: { apps: CardEntry[]; enabled
       </p>
     );
   }
-  // Unique category tags across all apps, for the filter row.
-  const allTags = Array.from(new Set(apps.flatMap((a) => displayTagsFor(a, "app")))).sort();
-  const shown = active ? apps.filter((a) => displayTagsFor(a, "app").includes(active)) : apps;
   return (
-    <div className="flex flex-col gap-4">
-      {allTags.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          <FilterChip label="All" active={active === null} onClick={() => setActive(null)} />
-          {allTags.map((t) => (
-            <FilterChip
-              key={t}
-              label={t}
-              active={active === t}
-              onClick={() => setActive(active === t ? null : t)}
-            />
-          ))}
-        </div>
-      )}
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {shown.map((a) => (
-          <li key={a.name}>
-            <AppCard entry={a} enabled={enabled} variant="app" />
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-        active
-          ? "border-[var(--link-accent)]/50 bg-[var(--link-accent)]/10 text-foreground"
-          : "border-border text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
-      )}
-    >
-      {label}
-    </button>
+    <ul ref={ref} onClickCapture={saveScroll} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {apps.map((a) => (
+        <li key={a.name}>
+          <AppCard entry={a} enabled={enabled} variant="app" />
+        </li>
+      ))}
+    </ul>
   );
 }

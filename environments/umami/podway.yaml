@@ -11,8 +11,9 @@ metadata:
   title: "Umami"
   # Short line adapted from the project's own README (https://github.com/umami-software/umami).
   # Folded block so a description containing a ": " (colon) stays valid YAML.
-  description: >-
-    A simple, privacy-focused, self-hosted web analytics alternative to Google Analytics.
+  description: "A privacy-focused, self-hosted web-analytics tool."
+  descriptionLong: >-
+    Umami is a simple, privacy-focused alternative to Google Analytics. It shows the essential website metrics in a clean dashboard without collecting personal data or using cookies.
   author: podway
   sourceUrl: https://github.com/umami-software/umami
   siteUrl: https://umami.is

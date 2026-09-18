@@ -11,8 +11,9 @@ metadata:
   title: "Docmost"
   # Short line adapted from the project's own README (https://github.com/docmost/docmost).
   # Folded block so a description containing a ": " (colon) stays valid YAML.
-  description: >-
-    An open-source collaborative wiki and documentation platform.
+  description: "An open-source collaborative wiki and documentation tool."
+  descriptionLong: >-
+    Docmost is an open-source collaborative wiki and documentation platform for creating and organizing knowledge. It supports real-time collaborative editing, spaces, permissions and diagrams for teams.
   author: podway
   sourceUrl: https://github.com/docmost/docmost
   siteUrl: https://docmost.com

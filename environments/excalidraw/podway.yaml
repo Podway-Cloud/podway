@@ -10,7 +10,9 @@ minSize: s
 metadata:
   title: "Excalidraw"
   # Short line adapted from the project's own README (https://github.com/excalidraw/excalidraw).
-  description: A virtual whiteboard for sketching hand-drawn-style diagrams.
+  description: "A virtual whiteboard for sketching hand-drawn diagrams."
+  descriptionLong: >-
+    Excalidraw is an open-source virtual whiteboard for sketching diagrams with a hand-drawn feel, ideal for quick wireframes, flowcharts and brainstorming. This self-hosted instance stores drawings in your browser.
   author: podway
   sourceUrl: https://github.com/excalidraw/excalidraw
   siteUrl: https://excalidraw.com

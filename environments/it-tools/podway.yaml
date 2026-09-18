@@ -10,7 +10,9 @@ minSize: mini
 metadata:
   title: "IT-Tools"
   # Short line adapted from the project's own README (https://github.com/CorentinTh/it-tools).
-  description: A collection of handy online tools for developers, with a clean UI.
+  description: "A collection of handy online tools for developers."
+  descriptionLong: >-
+    IT-Tools is a collection of useful developer utilities — converters, generators, formatters and more — in one clean, fast web app. Everything runs locally in your browser.
   author: podway
   sourceUrl: https://github.com/CorentinTh/it-tools
   siteUrl: https://it-tools.tech

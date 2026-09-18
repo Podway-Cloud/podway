@@ -65,7 +65,11 @@ export const Metadata = z.object({
   /** Human display name for the catalog (e.g. "BYO Project"). Falls back to the
    * kebab-case `name` when unset. The `name` stays the stable id used in URLs. */
   title: z.string().max(60).optional(),
+  /** SHORT one-liner for the catalog card (must fit without truncation). */
   description: z.string().optional(),
+  /** LONGER description (2-3 sentences, from the project's own README) shown on the new-pod page
+   * under the title. Falls back to `description` when unset. */
+  descriptionLong: z.string().max(600).optional(),
   author: z.string().optional(),
   tags: z.array(z.string()).optional(),
   /** The app's upstream source repository (e.g. the OSS project's GitHub page),

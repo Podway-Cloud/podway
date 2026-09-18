@@ -11,8 +11,9 @@ metadata:
   title: "Meilisearch"
   # Short line adapted from the project's own README (https://github.com/meilisearch/meilisearch).
   # Folded block so a description containing a ": " (colon) stays valid YAML.
-  description: >-
-    A fast, open-source search engine API with a built-in search preview.
+  description: "A fast, open-source search-engine API."
+  descriptionLong: >-
+    Meilisearch is a lightning-fast, open-source search engine that ships as an easy-to-use API with typo tolerance, filtering and AI-powered hybrid search. It's designed to add relevant, instant search to your apps and websites.
   author: podway
   sourceUrl: https://github.com/meilisearch/meilisearch
   siteUrl: https://www.meilisearch.com
