@@ -1,0 +1,11 @@
+# Paperless-ngx per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=paperless-ngx
+APP_SERVICE=paperless-ngx
+APP_IMAGE_VAR=PAPERLESS_NGX_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+APP_HEALTH_RETRIES=120
+DB_TYPE=postgres
+DB_SERVICE=postgres
+DB_USER=paperless
+DB_NAME=paperless
+APP_DATA_VOLUMES="pldata plmedia"

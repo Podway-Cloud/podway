@@ -1,0 +1,11 @@
+# Docmost per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=docmost
+APP_SERVICE=docmost
+APP_IMAGE_VAR=DOCMOST_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+APP_HEALTH_RETRIES=60
+DB_TYPE=postgres
+DB_SERVICE=postgres
+DB_USER=docmost
+DB_NAME=docmost
+APP_DATA_VOLUMES="data"

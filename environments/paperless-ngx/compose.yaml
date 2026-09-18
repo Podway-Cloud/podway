@@ -1,0 +1,48 @@
+# Paperless-ngx stack for an app-pod. Docker is provided by the pod image with its data-root on the
+# persistent /home/dev volume, so the named volumes below survive a pod restart AND an image update.
+# `restart: unless-stopped` makes docker bring the stack back on every boot — no boot hook needed.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: paperless
+    volumes: [ "pg:/var/lib/postgresql/data" ]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperless"]
+      interval: 5s
+      retries: 15
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 15
+  paperless-ngx:
+    image: ${PAPERLESS_NGX_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # The cockpit preview forwards ONLY port 3000 → map the app's internal 8000 onto 3000.
+    ports: [ "3000:8000" ]
+    volumes: [ "pldata:/usr/src/paperless/data", "plmedia:/usr/src/paperless/media" ]
+    environment:
+      - PAPERLESS_REDIS=redis://redis:6379
+      - PAPERLESS_DBHOST=postgres
+      - PAPERLESS_DBUSER=paperless
+      - PAPERLESS_DBPASS=${DB_PASSWORD}
+      - PAPERLESS_DBNAME=paperless
+      - PAPERLESS_SECRET_KEY=${SECRET_KEY}
+      - PAPERLESS_PORT=8000
+      - PAPERLESS_ADMIN_USER=admin
+      - PAPERLESS_ADMIN_PASSWORD=${ADMIN_PASSWORD}
+volumes:
+  pg: {}
+  pldata: {}
+  plmedia: {}

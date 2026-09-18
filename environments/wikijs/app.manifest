@@ -1,0 +1,11 @@
+# Wiki.js per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=wikijs
+APP_SERVICE=wikijs
+APP_IMAGE_VAR=WIKIJS_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+APP_HEALTH_RETRIES=60
+DB_TYPE=postgres
+DB_SERVICE=postgres
+DB_USER=wiki
+DB_NAME=wiki
+APP_DATA_VOLUMES=""

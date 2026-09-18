@@ -1,0 +1,11 @@
+# Umami per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=umami
+APP_SERVICE=umami
+APP_IMAGE_VAR=UMAMI_IMAGE
+APP_HEALTH_URL=http://localhost:3000/api/heartbeat
+APP_HEALTH_RETRIES=60
+DB_TYPE=postgres
+DB_SERVICE=postgres
+DB_USER=umami
+DB_NAME=umami
+APP_DATA_VOLUMES=""

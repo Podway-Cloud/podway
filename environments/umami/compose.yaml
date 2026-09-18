@@ -1,0 +1,30 @@
+# Umami stack for an app-pod. Docker is provided by the pod image with its data-root on the
+# persistent /home/dev volume, so the named volumes below survive a pod restart AND an image update.
+# `restart: unless-stopped` makes docker bring the stack back on every boot — no boot hook needed.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: umami
+    volumes: [ "pg:/var/lib/postgresql/data" ]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami"]
+      interval: 5s
+      retries: 15
+  umami:
+    image: ${UMAMI_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # The cockpit preview forwards ONLY port 3000 → map the app's internal 3000 onto 3000.
+    ports: [ "3000:3000" ]
+    environment:
+      - DATABASE_URL=postgresql://umami:${DB_PASSWORD}@postgres:5432/umami
+      - DATABASE_TYPE=postgresql
+      - APP_SECRET=${APP_SECRET}
+volumes:
+  pg: {}
