@@ -1,0 +1,7 @@
+# changedetection.io per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=changedetection
+APP_SERVICE=changedetection
+APP_IMAGE_VAR=CHANGEDETECTION_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+DB_TYPE=none
+APP_DATA_VOLUMES="data"

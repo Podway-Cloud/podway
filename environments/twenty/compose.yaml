@@ -1,0 +1,67 @@
+# Twenty (CRM) stack for an app-pod: server + worker + Postgres + Redis. Docker's data-root is on the
+# persistent /home/dev volume, so the named volumes survive a pod restart AND an image update.
+# `restart: unless-stopped` brings the stack back on every boot. SERVER_URL is the pod's PUBLIC preview
+# URL, injected into .env at first-boot setup so the frontend can reach the backend.
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    volumes: [ "db-data:/var/lib/postgresql/data" ]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: default
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h localhost -d postgres"]
+      interval: 5s
+      retries: 20
+  redis:
+    image: redis
+    restart: unless-stopped
+    command: ["--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+  server:
+    image: ${TWENTY_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    # The cockpit preview forwards ONLY port 3000 → Twenty's server already listens on 3000.
+    ports: [ "3000:3000" ]
+    volumes: [ "server-local-data:/app/packages/twenty-server/.local-storage" ]
+    environment:
+      PG_DATABASE_URL: postgres://postgres:${DB_PASSWORD}@db:5432/default
+      SERVER_URL: ${MAIN_URL}
+      REDIS_URL: redis://redis:6379
+      DISABLE_DB_MIGRATIONS: "false"
+      DISABLE_CRON_JOBS_REGISTRATION: "false"
+      STORAGE_TYPE: local
+      APP_SECRET: ${APP_SECRET}
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail http://localhost:3000/healthz || exit 1"]
+      interval: 10s
+      retries: 30
+      start_period: 60s
+  worker:
+    image: ${TWENTY_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      server: { condition: service_started }
+    command: ["yarn", "worker:prod"]
+    volumes: [ "server-local-data:/app/packages/twenty-server/.local-storage" ]
+    environment:
+      PG_DATABASE_URL: postgres://postgres:${DB_PASSWORD}@db:5432/default
+      SERVER_URL: ${MAIN_URL}
+      REDIS_URL: redis://redis:6379
+      DISABLE_DB_MIGRATIONS: "true"
+      DISABLE_CRON_JOBS_REGISTRATION: "true"
+      STORAGE_TYPE: local
+      APP_SECRET: ${APP_SECRET}
+volumes:
+  db-data: {}
+  server-local-data: {}

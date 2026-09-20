@@ -1,0 +1,11 @@
+# Twenty per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=twenty
+APP_SERVICE=server
+APP_IMAGE_VAR=TWENTY_IMAGE
+APP_HEALTH_URL=http://localhost:3000/healthz
+APP_HEALTH_RETRIES=60
+DB_TYPE=postgres
+DB_SERVICE=db
+DB_USER=postgres
+DB_NAME=default
+APP_DATA_VOLUMES="server-local-data"

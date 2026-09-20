@@ -1,0 +1,11 @@
+# Postiz per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=postiz
+APP_SERVICE=postiz
+APP_IMAGE_VAR=POSTIZ_IMAGE
+APP_HEALTH_URL=http://localhost:3000/auth
+APP_HEALTH_RETRIES=60
+DB_TYPE=postgres
+DB_SERVICE=postiz-postgres
+DB_USER=postiz
+DB_NAME=postiz
+APP_DATA_VOLUMES="config uploads"

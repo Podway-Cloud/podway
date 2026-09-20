@@ -1,0 +1,70 @@
+apiVersion: podway/v0
+name: gatus
+
+# APP (the "Apps" tab): a self-hosted OSS app Podway DEPLOYS and KEEPS UPDATED for the user. The pod
+# runs the app with `docker compose` (Docker is baked into the cloud pod-base image); the agent is its
+# always-on admin. Scaffolded via scripts/incus/scaffold-app-env.mjs; minSize confirmed by tier-walk.
+kind: app
+minSize: s
+
+metadata:
+  title: "Gatus"
+  # Short line adapted from the project's own README (https://github.com/TwiN/gatus).
+  # Folded block so a description containing a ": " (colon) stays valid YAML.
+  description: >-
+    An automated health dashboard and status page for your services and endpoints.
+  descriptionLong: >-
+    Gatus is an automated health dashboard and status page. It regularly checks your endpoints against conditions you define — status codes, response time, body content — and shows results with history and alerting. Configure it with a simple YAML file.
+  author: podway
+  sourceUrl: https://github.com/TwiN/gatus
+  siteUrl: https://gatus.io
+  tags: [self-host, oss, monitoring, status-page, uptime]
+
+base:
+  devcontainer: .devcontainer/devcontainer.json
+
+agents: [claude-code, codex]
+shared: [universal]
+
+# First-party, trusted env: the agent runs docker compose + the maintenance engine unprompted.
+permissions:
+  mode: bypassPermissions
+
+network:
+  policy: full
+
+lifecycle: always-on
+
+preview: private
+
+setup:
+  - >-
+    if [ ! -f .env ]; then printf 'GATUS_IMAGE=%s\n' "ghcr.io/twin/gatus:latest" > .env; chmod 600 .env; fi
+  - chmod +x bin/app-admin.sh
+  - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
+
+kickoff: |
+  You are the always-on ADMIN for this person's own Gatus instance, deployed on THIS pod with
+  `docker compose` and served on the pod's preview (port 3000). Keep it running, keep its data safe,
+  and keep it up to date WITHOUT ever breaking it.
+
+  What is already true when you start (the env's setup ran at first boot):
+  - Docker is installed from the pod image; its data-root is on /home/dev, so the app's data survives a
+    pod restart AND an image update. The stack is ~/work/compose.yaml with `restart: unless-stopped`.
+  - Secrets (if any) live in ~/work/.env — NEVER commit or echo them.
+  - The maintenance engine is ~/work/bin/app-admin.sh. Always run it with `APP_ADMIN_DIR=~/work`.
+
+  First turn:
+  1. Confirm health: `APP_ADMIN_DIR=~/work bin/app-admin.sh status` and open the preview. If it is up,
+     tell the owner their Gatus is live and give them the preview link.
+  2. Offer, don't assume: back up now? Keep it to 1-2 sharp questions.
+
+  Ongoing duties:
+  - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot`.
+  - UPGRADES: NEVER just `docker compose pull`. Use
+    `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <tag>` — it snapshots, pulls, health-checks and
+    AUTO-ROLLS-BACK code AND data if the new version is unhealthy. Apply only upgrades you class as SAFE.
+  - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
+
+  END EVERY TURN ORIENTED: one line — "Gatus: <up/updating> · data: <backed-up when> · next: <thing>".
+  Lead; only pause at real forks (a risky upgrade, deleting data, exposing the app publicly).

@@ -1,0 +1,81 @@
+apiVersion: podway/v0
+name: twenty
+
+# APP (the "Apps" tab): a self-hosted OSS app Podway DEPLOYS and KEEPS UPDATED for the user. The pod
+# runs the app with `docker compose` (Docker is baked into the cloud pod-base image); the agent is its
+# always-on admin. Hand-written env (multi-service: server + worker + Postgres + Redis).
+kind: app
+# 4 services (server + worker + postgres + redis). minSize confirmed by the tier-walk smoke.
+minSize: m
+
+metadata:
+  title: "Twenty"
+  # Short line adapted from the project's own README (github.com/twentyhq/twenty).
+  description: >-
+    A modern, open-source CRM — an alternative to Salesforce built for your whole team.
+  descriptionLong: >-
+    Twenty is a modern, open-source CRM, a self-hosted alternative to Salesforce. Track companies, people, and deals in a fast, customizable interface with rich filters and a kanban pipeline. Your customer data stays on your own server.
+  author: podway
+  sourceUrl: https://github.com/twentyhq/twenty
+  siteUrl: https://twenty.com
+  tags: [self-host, oss, crm, sales, productivity]
+
+base:
+  devcontainer: .devcontainer/devcontainer.json
+
+agents: [claude-code, codex]
+shared: [universal]
+
+permissions:
+  mode: bypassPermissions
+
+network:
+  policy: full
+
+lifecycle: always-on
+
+preview: private
+
+# DB password + APP_SECRET are GENERATED per-pod at setup; SERVER_URL is the pod's PUBLIC preview URL
+# (from `podway preview`) so the browser frontend reaches the backend. All go to ~/work/.env — never
+# committed, never a value the user must paste.
+setup:
+  - >-
+    if [ ! -f .env ]; then
+    URL="$(podway preview 2>/dev/null | grep -o 'https://[^ )]*' | head -1)"; [ -z "$URL" ] && URL="http://localhost:3000";
+    printf 'TWENTY_IMAGE=%s\nDB_PASSWORD=%s\nAPP_SECRET=%s\nMAIN_URL=%s\n'
+    "twentycrm/twenty:latest" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$URL" > .env;
+    chmod 600 .env; fi
+  - chmod +x bin/app-admin.sh
+  - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
+
+kickoff: |
+  You are the always-on ADMIN for this person's own Twenty CRM, deployed on THIS pod with
+  `docker compose` and served on the pod's preview (port 3000). Keep it running, keep its data safe,
+  and keep it up to date WITHOUT ever breaking it.
+
+  What is already true when you start (the env's setup ran at first boot):
+  - Docker is installed from the pod image; its data-root is on /home/dev, so all data (the Postgres DB
+    + the server's local-storage volume) survives a pod restart AND an image update. The stack is
+    ~/work/compose.yaml (server + worker + postgres + redis) with `restart: unless-stopped`.
+  - Secrets live in ~/work/.env — NEVER commit or echo them. SERVER_URL (MAIN_URL) is this pod's public
+    preview URL; if the pod's URL ever changes, update MAIN_URL + redeploy so the frontend still works.
+  - The maintenance engine is ~/work/bin/app-admin.sh. Always run it with `APP_ADMIN_DIR=~/work`.
+
+  First turn:
+  1. Confirm health: `APP_ADMIN_DIR=~/work bin/app-admin.sh status` and open the preview. If Twenty is
+     up, tell the owner it is live, give them the preview link, and note they create the first workspace
+     + account on first visit.
+  2. Offer, don't assume: import contacts? set up a backup? Keep it to 1-2 sharp questions.
+
+  Ongoing duties:
+  - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot` (dumps the DB +
+    the server local-storage volume + image tag).
+  - UPGRADES: NEVER just `docker compose pull`. Use
+    `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <tag>` — it snapshots, pulls, health-checks and
+    AUTO-ROLLS-BACK code AND data if the new version is unhealthy. Twenty runs DB migrations on the
+    server at boot; a major bump can migrate the schema — snapshot + read release notes first.
+  - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
+
+  END EVERY TURN ORIENTED: one line — "Twenty: <up/updating> · data: <backed-up when> · next: <thing>".
+  Lead; only pause at real forks (a risky upgrade, deleting data, exposing the preview publicly).

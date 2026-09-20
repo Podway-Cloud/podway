@@ -1,0 +1,95 @@
+apiVersion: podway/v0
+name: postiz
+
+# APP (the "Apps" tab): a self-hosted OSS app Podway DEPLOYS and KEEPS UPDATED for the user. The pod
+# runs the app with `docker compose` (Docker is baked into the cloud pod-base image); the agent is its
+# always-on admin. Hand-written env (heavier multi-service stack than the scaffolder covers).
+kind: app
+# TRIMMED stack (postiz + postgres + redis + temporal-on-postgres, NO Elasticsearch) idles ~2.5GB.
+# minSize confirmed by the tier-walk smoke.
+minSize: m
+
+metadata:
+  title: "Postiz"
+  # Short line adapted from the project's own README (github.com/gitroomhq/postiz-app).
+  description: >-
+    An open-source social media scheduling tool for all your channels, with an AI assistant.
+  descriptionLong: >-
+    Postiz is an open-source social media scheduling tool, a self-hosted alternative to Buffer. Plan and schedule posts across many networks from one calendar, collaborate with a team, and draft with an AI assistant. Your accounts and content stay on your own server.
+  author: podway
+  sourceUrl: https://github.com/gitroomhq/postiz-app
+  siteUrl: https://postiz.com
+  tags: [self-host, oss, social-media, scheduling, marketing]
+
+base:
+  devcontainer: .devcontainer/devcontainer.json
+
+agents: [claude-code, codex]
+shared: [universal]
+
+# First-party, trusted env: the agent runs docker compose + the maintenance engine unprompted.
+permissions:
+  mode: bypassPermissions
+
+# Postiz reaches out to the social networks you connect, and pulls its own container images.
+network:
+  policy: full
+
+lifecycle: always-on
+
+# Postiz is served on the pod's preview (:3000). Private by default — it is YOUR scheduling console,
+# and it has its own login. The owner can flip the preview public per pod if an OAuth callback needs it.
+preview: private
+
+# The DB password + JWT secret are GENERATED per-pod at setup; MAIN_URL is the pod's PUBLIC preview URL
+# (from `podway preview`), so Postiz's frontend can reach its own backend and OAuth callbacks resolve.
+# All are written to ~/work/.env — never committed, never a value the user must paste.
+setup:
+  # One-time first-boot provisioning, run as `dev` in ~/work. `podway preview` gives this pod's public
+  # URL; Postiz bakes it into MAIN_URL/FRONTEND_URL so the browser-side frontend can call the backend.
+  # Falls back to localhost:3000 only if the preview URL can't be read (e.g. a scratch smoke pod).
+  - >-
+    if [ ! -f .env ]; then
+    URL="$(podway preview 2>/dev/null | grep -oE 'https://[^ )]+' | head -1)"; [ -z "$URL" ] && URL="http://localhost:3000";
+    printf 'POSTIZ_IMAGE=%s\nDB_PASSWORD=%s\nJWT_SECRET=%s\nMAIN_URL=%s\n'
+    "ghcr.io/gitroomhq/postiz-app:latest" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$URL" > .env;
+    chmod 600 .env; fi
+  - chmod +x bin/app-admin.sh
+  - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
+
+kickoff: |
+  You are the always-on ADMIN for this person's own Postiz instance (an open-source social-media
+  scheduler), deployed on THIS pod with `docker compose` and served on the pod's preview (port 3000).
+  Keep it running, keep its data safe, and keep it up to date WITHOUT ever breaking it.
+
+  What is already true when you start (the env's setup ran at first boot):
+  - Docker is installed from the pod image; its data-root is on /home/dev, so all data (the Postgres DB
+    + the config/uploads volumes) survives a pod restart AND an image update. The stack is
+    ~/work/compose.yaml (postiz + postgres + redis + temporal) with `restart: unless-stopped`.
+  - The stack is TRIMMED for cost: Temporal (Postiz's scheduling engine) runs on the SAME Postgres with
+    Postgres visibility — there is deliberately NO Elasticsearch. Don't "add it back" to fix a problem
+    without checking; the trim is intentional and was smoke-tested.
+  - Secrets live in ~/work/.env — NEVER commit or echo them. MAIN_URL there is this pod's public preview
+    URL; if the pod's URL ever changes, Postiz's frontend/OAuth need MAIN_URL updated + a redeploy.
+  - The maintenance engine is ~/work/bin/app-admin.sh. Always run it with `APP_ADMIN_DIR=~/work`.
+
+  First turn:
+  1. Confirm health: `APP_ADMIN_DIR=~/work bin/app-admin.sh status` and open the preview. If Postiz is
+     up, tell the owner it is live, give them the preview link, and note they create the first account
+     on the sign-up page (registration is open by default).
+  2. Offer, don't assume: connect a first social account? set up a backup? Keep it to 1-2 sharp questions.
+     Connecting a network (X, LinkedIn, …) needs that network's OAuth app keys — surface which env vars
+     to set and point the owner at the dashboard; never invent credentials.
+
+  Ongoing duties:
+  - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot` (dumps the postiz
+    DB + the config/uploads volumes + image tag). NOTE: in-flight Temporal scheduling state is NOT in
+    the snapshot — accounts, posts and connections are; scheduled workflows would be re-created.
+  - UPGRADES: NEVER just `docker compose pull`. Use
+    `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <tag>` — it snapshots, pulls, health-checks and
+    AUTO-ROLLS-BACK code AND data if the new version is unhealthy. Apply only upgrades you class as SAFE;
+    a Postiz major bump can include a DB migration — snapshot + read the release notes first.
+  - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
+
+  END EVERY TURN ORIENTED: one line — "Postiz: <up/updating> · data: <backed-up when> · next: <thing>".
+  Lead; only pause at real forks (a risky upgrade, deleting data, exposing the preview publicly for OAuth).

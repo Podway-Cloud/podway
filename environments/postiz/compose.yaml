@@ -1,0 +1,71 @@
+# Postiz stack for an app-pod (TRIMMED: Temporal on Postgres, NO Elasticsearch — ~2.5GB idle vs the
+# upstream 7-service stack). Docker's data-root is on the persistent /home/dev volume, so the named
+# volumes below survive a pod restart AND an image update. `restart: unless-stopped` brings the stack
+# back on every boot. MAIN_URL is the pod's PUBLIC preview URL, injected into .env at first-boot setup.
+services:
+  postiz-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postiz
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: postiz
+    volumes: [ "pg:/var/lib/postgresql/data" ]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postiz"]
+      interval: 5s
+      retries: 20
+  postiz-redis:
+    image: redis:7.2-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+  # Temporal (Postiz's scheduling engine) on the SAME Postgres — auto-setup creates its temporal +
+  # temporal_visibility DBs there. Postgres visibility (no Elasticsearch) keeps the footprint tiny.
+  temporal:
+    image: temporalio/auto-setup:1.28.1
+    restart: unless-stopped
+    depends_on:
+      postiz-postgres:
+        condition: service_healthy
+    environment:
+      - DB=postgres12
+      - DBNAME=temporal
+      - VISIBILITY_DBNAME=temporal_visibility
+      - DB_PORT=5432
+      - POSTGRES_USER=postiz
+      - POSTGRES_PWD=${DB_PASSWORD}
+      - POSTGRES_SEEDS=postiz-postgres
+  postiz:
+    image: ${POSTIZ_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      postiz-postgres:
+        condition: service_healthy
+      postiz-redis:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+    # The cockpit preview forwards ONLY port 3000 → map Postiz's internal 5000 onto 3000.
+    ports: [ "3000:5000" ]
+    volumes: [ "config:/config/", "uploads:/uploads/" ]
+    environment:
+      - MAIN_URL=${MAIN_URL}
+      - FRONTEND_URL=${MAIN_URL}
+      - NEXT_PUBLIC_BACKEND_URL=${MAIN_URL}/api
+      - BACKEND_INTERNAL_URL=http://localhost:3000
+      - TEMPORAL_ADDRESS=temporal:7233
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=postgresql://postiz:${DB_PASSWORD}@postiz-postgres:5432/postiz
+      - REDIS_URL=redis://postiz-redis:6379
+      - IS_GENERAL=true
+      - DISABLE_REGISTRATION=false
+      - STORAGE_PROVIDER=local
+      - UPLOAD_DIRECTORY=/uploads
+      - NEXT_PUBLIC_UPLOAD_DIRECTORY=/uploads
+volumes:
+  pg: {}
+  config: {}
+  uploads: {}

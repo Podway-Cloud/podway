@@ -1,0 +1,11 @@
+# Gatus config — edit to add your own endpoints to monitor.
+# Docs: https://github.com/TwiN/gatus
+storage:
+  type: sqlite
+  path: /data/gatus.db
+endpoints:
+  - name: podway-preview
+    url: "http://localhost:8080/health"
+    interval: 60s
+    conditions:
+      - "[STATUS] == 200"
