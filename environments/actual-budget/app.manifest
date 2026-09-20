@@ -1,0 +1,7 @@
+# Actual Budget per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=actual-budget
+APP_SERVICE=actual-budget
+APP_IMAGE_VAR=ACTUAL_BUDGET_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+DB_TYPE=none
+APP_DATA_VOLUMES="data"

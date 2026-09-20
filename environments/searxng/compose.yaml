@@ -1,0 +1,15 @@
+# SearXNG stack for an app-pod. Docker is provided by the pod image with its data-root on the
+# persistent /home/dev volume, so the named volumes below survive a pod restart AND an image update.
+# `restart: unless-stopped` makes docker bring the stack back on every boot — no boot hook needed.
+services:
+  searxng:
+    image: ${SEARXNG_IMAGE}
+    restart: unless-stopped
+    # The cockpit preview forwards ONLY port 3000 → map the app's internal 8080 onto 3000.
+    ports: [ "3000:8080" ]
+    volumes: [ "data:/etc/searxng" ]
+    environment:
+      - SEARXNG_SECRET=${SEARXNG_SECRET}
+      - SEARXNG_BASE_URL=http://localhost:3000/
+volumes:
+  data: {}

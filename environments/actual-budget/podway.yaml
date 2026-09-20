@@ -1,0 +1,70 @@
+apiVersion: podway/v0
+name: actual-budget
+
+# APP (the "Apps" tab): a self-hosted OSS app Podway DEPLOYS and KEEPS UPDATED for the user. The pod
+# runs the app with `docker compose` (Docker is baked into the cloud pod-base image); the agent is its
+# always-on admin. Scaffolded via scripts/incus/scaffold-app-env.mjs; minSize confirmed by tier-walk.
+kind: app
+minSize: s
+
+metadata:
+  title: "Actual Budget"
+  # Short line adapted from the project's own README (https://github.com/actualbudget/actual).
+  # Folded block so a description containing a ": " (colon) stays valid YAML.
+  description: >-
+    A local-first personal finance app with fast, private envelope budgeting.
+  descriptionLong: >-
+    Actual Budget is a local-first personal finance app built around envelope budgeting. It tracks accounts, categorizes transactions, and keeps your data private and fast on your own server. Optional sync keeps your devices in step.
+  author: podway
+  sourceUrl: https://github.com/actualbudget/actual
+  siteUrl: https://actualbudget.org
+  tags: [self-host, oss, finance, budgeting, money]
+
+base:
+  devcontainer: .devcontainer/devcontainer.json
+
+agents: [claude-code, codex]
+shared: [universal]
+
+# First-party, trusted env: the agent runs docker compose + the maintenance engine unprompted.
+permissions:
+  mode: bypassPermissions
+
+network:
+  policy: full
+
+lifecycle: always-on
+
+preview: private
+
+setup:
+  - >-
+    if [ ! -f .env ]; then printf 'ACTUAL_BUDGET_IMAGE=%s\n' "actualbudget/actual-server:latest" > .env; chmod 600 .env; fi
+  - chmod +x bin/app-admin.sh
+  - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
+
+kickoff: |
+  You are the always-on ADMIN for this person's own Actual Budget instance, deployed on THIS pod with
+  `docker compose` and served on the pod's preview (port 3000). Keep it running, keep its data safe,
+  and keep it up to date WITHOUT ever breaking it.
+
+  What is already true when you start (the env's setup ran at first boot):
+  - Docker is installed from the pod image; its data-root is on /home/dev, so the app's data survives a
+    pod restart AND an image update. The stack is ~/work/compose.yaml with `restart: unless-stopped`.
+  - Secrets (if any) live in ~/work/.env — NEVER commit or echo them.
+  - The maintenance engine is ~/work/bin/app-admin.sh. Always run it with `APP_ADMIN_DIR=~/work`.
+
+  First turn:
+  1. Confirm health: `APP_ADMIN_DIR=~/work bin/app-admin.sh status` and open the preview. If it is up,
+     tell the owner their Actual Budget is live and give them the preview link.
+  2. Offer, don't assume: back up now? Keep it to 1-2 sharp questions.
+
+  Ongoing duties:
+  - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot`.
+  - UPGRADES: NEVER just `docker compose pull`. Use
+    `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <tag>` — it snapshots, pulls, health-checks and
+    AUTO-ROLLS-BACK code AND data if the new version is unhealthy. Apply only upgrades you class as SAFE.
+  - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
+
+  END EVERY TURN ORIENTED: one line — "Actual Budget: <up/updating> · data: <backed-up when> · next: <thing>".
+  Lead; only pause at real forks (a risky upgrade, deleting data, exposing the app publicly).
