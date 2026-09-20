@@ -26,6 +26,9 @@ const HIDDEN_APPS = new Set([
   "filebrowser",
   "homepage",
   "wikijs",
+  // Not owner-curation: firefly-iii is committed + baked but fails restart-survival on a
+  // hard pod reboot (storage-perms corruption). Hidden until fixed + re-smoked. See 0audit.md.
+  "firefly-iii",
 ]);
 
 export default async function EnvGallery() {

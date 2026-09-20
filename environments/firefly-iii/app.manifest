@@ -1,0 +1,10 @@
+# Firefly III per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=firefly-iii
+APP_SERVICE=firefly-iii
+APP_IMAGE_VAR=FIREFLY_III_IMAGE
+APP_HEALTH_URL=http://localhost:3000/login
+DB_TYPE=postgres
+DB_SERVICE=postgres
+DB_USER=firefly
+DB_NAME=firefly
+APP_DATA_VOLUMES="data"

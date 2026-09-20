@@ -1,0 +1,8 @@
+# Stirling PDF per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=stirling-pdf
+APP_SERVICE=stirling-pdf
+APP_IMAGE_VAR=STIRLING_PDF_IMAGE
+APP_HEALTH_URL=http://localhost:3000/api/v1/info/status
+APP_HEALTH_RETRIES=60
+DB_TYPE=none
+APP_DATA_VOLUMES="data"

@@ -1,0 +1,39 @@
+# Firefly III stack for an app-pod. Docker is provided by the pod image with its data-root on the
+# persistent /home/dev volume, so the named volumes below survive a pod restart AND an image update.
+# `restart: unless-stopped` makes docker bring the stack back on every boot — no boot hook needed.
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: firefly
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: firefly
+    volumes: [ "pg:/var/lib/postgresql/data" ]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U firefly"]
+      interval: 5s
+      retries: 15
+  firefly-iii:
+    image: ${FIREFLY_III_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # The cockpit preview forwards ONLY port 3000 → map the app's internal 8080 onto 3000.
+    ports: [ "3000:8080" ]
+    volumes: [ "data:/var/www/html/storage/upload" ]
+    environment:
+      - APP_KEY=${APP_KEY}
+      - APP_ENV=production
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=firefly
+      - DB_USERNAME=firefly
+      - DB_PASSWORD=${DB_PASSWORD}
+      - APP_URL=http://localhost:3000
+      - TRUSTED_PROXIES=**
+volumes:
+  pg: {}
+  data: {}
