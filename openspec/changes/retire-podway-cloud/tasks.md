@@ -1,15 +1,15 @@
 # Tasks — retire podway.cloud
 
 ## 1. Phase 1 prep — cert + DNS for podway.site (additive, nothing breaks)
-- [ ] 1.1 `fly certs add '*.podway.site' -a podway-gateway` (and `podway.site` if apex is used); capture the DNS-01 validation target.
-- [ ] 1.2 Via `CLOUDFLARE_API_TOKEN`: add `*.podway.site` CNAME → `podway-gateway.fly.dev` (DNS only), plus the `_acme-challenge` validation record. Wait for `fly certs show '*.podway.site'` = Issued.
+- [x] 1.1 `fly certs add '*.podway.site' -a podway-gateway` (and `podway.site` if apex is used); capture the DNS-01 validation target.
+- [x] 1.2 Via `CLOUDFLARE_API_TOKEN`: add `*.podway.site` CNAME → `podway-gateway.fly.dev` (DNS only), plus the `_acme-challenge` validation record. Wait for `fly certs show '*.podway.site'` = Issued.
 
 ## 2. Phase 1 code — preview host move (dual-domain safe)
 - [x] 2.1 Fix the 2-label heuristic in `packages/gateway/src/main.ts` (appOrigin, relayConnectUrl) and `packages/provider/src/pod-init.ts` (appOrigin): derive correctly when the base has no `preview.` label.
 - [x] 2.2 `allowedDevOrigins`: add `*.podway.site` (keep `*.preview.podway.cloud` until teardown) in `environments/morning-ops-robot/app/next.config.ts`, `environments/first-10-customers/app/next.config.ts`, AND the pod-base scaffolder that emits these for new app-pods.
 - [x] 2.3 Swap example/UI hostnames: `apps/web/app/landing-agent-home.tsx`, `apps/web/app/dev-harness/preview/page.tsx`, `apps/web/components/preview-card.tsx`.
 - [ ] 2.4 Update preview-host tests to podway.site: `packages/provider/test/{pod-init,base-image,podway-cli-surfaces,incus-provider}.test.ts`, `apps/web/test/term-links.test.ts`, `packages/gateway/test/relay-tunnel-router.test.ts`. Prove they fail against the old value.
-- [ ] 2.5 Build + test (`pnpm -r build && pnpm -r test`, web `tsc`), commit, and rebuild pod-base (bakes the scaffolder + pod-init changes); digest bump.
+- [x] 2.5 Build + test (`pnpm -r build && pnpm -r test`, web `tsc`), commit, and rebuild pod-base (bakes the scaffolder + pod-init changes); digest bump.
 
 ## 3. Phase 1 flip + verify
 - [ ] 3.1 Set `PODWAY_PREVIEW_BASE=podway.site` on `podway-gateway` + `podway-web` (Fly secrets).
