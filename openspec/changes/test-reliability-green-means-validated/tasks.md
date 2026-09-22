@@ -16,13 +16,19 @@
   (`require{User,ApprovedUser,Admin}`), gated via a local helper (e.g. `assertOwnedPod`), nor in an
   explicit allowlist (one entry: `billingEnabled`, a public read-only flag). Verified to FAIL on an
   injected ungated action. A new ungated action now fails CI with no per-action test edit.
-- [ ] 1.4 Fix the live dead assertion `apps/web/e2e/admin-pages.spec.ts:96` (target the real `link`
+- [x] 1.4 Dead assertion at `apps/web/e2e/admin-pages.spec.ts` FIXED (already on main): the pods-table
+  sortability test now clicks the real `link` header (Size) and asserts `?sort=size` applied, guard removed.
+  (Superseded original wording:) Fix the live dead assertion `apps/web/e2e/admin-pages.spec.ts:96` (target the real `link`
   role + existing columns; remove the `if (await …count())` guard so it actually tests sortability).
-- [ ] 1.5 Add a CI lint/grep guard: fail on e2e assertions wrapped in `if (await …count())` and on
-  test bodies with zero `expect`.
-- [ ] 1.6 Delete/convert vacuous tests: `shared/test/environment-spec.test.ts` (empty loop),
-  `environments-conform.test.ts` (continue-past-missing), `relay/test/dashboard.browser.test.ts`
-  (skipIf hides browser-free assertions), `shared/test/relay.test.ts` (literal-equals-literal).
+- [x] 1.5 `scripts/check-test-quality.mjs` (wired into ci.yml + public-ci.yml) fails on assertion-free
+  test bodies (no `expect*(`/`assert*(` and no `// no-expect-ok: <why>` waiver) and on any `.spec.ts`
+  assertion guarded by `if (await …count())`. Clean across 227 test files; the 6 genuine non-`expect`
+  tests (3 VISUAL screenshots, 3 socket round-trips that reject on timeout) carry reasoned waivers.
+  Verified to FAIL on an injected vacuous test AND a count()-guarded assertion.
+- [x] 1.6 The named tests are no longer vacuous (fixed in earlier cleanup, now guarded by 1.5):
+  `environment-spec.test.ts` has 44 real expects; `environments-conform.test.ts` asserts `validated>=3`
+  (the `continue` only skips non-env dirs); `relay.test.ts` asserts real `RELAY_LIMITS`/`classifyRelayRefusal`
+  behaviour; `dashboard.browser.test.ts`'s `skipIf(!browser)` is a legitimate browser gate with real assertions inside.
 - [x] 1.7a Coverage provider installed (`@vitest/coverage-v8`) + a root `pnpm coverage` script (v8,
   text + json-summary). First numbers confirm the audit: `billing.ts` is **44.8%** covered — the
   money-movement writes (`grantCredit`, `handleEvent`, `syncSubscription`) are the uncovered ranges.

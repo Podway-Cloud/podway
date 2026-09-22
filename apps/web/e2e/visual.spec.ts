@@ -7,6 +7,7 @@ const OUT = process.env.VISUAL_OUT || "/tmp/visual";
 // Capture screenshots of the cockpit walkthrough + the terminal stats bar so the
 // placement can actually be eyeballed (not just asserted). Run with a wide viewport.
 test("VISUAL walkthrough + terminal stats", async ({ page }) => {
+  // no-expect-ok: VISUAL capture for human review — takes screenshots, not a functional assertion.
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 1440, height: 950 });
   await login(page, "approved");
@@ -52,6 +53,7 @@ test("VISUAL walkthrough + terminal stats", async ({ page }) => {
 });
 
 test("VISUAL mobile — launch wizard, walkthrough, github wizard", async ({ page }) => {
+  // no-expect-ok: VISUAL capture for human review — takes screenshots, not a functional assertion.
   test.setTimeout(150_000);
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page, "approved");
@@ -160,6 +162,7 @@ test("VISUAL launch wizard — name required, secret persists, review size", asy
 // surface (2026-09-07); this test moved with it rather than being deleted, because the explanation
 // still has to exist SOMEWHERE.
 test("VISUAL settings relay ⓘ explains the relay", async ({ page }) => {
+  // no-expect-ok: VISUAL capture for human review — takes screenshots, not a functional assertion.
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1100, height: 950 });
   await login(page, "approved");

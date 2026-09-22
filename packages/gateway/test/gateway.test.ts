@@ -232,6 +232,8 @@ describe("terminal gateway", () => {
   });
 
   it("proxies terminal I/O for the owner to a real pod-agent (5.3)", async () => {
+    // no-expect-ok: waitOutput rejects on timeout, so reaching the end IS the assertion — the
+    // round-trip string came back through the gateway proxy.
     await seed("pod1", "u1");
     const ws = await connect("pod1", "u1");
     await new Promise((r) => setTimeout(r, 500));

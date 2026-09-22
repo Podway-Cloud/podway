@@ -54,6 +54,8 @@ function waitForOutput(ws: WebSocket, needle: string, ms = 6000): Promise<void> 
 
 describe("AgentServer (real PTY over WebSocket)", () => {
   it("round-trips input → output (8.1, 4.2)", async () => {
+    // no-expect-ok: waitForOutput rejects on timeout, so reaching the end IS the assertion — the
+    // echoed "srv_ok_42" was received over the socket, else this test fails.
     const { url } = await startServer();
     const ws = await connect(url);
     await new Promise((r) => setTimeout(r, 400));
@@ -63,6 +65,8 @@ describe("AgentServer (real PTY over WebSocket)", () => {
   });
 
   it("mirrors output to two concurrent clients (8.4)", async () => {
+    // no-expect-ok: both waitForOutput calls reject on timeout — reaching the end proves both
+    // clients received the mirrored output.
     const { url } = await startServer();
     const a = await connect(url);
     const b = await connect(url);

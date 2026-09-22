@@ -56,3 +56,6 @@ jobs:
           test
       - name: Lint environment manifests
         run: node scripts/lint-envs.mjs
+
+      - name: Check test quality
+        run: node scripts/check-test-quality.mjs
