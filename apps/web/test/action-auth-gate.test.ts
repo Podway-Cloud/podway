@@ -29,20 +29,10 @@ describe("server-action approval gate (H2)", () => {
     expect(fn).not.toMatch(/const user = await requireUser\(\)/);
   });
 
-  // Billing mutations are inert while Stripe is unconfigured, but open the moment billing goes live —
-  // exactly the pre-alpha window. They CREATE Stripe state / grant CREDIT, so an unapproved user must
-  // not reach them (audit H2 residual, 2026-09-14).
-  it("startAddCard (creates Stripe SetupIntent) gates on requireApprovedUser", () => {
-    const fn = fnBody(billingActions, "startAddCard");
-    expect(fn).toContain("requireApprovedUser()");
-    expect(fn).not.toMatch(/await requireUser\(\)/);
-  });
-
-  it("markCardSaved (grants signup/referral credit) gates on requireApprovedUser", () => {
-    const fn = fnBody(billingActions, "markCardSaved");
-    expect(fn).toContain("requireApprovedUser()");
-    expect(fn).not.toMatch(/await requireUser\(\)/);
-  });
+  // NOTE: startAddCard + markCardSaved were source-scanned here; they are now proven at RUNTIME
+  // (they refuse when the approval gate rejects, and never touch Stripe/credit) in
+  // action-gate-runtime.test.ts. And EVERY "use server" action is checked for a gate by
+  // ungated-action-meta.test.ts — so a newly-added ungated action fails without a per-action edit here.
 
   it("syncOwnerBilling (takes a caller-supplied ownerId) is NOT a directly-invocable action", () => {
     // It must not be exported from a "use server" module — that exposed it as a POST anyone could call

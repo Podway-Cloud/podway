@@ -72,6 +72,16 @@ user. Signed-in but unapproved users SHALL be shown a pending state, not the pro
 These are inert while billing is unconfigured, but open the moment Stripe is enabled — the pre-alpha
 window this gate exists for (audit H2 residual, 2026-09-14).
 
+#### Scenario: The action gate is verified at runtime, and a new ungated action fails the build
+
+- **WHEN** the test suite validates these gates
+- **THEN** it SHALL invoke a money-moving action with an unapproved session and assert the action
+  REFUSES before any external/side effect (a present-but-broken gate SHALL fail the test), rather than
+  only grepping the source for the gate token
+- **AND** a meta-test SHALL enumerate every exported action in every `"use server"` module and FAIL
+  the build if one enforces no gate (inline, via a gating helper, or an explicit allowlisted-public
+  entry with a reason) — so a newly-added ungated mutating action cannot ship green
+
 ### Requirement: Admin approval page
 
 An admin-only page SHALL list users (pending first) and let an admin approve or revoke access.

@@ -1,14 +1,21 @@
 # Tasks — make green mean validated
 
 ## Phase 1 — Make green HONEST (cheap, do first)
-- [ ] 1.1 Convert `apps/web/test/action-auth-gate.test.ts` from source-scan to RUNTIME: call each
-  guarded server action (launchPod, startAddCard, markCardSaved, …) with an unapproved/other-owner
-  session and assert it rejects. Model: `admin-billing-gate.test.ts:48-86`.
+- [~] 1.1 Convert `apps/web/test/action-auth-gate.test.ts` from source-scan to RUNTIME: call each
+  guarded server action with an unapproved/other-owner session and assert it rejects. Model:
+  `admin-billing-gate.test.ts:48-86`. DONE for the money paths — `startAddCard` + `markCardSaved`
+  now proven at runtime in `action-gate-runtime.test.ts` (refuse when the gate rejects, never touch
+  Stripe/credit; approved user gets through; inert when billing off), verified to FAIL against a
+  removed gate. Their source-scans were dropped from action-auth-gate.test.ts. REMAINING: launchPod's
+  runtime conversion (actions.ts has a heavy import graph to fake) — still token-covered by 1.3.
 - [ ] 1.2 Convert the source-scan half of `admin-billing-gate.test.ts` + `t3-harness-guard.test.ts`
   + `posthog-boundary.test.ts` to runtime/behavioral where a runtime seam exists; keep as source-scan
   ONLY where there is genuinely nothing to invoke (and label it as a policy check, not a gate test).
-- [ ] 1.3 Add an **ungated-action meta-test**: enumerate every exported `"use server"` mutating
-  action under `apps/web`, fail if one is not covered by the auth-gate registry/test.
+- [x] 1.3 Ungated-action meta-test — `apps/web/test/ungated-action-meta.test.ts` discovers every
+  `"use server"` module under apps/web and fails if an exported action is neither gated inline
+  (`require{User,ApprovedUser,Admin}`), gated via a local helper (e.g. `assertOwnedPod`), nor in an
+  explicit allowlist (one entry: `billingEnabled`, a public read-only flag). Verified to FAIL on an
+  injected ungated action. A new ungated action now fails CI with no per-action test edit.
 - [ ] 1.4 Fix the live dead assertion `apps/web/e2e/admin-pages.spec.ts:96` (target the real `link`
   role + existing columns; remove the `if (await …count())` guard so it actually tests sortability).
 - [ ] 1.5 Add a CI lint/grep guard: fail on e2e assertions wrapped in `if (await …count())` and on
@@ -58,8 +65,9 @@
   invariant), `pre-push`, `check-0audit.sh` (ceilings + `[no-spec]` bypass), `check-migrations.sh`.
 
 ## Cross-cutting
-- [ ] 5.1 Update specs: add "enforcement is tested at runtime" scenarios to `backoffice` / `billing` /
-  `access-control`; add a short testing-standards rule (no source-scan gates, no assertion-free tests,
-  no un-expiring quarantine) to `.claude/rules/`.
+- [~] 5.1 Update specs + rules. DONE: `access-control` spec gained a "gate is verified at runtime, and
+  a new ungated action fails the build" scenario; `.claude/rules/testing-standards.md` added (no
+  source-scan gates, no vacuous tests, prove-the-test-fails, quarantine-expiry) and imported in
+  CLAUDE.md. REMAINING: the matching `backoffice`/`billing` runtime scenarios.
 - [ ] 5.2 Each phase lands as its own PR (Phase 1 first — it's the cheapest trust win). Verify each
   new/changed test FAILS against the bug it guards before it's considered done.
