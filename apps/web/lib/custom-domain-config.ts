@@ -7,7 +7,7 @@
  * to hand out DNS records that can never verify and to wait on a certificate that will never be
  * issued — worse than the feature simply not being there yet.
  *
- * Both values must be SET. There is deliberately NO default: a default (`cname.podway.cloud`) is
+ * Both values must be SET. There is deliberately NO default: a default (`cname.podway.site`) is
  * exactly what made an unprovisioned placeholder look like a working target.
  *
  * This lives outside `custom-domain-actions.ts` because that file is `"use server"`, which may

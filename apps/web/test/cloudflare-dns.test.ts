@@ -8,7 +8,7 @@ import { writeCustomDomainRecords } from "@/lib/cloudflare-dns";
  */
 
 const TOKEN = "cf-secret-token-do-not-leak";
-const CNAME = { type: "CNAME", name: "app.acme.com", value: "cname.podway.cloud" };
+const CNAME = { type: "CNAME", name: "app.acme.com", value: "cname.podway.site" };
 const TXT = { type: "TXT", name: "_podway-challenge.app.acme.com", value: "podway-verify=abc123" };
 
 type Handler = (url: string, init?: RequestInit) => { status?: number; body: unknown };
@@ -81,7 +81,7 @@ describe("writeCustomDomainRecords", () => {
       return { body: { success: true, result: [] } };
     });
     const r = await writeCustomDomainRecords(TOKEN, "app.acme.co.uk", [
-      { type: "CNAME", name: "app.acme.co.uk", value: "cname.podway.cloud" },
+      { type: "CNAME", name: "app.acme.co.uk", value: "cname.podway.site" },
     ]);
     expect(r).toMatchObject({ ok: true, zone: "acme.co.uk" });
   });
