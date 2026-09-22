@@ -332,6 +332,11 @@
 .pricingSpecs > div { display: flex; justify-content: space-between; font-size: 12.5px; }
 .pricingSpecs dt { color: #717e84; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
 .pricingSpecs dd { margin: 0; color: var(--text); font-weight: 600; }
+/* Per-card launch button — pinned to the card bottom so all five align. */
+.pricingCta { margin-top: 16px; display: block; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-strong); padding: 9px 12px; color: var(--text); font-size: 13px; font-weight: 650; text-align: center; text-decoration: none; }
+.pricingCta:hover { border-color: color-mix(in srgb, var(--blue-soft) 45%, var(--line)); background: #202a2f; }
+.pricingCtaFeatured { background: var(--blue); border-color: var(--blue); color: #fff; }
+.pricingCtaFeatured:hover { background: #6a97ff; border-color: #6a97ff; }
 .pricingFooter { margin-top: 40px; }
 .pricingIncludes h3 { color: var(--lp-muted); font-family: var(--font-mono); font-size: 11px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
 .pricingIncludes ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 22px; margin: 16px 0 0; padding: 0; list-style: none; }

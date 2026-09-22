@@ -85,6 +85,7 @@ export default function LaunchConfigure({
   oss = false,
   capacity = null,
   initialName,
+  initialSize,
   deeplink = false,
   refSource,
   billingEnabled = false,
@@ -122,6 +123,10 @@ export default function LaunchConfigure({
    * step with — only applied when there's no resumable draft, so it never clobbers a user's own
    * edit on refresh. Create still requires an explicit click either way. */
   initialName?: string;
+  /** Deep-link create: a size to open the Size picker on (a pricing card / campaign link picks the
+   * tier). Floored to the env's `minSize` so an app can't start below its supported tier. Only the
+   * pre-draft default — a resumable draft still wins, same as `initialName`. */
+  initialSize?: PodSize;
   /** Deep-link create: marks this launch as coming from `/start`, so the post-create hand-off
    * shows the 2-card walkthrough (Card A live app, Card B steer from Claude) instead of the
    * default coach-mark tour. */
@@ -146,7 +151,11 @@ export default function LaunchConfigure({
   // An env that declares a minSize (every `kind: app`) has been sized to that tier — it's the RIGHT
   // default, not a floor under the generic Medium. Defaulting apps to their minSize right-sizes them
   // (Uptime Kuma → Mini, not Medium); the user can still bump up. Non-app envs default to Medium.
-  const [size, setSize] = useState<PodSize>(minSize ?? DEFAULT_POD_SIZE);
+  // A deep-linked size (pricing card) opens the picker there, floored to the env's minSize; otherwise
+  // the env's minSize (right-sizes an app) or the generic default.
+  const [size, setSize] = useState<PodSize>(
+    initialSize ? (minSize ? maxSize(initialSize, minSize) : initialSize) : (minSize ?? DEFAULT_POD_SIZE),
+  );
   // Self-host resource limits (self-host-pod-sizing); null ⇒ unlimited, the OSS default.
   const [cpus, setCpus] = useState<number | null>(null);
   const [memoryMb, setMemoryMb] = useState<number | null>(null);
@@ -781,7 +790,8 @@ export default function LaunchConfigure({
                     </div>
                     {!billingEnabled ? (
                       <p className="text-[12.5px] text-muted-foreground">
-                        Nothing is charged yet — payments are coming soon. Prices are shown so you can plan.
+                        Nothing is charged yet — payments are coming soon. When they open, add a card and get{" "}
+                        <span className="font-medium text-foreground">${SIGNUP_CREDIT_USD} in free credit</span> toward your pods. Prices are shown so you can plan.
                       </p>
                     ) : hasCard ? (
                       <p className="text-[12.5px] text-muted-foreground">

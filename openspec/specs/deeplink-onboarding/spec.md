@@ -27,6 +27,21 @@ app by slug; `ref` is an opaque attribution source. Visiting `/start`:
 - **WHEN** `/start?app=does-not-exist` is opened
 - **THEN** the user SHALL land on the normal catalog with no error page and no pod created
 
+### Requirement: A deep link MAY preselect a pod size, including a size-only (no-app) launch
+
+The `/start` entry SHALL accept an optional `size=<tier>` param, validated against the tier list
+(unknown ⇒ ignored, the env default stands). When `size` is present WITHOUT `app`, `/start` SHALL
+open the create wizard for a blank bring-your-own-repo workspace at that size — the path a landing
+pricing card takes ("launch a pod at this size"). The chosen size SHALL be floored to the target
+env's `minSize` so an app cannot start below its supported tier. As with `app`, `/start` SHALL carry
+`size` through sign-in and SHALL NEVER create a pod on its own.
+
+#### Scenario: A pricing card preselects the size on a blank workspace
+
+- **WHEN** an authenticated user opens `/start?size=xl&ref=pricing`
+- **THEN** the create wizard SHALL open for the blank workspace with the XL tier preselected and the
+  name field focused, and a single explicit Create the user must click
+
 ### Requirement: First-touch referral attribution is stored on the account and the pod
 
 The platform SHALL record the deep link's `ref` as first-touch attribution: on the user's account when

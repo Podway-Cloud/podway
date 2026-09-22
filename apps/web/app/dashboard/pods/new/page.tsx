@@ -10,6 +10,7 @@ import { harnessEnabled } from "@/lib/agent-harness";
 import { getBillingSummary } from "@/lib/billing-actions";
 import { accountRamCapGb } from "@/lib/account-limits";
 import { sanitizeRef } from "@podway/shared";
+import { POD_SIZES, type PodSize } from "@podway/shared/tiers";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +25,10 @@ export const metadata = { title: "New pod" };
 export default async function NewPodPage({
   searchParams,
 }: {
-  searchParams: Promise<{ env?: string; step?: string; from?: string; ref?: string; name?: string }>;
+  searchParams: Promise<{ env?: string; step?: string; from?: string; ref?: string; name?: string; size?: string }>;
 }) {
   const user = await requireApprovedUser();
-  const { env, step, from, ref: rawRef, name: rawName } = await searchParams;
+  const { env, step, from, ref: rawRef, name: rawName, size: rawSize } = await searchParams;
   if (!env) redirect("/dashboard/create");
   const detail = await getEnvironmentDetail(env);
   if (!detail) redirect("/dashboard/create");
@@ -44,6 +45,11 @@ export default async function NewPodPage({
   const presetName = rawName?.trim().replace(/\s+/g, " ").slice(0, 60);
   const initialName = deeplink ? (presetName || `my ${detail.title}`) : undefined;
   const ref = sanitizeRef(rawRef);
+  // A pricing card / campaign link can preselect a size (?size=m). Validate against the tier list;
+  // LaunchConfigure floors it to the env's minSize. Unknown ⇒ ignored (env default stands).
+  const initialSize = (POD_SIZES as readonly string[]).includes(rawSize ?? "")
+    ? (rawSize as PodSize)
+    : undefined;
   // The account's RAM budget (GB), so the wizard can show the cost + free memory and block a
   // launch that won't fit BEFORE the user fills everything in. Admins are unbounded; a user WITH a
   // card gets the higher carded budget (they pay per pod beyond their free credit).
@@ -82,6 +88,7 @@ export default async function NewPodPage({
         t3Enabled={harnessEnabled("t3")}
         capacity={capacity}
         initialName={initialName}
+        initialSize={initialSize}
         deeplink={deeplink}
         refSource={ref ?? undefined}
         billingEnabled={billing !== null}

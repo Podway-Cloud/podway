@@ -255,6 +255,16 @@ export default async function AgentComputerLanding({
                   <div><dt>vCPU</dt><dd>{t.vcpu} burst</dd></div>
                   <div><dt>Disk</dt><dd>{t.diskGb} GB</dd></div>
                 </dl>
+                {/* Launch a blank workspace at this size — /start carries the size + ref through
+                    sign-in and opens the prefilled wizard (name focused, size preselected). */}
+                <TrackedLink
+                  className={`${styles.pricingCta} ${t.tag === "default" ? styles.pricingCtaFeatured : ""}`}
+                  href={`/start?size=${t.id}&ref=pricing`}
+                  eventName="landing_primary_cta"
+                  item={`pricing-${t.id}`}
+                >
+                  Get started
+                </TrackedLink>
               </article>
             ))}
           </div>

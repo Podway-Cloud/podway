@@ -3,8 +3,13 @@ import { getCurrentUser, editionOss } from "@/lib/session";
 import { getEnvironmentDetail } from "@/lib/environments";
 import { recordFirstTouchRef } from "@/lib/attribution";
 import { sanitizeRef } from "@podway/shared";
+import { POD_SIZES } from "@podway/shared/tiers";
 
 export const dynamic = "force-dynamic";
+
+/** The env a size-only deep link (pricing card, no app) launches: a blank bring-your-own-repo
+ * workspace at the chosen size. */
+const SIZE_ONLY_ENV = "byo-project";
 
 /**
  * The deep-link entry (deeplink-onboarding): `/start?app=<slug>&ref=<source>`. One link for
@@ -25,13 +30,17 @@ export const dynamic = "force-dynamic";
 export default async function StartPage({
   searchParams,
 }: {
-  searchParams: Promise<{ app?: string; ref?: string; name?: string }>;
+  searchParams: Promise<{ app?: string; ref?: string; name?: string; size?: string }>;
 }) {
-  const { app, ref: rawRef, name: rawName } = await searchParams;
+  const { app, ref: rawRef, name: rawName, size: rawSize } = await searchParams;
   const ref = sanitizeRef(rawRef);
   // Optional pod NAME the link can preset (e.g. /start?app=n8n&name=Acme%20automations). Light
   // sanitize only — the wizard + launchPod validate it; absent → the wizard's "my <app>" default.
   const name = rawName?.trim().replace(/\s+/g, " ").slice(0, 60) || undefined;
+  // Optional SIZE the link can preselect (a pricing card: /start?size=m). Validated against the tier
+  // list; the wizard floors it to the env's minSize. A size WITHOUT an app means "a blank workspace
+  // at this size" (the default-landing pricing cards).
+  const size = (POD_SIZES as readonly string[]).includes(rawSize ?? "") ? rawSize : undefined;
 
   const user = await getCurrentUser();
   if (!user) {
@@ -39,6 +48,7 @@ export default async function StartPage({
     if (app) qp.set("app", app);
     if (ref) qp.set("ref", ref);
     if (name) qp.set("name", name);
+    if (size) qp.set("size", size);
     const next = `/start${qp.size ? `?${qp.toString()}` : ""}`;
     redirect(`/signin?next=${encodeURIComponent(next)}`);
   }
@@ -49,7 +59,10 @@ export default async function StartPage({
     await recordFirstTouchRef(user.id, ref);
   }
 
-  const detail = app ? await getEnvironmentDetail(app) : null;
+  // `app` wins; otherwise a size-only link launches the blank workspace at that size. Neither → the
+  // catalog (unchanged). Unknown app → catalog (spec: unknown app falls back safely).
+  const envSlug = app || (size ? SIZE_ONLY_ENV : undefined);
+  const detail = envSlug ? await getEnvironmentDetail(envSlug) : null;
   if (!detail) redirect("/dashboard/create");
 
   // Hand off to the existing prefilled-wizard route. `from=deeplink` marks this as a deep-link
@@ -60,5 +73,6 @@ export default async function StartPage({
   const qp = new URLSearchParams({ env: detail.name, from: "deeplink" });
   if (ref) qp.set("ref", ref);
   if (name) qp.set("name", name);
+  if (size) qp.set("size", size);
   redirect(`/dashboard/pods/new?${qp.toString()}`);
 }
