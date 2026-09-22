@@ -284,6 +284,7 @@ describe("podway msg (agent-to-agent, same owner)", () => {
     ...env,
     PODWAY_MSG_OUTBOX: path.join(dir, "outbox.jsonl"),
     PODWAY_MSG_INBOX: path.join(dir, "inbox.jsonl"),
+    PODWAY_MSG_DONE: path.join(dir, "msg-done"),
     PODWAY_MSG_FLEET: path.join(dir, "fleet.json"),
   });
   const runMsg = (args: string[]) => execFileSync("bash", [cli, ...args], { env: msgEnv(), encoding: "utf8" });
@@ -347,6 +348,46 @@ describe("podway msg (agent-to-agent, same owner)", () => {
     const last = outbox().at(-1)!;
     expect(last.to).toBe("afisha-crawler-6bc4");
     expect(last.body).toBe("thanks!");
+    // Replying IS acting on it → the message is auto-marked done and drops out of the default view.
+    expect(runMsg(["msg", "inbox"])).toMatch(/0 open · 1 done[\s\S]*no open messages/);
+  });
+
+  it("shows OPEN messages newest-first; `done` hides a handled message; `--all` reveals it", async () => {
+    // Written oldest→newest, the order the delivery poll appends them.
+    await fs.writeFile(
+      path.join(dir, "inbox.jsonl"),
+      [
+        { id: "m1", from: "afisha-crawler-6bc4", body: "OLD one", at: "2026-08-01T10:00:00Z" },
+        { id: "m2", from: "cheerful-donkey-9d41", body: "middle two", at: "2026-09-10T09:00:00Z" },
+        { id: "m3", from: "afisha-crawler-6bc4", body: "NEWEST three", at: "2026-09-22T14:00:00Z" },
+      ].map((m) => JSON.stringify(m)).join("\n") + "\n",
+    );
+    // Default view: header counts + NEWEST first (m3 before m1).
+    const open = runMsg(["msg", "inbox"]);
+    expect(open).toMatch(/3 open · 0 done/);
+    expect(open.indexOf("NEWEST three")).toBeLessThan(open.indexOf("OLD one"));
+
+    // Mark the middle one handled → it leaves the default view, count drops.
+    expect(runMsg(["msg", "done", "m2"])).toMatch(/done: m2\s+\(2 open left\)/);
+    const afterDone = runMsg(["msg", "inbox"]);
+    expect(afterDone).toMatch(/2 open · 1 done/);
+    expect(afterDone).not.toContain("middle two");
+
+    // --all brings it back, tagged [done].
+    const all = runMsg(["msg", "inbox", "--all"]);
+    expect(all).toMatch(/\[done\][\s\S]*middle two/);
+
+    // done --all clears everything.
+    runMsg(["msg", "done", "--all"]);
+    expect(runMsg(["msg", "inbox"])).toMatch(/0 open · 3 done[\s\S]*no open messages/);
+  });
+
+  it("`done` on an unknown message id errors instead of recording it", async () => {
+    await fs.writeFile(
+      path.join(dir, "inbox.jsonl"),
+      JSON.stringify({ id: "real1", from: "afisha-crawler-6bc4", body: "hi", at: "2026-08-06T10:00:00Z" }) + "\n",
+    );
+    expect(() => runMsg(["msg", "done", "ghost"])).toThrow(/no message with id/);
   });
 
   it("errors on a reply to an unknown message id", async () => {

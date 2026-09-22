@@ -192,18 +192,36 @@ with a clear signal to the sender rather than delivered.
 - **WHEN** a pod exceeds the per-pair message rate cap within the window
 - **THEN** further messages on that pair SHALL be refused and the sender SHALL be told, not delivered
 
-### Requirement: The in-pod CLI sends, lists, replies, and lists the fleet
+### Requirement: The in-pod CLI sends, lists, replies, marks done, and lists the fleet
 
-The in-pod `podway` CLI SHALL expose `podway msg send <pod> "…"`, `podway msg inbox`,
-`podway msg reply <id> "…"`, and `podway msg pods`. `send` and `reply` SHALL append to the local outbox;
-`inbox` SHALL list messages from the poll-populated local inbox; `pods` SHALL list the owner's fleet
-from the pushed roster, marking the current pod. `send` SHALL resolve its reference locally for
-immediate feedback and refuse an ambiguous or unknown reference. A reply SHALL route back to the
-original sender by the same outbox → poll → injected-delivery path. Message bodies SHALL be encoded
-(not hand-escaped) so quotes, newlines, and shell metacharacters are preserved and inert.
+The in-pod `podway` CLI SHALL expose `podway msg send <pod> "…"`, `podway msg inbox [--all]`,
+`podway msg reply <id> "…"`, `podway msg done <id|--all>`, and `podway msg pods`. `send` and `reply`
+SHALL append to the local outbox; `pods` SHALL list the owner's fleet from the pushed roster, marking
+the current pod. `send` SHALL resolve its reference locally for immediate feedback and refuse an
+ambiguous or unknown reference. A reply SHALL route back to the original sender by the same outbox →
+poll → injected-delivery path. Message bodies SHALL be encoded (not hand-escaped) so quotes, newlines,
+and shell metacharacters are preserved and inert.
 
-#### Scenario: Reply routes back to the sender
+The inbox is a per-pod concept with a lifecycle so an agent is not re-reading a stale backlog on every
+poll. The delivery poll appends to an append-only local inbox log; "done" is a pod-local set of handled
+message ids (no server or DB round-trip). `inbox` SHALL by default list only the OPEN messages (those
+not marked done), NEWEST FIRST, and SHALL print a header stating the open/done split so nothing is
+silently hidden. `inbox --all` SHALL additionally list the done messages, each tagged, so no message is
+ever lost. `done <id>` SHALL mark one message handled (validated against the inbox) and `done --all`
+SHALL mark all current messages handled; both are idempotent. A successful `reply` SHALL auto-mark the
+replied message done, because replying is acting on it.
+
+#### Scenario: Reply routes back to the sender and clears the message
 
 - **WHEN** a recipient runs `podway msg reply <id> "…"`
 - **THEN** the reply SHALL be routed to the original sender's pod and delivered by the same injected-
-  turn mechanism, scoped to the same owner
+  turn mechanism, scoped to the same owner, AND the replied message SHALL drop out of the default
+  `inbox` view (marked done), still visible under `inbox --all`
+
+#### Scenario: The default inbox shows only open messages, newest first
+
+- **GIVEN** an inbox holding both old handled messages and newer unhandled ones
+- **WHEN** the agent runs `podway msg inbox`
+- **THEN** only the unhandled messages SHALL be listed, newest first, under a header naming how many
+  are open and how many done are hidden — and `podway msg done <id>` SHALL remove a message from that
+  default view without deleting it (it remains under `--all`)

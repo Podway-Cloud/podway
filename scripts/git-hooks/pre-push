@@ -13,6 +13,7 @@ Z=0000000000000000000000000000000000000000
 flagged=""
 stale_registry=""
 audit_bad=""
+asks_bad=""
 
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "$Z" ] && continue                       # branch delete — skip
@@ -33,6 +34,15 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     tmp=$(mktemp)
     git show "${local_sha}:0audit.md" > "$tmp" 2>/dev/null \
       && { bash scripts/check-0audit.sh "$tmp" || audit_bad="yes"; }
+    rm -f "$tmp"
+  fi
+
+  # 0asks hygiene: keep the owner-asks list a LIVE to-do (open items only), not a log of
+  # everything ever asked. Same placement as 0audit — before the [no-spec] bypass.
+  if printf '%s\n' "$files" | grep -qx '0asks.md'; then
+    tmp=$(mktemp)
+    git show "${local_sha}:0asks.md" > "$tmp" 2>/dev/null \
+      && { bash scripts/check-0asks.sh "$tmp" || asks_bad="yes"; }
     rm -f "$tmp"
   fi
 
@@ -85,6 +95,14 @@ fi
 if [ -n "$audit_bad" ]; then
   cat >&2 <<'MSG'
      (0audit hygiene guard — see /CLAUDE.md "Audit register". Emergency bypass: git push --no-verify)
+
+MSG
+  exit 1
+fi
+
+if [ -n "$asks_bad" ]; then
+  cat >&2 <<'MSG'
+     (0asks hygiene guard — see /CLAUDE.md "Owner asks". Emergency bypass: git push --no-verify)
 
 MSG
   exit 1
