@@ -771,15 +771,30 @@ export class GatewayServer {
 
   // --- Preview URL proxy (<slug>.<previewBase> → pod app port) ---
 
+  /** The gateway's own PUBLIC host (e.g. `gw.podway.site`), parsed from the advertised relay-connect
+   * URL. This is NOT `PODWAY_GATEWAY_HOST` — that env is the LISTEN/bind interface (default `::`, all
+   * interfaces); setting it to a public hostname makes the server try to bind the public IP and crash
+   * (EADDRNOTAVAIL). We need the public host only to recognise our own requests, so derive it from the
+   * URL we hand out, never from the bind interface. */
+  private gatewayPublicHost(): string | null {
+    const u = process.env.PODWAY_RELAY_CONNECT_URL;
+    if (!u) return null;
+    try {
+      return new URL(u).hostname.toLowerCase();
+    } catch {
+      return null;
+    }
+  }
+
   /** The slug if this request targets a preview host, else null. */
   private previewSlug(req: http.IncomingMessage): string | null {
     const base = this.config.previewBase;
     if (!base || !this.config.resolvePreviewOrigin) return null;
     const host = (req.headers.host ?? "").split(":")[0].toLowerCase();
-    // The gateway's OWN host is a SIBLING of the preview wildcard when they share a base
+    // The gateway's OWN public host is a SIBLING of the preview wildcard when they share a base
     // (gw.podway.site vs <slug>.podway.site). Never treat it as a preview, or /healthz, the admin
     // endpoints, and the terminal/relay WSS all get proxied to a pod named "gw" → 404 / broken.
-    const own = (process.env.PODWAY_GATEWAY_HOST ?? "").toLowerCase();
+    const own = this.gatewayPublicHost();
     if (own && host === own) return null;
     const suffix = "." + base.toLowerCase();
     if (!host.endsWith(suffix)) return null;
@@ -807,7 +822,7 @@ export class GatewayServer {
     if (!host) return true; // no Host header: not a browser hitting a customer domain
     const base = this.config.previewBase?.toLowerCase();
     if (base && (host === base || host.endsWith("." + base))) return true;
-    const own = (process.env.PODWAY_GATEWAY_HOST ?? "").toLowerCase();
+    const own = this.gatewayPublicHost();
     if (own && host === own) return true;
     return host === "localhost" || host.endsWith(".fly.dev") || host.endsWith(".internal");
   }

@@ -262,15 +262,16 @@ describe("preview proxy", () => {
   it("does NOT treat the gateway's OWN host as a preview (gw.<base> vs <slug>.<base> collision)", async () => {
     // When the gateway host shares the preview base (gw.podway.site vs <slug>.podway.site), the
     // preview wildcard would otherwise match "gw" as a slug and proxy /healthz + WSS to a pod "gw".
-    const prev = process.env.PODWAY_GATEWAY_HOST;
-    process.env.PODWAY_GATEWAY_HOST = "gw.preview.test"; // sibling of the *.preview.test wildcard
+    // The gateway's own public host is derived from the advertised relay-connect URL.
+    const prev = process.env.PODWAY_RELAY_CONNECT_URL;
+    process.env.PODWAY_RELAY_CONNECT_URL = "wss://gw.preview.test"; // sibling of the *.preview.test wildcard
     try {
       const res = await previewGet("gw", { path: "/healthz" });
       expect(res.status).toBe(200);
       expect(res.body).not.toContain("PREVIEW_OK"); // was proxied to the preview stand-in before the fix
     } finally {
-      if (prev === undefined) delete process.env.PODWAY_GATEWAY_HOST;
-      else process.env.PODWAY_GATEWAY_HOST = prev;
+      if (prev === undefined) delete process.env.PODWAY_RELAY_CONNECT_URL;
+      else process.env.PODWAY_RELAY_CONNECT_URL = prev;
     }
   });
 
