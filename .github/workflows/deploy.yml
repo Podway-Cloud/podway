@@ -51,7 +51,7 @@ jobs:
 
       - name: Gateway health
         if: ${{ github.event.inputs.app == 'gateway' || github.event.inputs.app == 'both' }}
-        run: curl -sf --max-time 30 https://gw.podway.cloud/healthz
+        run: curl -sf --max-time 30 https://gw.podway.site/healthz
 
       - name: Deploy web
         if: ${{ github.event.inputs.app == 'web' || github.event.inputs.app == 'both' }}

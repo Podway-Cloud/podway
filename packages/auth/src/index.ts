@@ -19,9 +19,10 @@ export interface AuthEnv {
   BETTER_AUTH_URL?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
-  /** e.g. ".podway.cloud" — scopes the session cookie so subdomains (the gateway) can read it. */
+  /** e.g. ".podway.io" — scopes the session cookie so the app's subdomains can read it. (Pod
+   * previews on podway.site are a different registrable domain and use the bridge token, not this.) */
   COOKIE_DOMAIN?: string;
-  /** comma-separated allowed origins, e.g. "https://podway.cloud,https://gw.podway.cloud". */
+  /** comma-separated allowed origins, e.g. "https://podway.io,https://gw.podway.site". */
   TRUSTED_ORIGINS?: string;
   /** "1" enables test-only email+password sign-in (never in production). */
   PODWAY_TEST_LOGIN?: string;
@@ -158,7 +159,7 @@ export function createAuth(env: AuthEnv) {
               process.env.PODWAY_ADMIN_NOTIFY_EMAIL ||
               process.env.ADMIN_EMAILS?.split(",")[0]?.trim();
             if (adminEmail) {
-              const base = (process.env.PODWAY_PUBLIC_URL || "https://podway.cloud").replace(/\/+$/, "");
+              const base = (process.env.PODWAY_PUBLIC_URL || "https://podway.io").replace(/\/+$/, "");
               const link = (a: "approve" | "later"): string =>
                 `${base}/admin/quick?t=${encodeURIComponent(mintActionToken(a, created.id, Date.now()))}`;
               await sendNewRequestEmail(

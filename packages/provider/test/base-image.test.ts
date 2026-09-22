@@ -848,7 +848,7 @@ describe("pod-base runtime-literacy layer", () => {
       spec,
       JSON.stringify({
         slug: "brave-otter-4f2a",
-        previewUrl: "https://brave-otter-4f2a.preview.podway.cloud",
+        previewUrl: "https://brave-otter-4f2a.podway.site",
         envName: "nextjs-starter",
         agents: { claude: {} },
         network: { policy: "full" },
@@ -861,13 +861,13 @@ describe("pod-base runtime-literacy layer", () => {
       const info = run(["info"]);
       expect(info).toContain("brave-otter-4f2a");
       expect(info).toContain("nextjs-starter");
-      expect(info).toContain("https://brave-otter-4f2a.preview.podway.cloud");
+      expect(info).toContain("https://brave-otter-4f2a.podway.site");
       // Literacy: info must surface the relay egress + the wider CLI, so an agent that
       // reaches here (the rules point it at `podway info`) learns the tools exist.
       expect(info).toContain("relay:");
       expect(info).toContain("PODWAY_RELAY_PROXY");
       expect(info).toMatch(/tools:.*podway msg/);
-      expect(run(["preview"]).trim()).toBe("https://brave-otter-4f2a.preview.podway.cloud");
+      expect(run(["preview"]).trim()).toBe("https://brave-otter-4f2a.podway.site");
     } finally {
       await fs.rm(spec, { force: true });
     }

@@ -20,7 +20,7 @@ JSON=0
 
 # Every host whose TLS failing takes a user-visible feature with it. A preview host is a wildcard, so
 # probe an arbitrary label — that is exactly how a real pod URL resolves.
-HOSTS="${CERT_HOSTS:-podway.io www.podway.io podway.cloud gw.podway.cloud cert-check.preview.podway.cloud}"
+HOSTS="${CERT_HOSTS:-podway.io www.podway.io gw.podway.site cert-check.podway.site}"
 
 bad=0
 rows=""

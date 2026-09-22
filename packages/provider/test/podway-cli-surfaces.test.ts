@@ -184,10 +184,10 @@ describe("podway info — the owner's dashboard link is ALWAYS surfaced", () => 
     // fly-provider.test.ts's regression test), so a fixture using that shape would enshrine the bug.
     const e = await withSpec({
       slug: "pod-x",
-      previewUrl: "https://pod-x.preview.podway.cloud",
-      cockpitUrl: "https://podway.cloud/dashboard/pods/pod-x",
+      previewUrl: "https://pod-x.podway.site",
+      cockpitUrl: "https://podway.io/dashboard/pods/pod-x",
     });
-    expect(infoWith(e)).toMatch(/cockpit:\s+https:\/\/podway\.cloud\/dashboard\/pods\/pod-x/);
+    expect(infoWith(e)).toMatch(/cockpit:\s+https:\/\/podway\.io\/dashboard\/pods\/pod-x/);
   });
 
   it("DERIVES a dashboard link from previewUrl when an older spec has cockpitUrl null", async () => {

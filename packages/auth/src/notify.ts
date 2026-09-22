@@ -153,7 +153,7 @@ export async function sendNewRequestEmail(
       `Email: ${requester.email}\n\n` +
       `Approve now:\n${links.approveUrl}\n\n` +
       `Set aside for later:\n${links.laterUrl}\n\n` +
-      `(Or review everyone at https://podway.cloud/admin.)\n`;
+      `(Or review everyone at https://podway.io/admin.)\n`;
     const message =
       `From: ${encodeFrom(from)}\r\n` +
       `To: ${to}\r\n` +
@@ -203,7 +203,7 @@ export async function sendApprovalEmail(
       `You're in. Podway gives your coding agent a real computer in the cloud — isolated, ` +
       `yours, and still working after you close the laptop.\n\n` +
       `Sign in and launch your first environment (about a minute to a working project):\n` +
-      `https://podway.cloud/signin\n\n` +
+      `https://podway.io/signin\n\n` +
       `You're one of a small first group, so I'll actually read what you send back. Reply to ` +
       `this email with anything — a bug, a rough edge, an idea, or just what you built.\n\n` +
       // Personalize this signature to your name before inviting (see the copy doc).

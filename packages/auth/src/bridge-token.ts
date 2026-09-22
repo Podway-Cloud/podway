@@ -3,7 +3,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 /**
  * Cross-domain access bridge (2026-09 domain split).
  *
- * The app lives on `podway.io`; the gateway + pod previews live on `podway.cloud`. They no longer
+ * The app lives on `podway.io`; the gateway (`gw.podway.site`) + pod previews (`*.podway.site`) live
+ * on a different registrable domain. They no longer
  * share a session cookie (that was the whole point — a pod preview must not sit on the app's login
  * domain). So the gateway can't read the app's login cookie to identify the owner for a terminal
  * socket or a private preview.

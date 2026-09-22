@@ -245,7 +245,7 @@ async function main(): Promise<void> {
   const dunningMs = Number(process.env.PODWAY_DUNNING_SWEEP_MS ?? 24 * 60 * 60_000);
   if (stripeConfigured() && dunningMs > 0) {
     const billing = new BillingService(db);
-    const appUrl = (process.env.BETTER_AUTH_URL || "https://podway.cloud").replace(/\/+$/, "");
+    const appUrl = (process.env.BETTER_AUTH_URL || "https://podway.io").replace(/\/+$/, "");
     const dunning = new DunningService(db, billing, control, {
       sendEmail: async ({ ownerId, daysLeft, amountDueCents, suspended }) => {
         const rows = await db.select().from(user).where(eq(user.id, ownerId));

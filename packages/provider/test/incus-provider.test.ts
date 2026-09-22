@@ -517,8 +517,36 @@ describe("refreshSpecPermissions", () => {
 
   it("leaves the spec alone when no app origin is configured (local/dev)", () => {
     delete process.env.PODWAY_APP_ORIGIN;
+    delete process.env.PODWAY_PREVIEW_BASE;
     const spec = JSON.stringify({ slug: "p3", cockpitUrl: "https://elsewhere.test/dashboard/pods/p3" });
     expect(refreshSpecPermissions(spec, undefined)).toBe(spec);
+  });
+
+  it("re-stamps a previewUrl left on the OLD preview domain onto the current base", () => {
+    const prev = process.env.PODWAY_PREVIEW_BASE;
+    process.env.PODWAY_PREVIEW_BASE = "podway.site";
+    try {
+      // Pod created before the preview-domain move — its stamped previewUrl is the dead host.
+      const stale = JSON.stringify({ slug: "p4", previewUrl: "https://p4.preview.podway.cloud" });
+      const out = JSON.parse(refreshSpecPermissions(stale, undefined));
+      expect(out.previewUrl).toBe("https://p4.podway.site"); // was preview.podway.cloud before the heal
+    } finally {
+      if (prev === undefined) delete process.env.PODWAY_PREVIEW_BASE;
+      else process.env.PODWAY_PREVIEW_BASE = prev;
+    }
+  });
+
+  it("does NOT invent a previewUrl for a pod that never had one", () => {
+    const prev = process.env.PODWAY_PREVIEW_BASE;
+    process.env.PODWAY_PREVIEW_BASE = "podway.site";
+    try {
+      const spec = JSON.stringify({ slug: "p5" }); // no previewUrl (a no-preview pod)
+      const out = JSON.parse(refreshSpecPermissions(spec, undefined));
+      expect(out.previewUrl).toBeUndefined();
+    } finally {
+      if (prev === undefined) delete process.env.PODWAY_PREVIEW_BASE;
+      else process.env.PODWAY_PREVIEW_BASE = prev;
+    }
   });
 
   // A dashboard rename updates the DB but the on-pod spec is preserved verbatim across an update, so

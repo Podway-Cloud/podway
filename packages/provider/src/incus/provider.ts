@@ -210,11 +210,27 @@ function healCockpitUrl(spec: Record<string, unknown>): boolean {
       changed = true;
     }
   }
-  // The pre-rename URL heal that used to live here is GONE (2026-09-06). It rewrote a dead host in
-  // cockpitUrl/previewUrl for pods provisioned before the domain flip. Verified across the whole
-  // fleet before removing: no pod spec still carries that host, so it had become a no-op that only
-  // implied the old domain was still handled. The domain itself is retired — its certificate was
-  // never issued, so those URLs fail at the TLS handshake regardless of what a spec says.
+  // The pre-rename URL heal that used to live here was removed 2026-09-06 (a no-op after the
+  // podbay→podway flip). It's back for the preview-domain move (preview.podway.cloud → podway.site):
+  // the on-pod `podway preview` CLI reads the STAMPED previewUrl, and a spec is preserved verbatim
+  // across updates, so a pod created before the move keeps the dead host forever — and it fails at the
+  // TLS handshake once podway.cloud is retired. Re-derive it exactly as pod-init.ts stamps a fresh pod
+  // (`https://<slug>.<PODWAY_PREVIEW_BASE>`). Only rewrites an EXISTING previewUrl (never adds one to a
+  // no-preview pod); untouched when the env is unset (local/dev).
+  const previewBase = process.env.PODWAY_PREVIEW_BASE?.replace(/^\.+|\.+$/g, "");
+  if (
+    previewBase &&
+    typeof spec.previewUrl === "string" &&
+    spec.previewUrl !== "" &&
+    typeof spec.slug === "string" &&
+    spec.slug !== ""
+  ) {
+    const want = `https://${spec.slug}.${previewBase}`;
+    if (spec.previewUrl !== want) {
+      spec.previewUrl = want;
+      changed = true;
+    }
+  }
   return changed;
 }
 

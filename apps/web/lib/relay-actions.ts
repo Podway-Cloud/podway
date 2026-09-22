@@ -17,13 +17,14 @@ function relayService(): RelayService {
 }
 
 /** The public wss:// a relay dials to reach the gateway, for the copy-paste command.
- * Explicit override, else derived from the preview base (gateway.<root>). */
+ * Explicit override (prod sets it), else derived from the LEGACY 3-label preview base
+ * (preview.podway.cloud → gateway.podway.cloud), else the gateway's public host. A 2-label base
+ * (podway.site) has no derivable gateway subdomain, so don't guess — fall to the explicit host. */
 function relayConnectUrl(): string {
   if (process.env.PODWAY_RELAY_CONNECT_URL) return process.env.PODWAY_RELAY_CONNECT_URL;
   const base = process.env.PODWAY_PREVIEW_BASE?.replace(/^\.+|\.+$/g, "");
   if (base && base.split(".").length > 2) return `wss://gateway.${base.split(".").slice(1).join(".")}`;
-  if (base) return `wss://gateway.${base}`;
-  return "wss://gateway.podway.cloud";
+  return "wss://gw.podway.site";
 }
 
 export interface RelayCommand {
