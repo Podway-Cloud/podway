@@ -776,6 +776,11 @@ export class GatewayServer {
     const base = this.config.previewBase;
     if (!base || !this.config.resolvePreviewOrigin) return null;
     const host = (req.headers.host ?? "").split(":")[0].toLowerCase();
+    // The gateway's OWN host is a SIBLING of the preview wildcard when they share a base
+    // (gw.podway.site vs <slug>.podway.site). Never treat it as a preview, or /healthz, the admin
+    // endpoints, and the terminal/relay WSS all get proxied to a pod named "gw" → 404 / broken.
+    const own = (process.env.PODWAY_GATEWAY_HOST ?? "").toLowerCase();
+    if (own && host === own) return null;
     const suffix = "." + base.toLowerCase();
     if (!host.endsWith(suffix)) return null;
     const slug = host.slice(0, -suffix.length);
