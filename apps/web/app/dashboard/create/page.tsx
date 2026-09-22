@@ -12,6 +12,7 @@ export default function EnvironmentsPage() {
     <DashboardPage
       title="Create a pod"
       intro="Start an open-ended workspace for ongoing development, or launch a self-hosted app your AI admin keeps running for you."
+      wide
     >
       <EnvGallery />
     </DashboardPage>

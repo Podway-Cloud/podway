@@ -11,6 +11,10 @@ import { priceForSize, DEFAULT_POD_SIZE } from "@podway/shared/tiers";
 
 export type CardEntry = CatalogEntry & { stars: number | null; updatedAt: string | null };
 
+// Brand marks that are solid monochrome BLACK (no colored variant exists) — they need a light tile
+// to be visible on the dark card. Keyed by the logo filename set in each env's podway.yaml.
+const DARK_LOGOS = new Set(["ghost.png", "umami.png", "vaultwarden.png"]);
+
 // GitHub mark — lucide dropped its brand icons, so a repo link needs this small inline glyph.
 function GithubMark({ className }: { className?: string }) {
   return (
@@ -73,7 +77,15 @@ export default function AppCard({
       {/* HEADER: big logo left, name + one-line description right (selfh.st layout). */}
       <div className="flex items-start gap-4">
         {isApp ? (
-          <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white/[0.04] ring-1 ring-border">
+          // A few brand marks are solid monochrome BLACK (Ghost, Umami, Vaultwarden), so they vanish
+          // on the default dark tile — give those a light tile so the logo is visible. Colored/white
+          // logos keep the dark tile (a white logo would disappear on a light one).
+          <span
+            className={
+              "grid size-14 shrink-0 place-items-center overflow-hidden rounded-2xl ring-1 ring-border " +
+              (DARK_LOGOS.has(e.logo ?? "") ? "bg-white" : "bg-white/[0.04]")
+            }
+          >
             <Image
               src={`/selfhost-apps/${e.logo ?? `${e.name}.svg`}`}
               alt=""
@@ -104,7 +116,7 @@ export default function AppCard({
             )}
           </h3>
           {e.description && (
-            <p className="mt-1 line-clamp-2 text-[13px] leading-snug text-muted-foreground">{e.description}</p>
+            <p className="mt-1 line-clamp-3 text-[13px] leading-snug text-muted-foreground">{e.description}</p>
           )}
         </div>
       </div>

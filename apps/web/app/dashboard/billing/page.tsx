@@ -51,7 +51,7 @@ export default async function BillingPage() {
     : [[], null, [], { joined: 0, pending: 0, earned: 0, earnedCents: 0 }, null];
 
   return (
-    <DashboardPage backHref="/dashboard" backLabel="Pods" title="Billing">
+    <DashboardPage title="Billing">
       <BillingView
         enabled={enabled}
         hasCard={billing?.hasCard ?? false}
