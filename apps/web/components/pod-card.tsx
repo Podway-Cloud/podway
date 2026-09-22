@@ -121,6 +121,11 @@ export default function PodCard({
   const onboarding = !t3Active && !authedAt && !sessionUrl;
   const reachable = status === "running" && !updating;
   const href = `/dashboard/pods/${slug}`;
+  // Under memory pressure: the kernel PSI "some" avg10 says the pod stalled on memory >20% of the
+  // last ~10s — its working set exceeds RAM and it's thrashing into swap (slow-but-alive). Show a
+  // "size up" badge; the cockpit (this card's href) is where the owner resizes. Only when reachable
+  // (a value only lands on a running, answering pod).
+  const underPressure = reachable && (live?.memPressurePct ?? 0) >= 20;
 
   // WHICH agents the pod runs comes from the DURABLE list (podAgents), never from the
   // live health probe — a mid-update probe can transiently report only one agent, which
@@ -387,6 +392,16 @@ export default function PodCard({
                 StatusBadge above already says "updating"; that is the whole status. */}
             {!updating && (
               <span>· active {live?.agentIdleMs != null ? agoFromMs(live.agentIdleMs) : agoLabel}</span>
+            )}
+            {/* Memory pressure — swap keeps it alive but it's thrashing (slow). Nudge a resize; the
+                card links to the cockpit where Size lives. Warning token per ui-patterns. */}
+            {underPressure && (
+              <span
+                title="This pod is low on memory and running slowly (thrashing into swap). Open it and bump the Size up."
+                className="inline-flex items-center gap-1 rounded-md border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[11px] font-semibold text-warning"
+              >
+                Low on memory · size up
+              </span>
             )}
           </div>
 

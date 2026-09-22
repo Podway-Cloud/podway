@@ -599,6 +599,10 @@ export class AgentServer {
             // The CLI's own "what am I blocked on" detail (e.g. "dialog open") —
             // lets the dashboard tell "needs an answer" apart from plain waiting.
             agentWaitingFor: sess.waitingFor ?? null,
+            // Memory-pressure (kernel PSI "some" avg10, %): sustained high = the pod is thrashing
+            // into swap (working set > RAM). Drives the dashboard "under memory pressure — size up"
+            // badge. Cheap read of the sampler's latest tick.
+            memPressurePct: this.metrics.latestPressurePct(),
             // How many secrets the pod has ASKED the owner for and not yet received. Reported here,
             // on a read the control plane already makes once per pod per poll, so the dashboard can
             // mark a pod that is blocked waiting on the owner WITHOUT a second per-pod call. The

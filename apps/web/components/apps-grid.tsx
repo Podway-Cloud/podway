@@ -66,7 +66,7 @@ export default function AppsGrid({ apps, enabled }: { apps: CardEntry[]; enabled
     );
   }
   return (
-    <ul ref={ref} onClickCapture={saveScroll} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+    <ul ref={ref} onClickCapture={saveScroll} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {apps.map((a) => (
         <li key={a.name}>
           <AppCard entry={a} enabled={enabled} variant="app" />

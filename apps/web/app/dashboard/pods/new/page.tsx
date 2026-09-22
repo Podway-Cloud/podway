@@ -60,7 +60,7 @@ export default async function NewPodPage({
 
   return (
     <DashboardPage
-      backHref="/dashboard/create"
+      backHref={detail.kind === "app" ? "/dashboard/create?tab=apps" : "/dashboard/create"}
       backLabel="Create a pod"
       title={`New pod — ${detail.title}`}
       intro={detail.kind === "app" ? detail.descriptionLong || undefined : undefined}

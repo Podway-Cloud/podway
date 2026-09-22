@@ -1,0 +1,4 @@
+.env
+snapshots/
+.keyguard
+cert.p12

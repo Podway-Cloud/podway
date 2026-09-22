@@ -246,6 +246,10 @@ export interface PodLiveSignals {
   codexStatus: string | null;
   /** The CLI's "what am I blocked on" detail (e.g. "dialog open"), when reported. */
   agentWaitingFor: string | null;
+  /** Memory-pressure (kernel PSI "some" avg10, %): a sustained high value means the pod's working
+   * set exceeds RAM and it's thrashing into swap (slow-but-alive). Drives the card's "under memory
+   * pressure — size up" badge. Optional — 0/absent from pre-pressure agents. */
+  memPressurePct?: number;
   /** The env's own current first-boot deploy milestone (a `podway-progress:` marker), while its
    * `setup` runs — e.g. "Pulling n8n…". Null once setup is done, on an older image, or when the
    * env emits no markers. Drives the onboarding "Starting your agent" step's milestone line; see

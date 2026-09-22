@@ -17,6 +17,8 @@ metadata:
   author: podway
   sourceUrl: https://github.com/umami-software/umami
   siteUrl: https://umami.is
+  # Colored brand PNG — the selfh.st SVG is monochrome (owner: cards should be colored).
+  logo: umami.png
   tags: [analytics, privacy]
 
 base:

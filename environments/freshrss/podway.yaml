@@ -5,7 +5,7 @@ name: freshrss
 # runs the app with `docker compose` (Docker is baked into the cloud pod-base image); the agent is its
 # always-on admin. Scaffolded via scripts/incus/scaffold-app-env.mjs; minSize confirmed by tier-walk.
 kind: app
-minSize: s
+minSize: mini
 
 metadata:
   title: "FreshRSS"

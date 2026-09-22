@@ -141,14 +141,7 @@ export default function LaunchConfigure({
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState(initialName ?? "");
   const nameRef = useRef<HTMLInputElement>(null);
-  // Deep-link create opens with a friendly default name already filled ("my n8n") — focus it and
-  // select the text so the user can immediately type a different name without clearing it first.
-  useEffect(() => {
-    if (deeplink) {
-      nameRef.current?.focus();
-      nameRef.current?.select();
-    }
-  }, [deeplink]);
+  const didAutofocus = useRef(false);
   // Floor the starting size to the env's minimum (an app + DB stack won't run on the global default).
   // An env that declares a minSize (every `kind: app`) has been sized to that tier — it's the RIGHT
   // default, not a floor under the generic Medium. Defaulting apps to their minSize right-sizes them
@@ -186,6 +179,18 @@ export default function LaunchConfigure({
 
   const DRAFT_KEY = `podway:launch-draft:${env}`;
   const [step, setStep] = useState<LaunchStep>("basics");
+  // Focus + select the pod-name whenever the wizard opens on the Basics step — reached via a
+  // deep-link, an app-card click, or a `?env=…` URL (owner ask, repeated 2026-09-21). The name is
+  // the first thing to edit, and it opens with a friendly default ("my gatus") so selecting the text
+  // lets the user type over it. Fires once; a no-op if a restored draft opened a later step (the
+  // name input isn't rendered then, so nameRef.current is null).
+  useEffect(() => {
+    if (!didAutofocus.current && step === "basics") {
+      nameRef.current?.focus();
+      nameRef.current?.select();
+      didAutofocus.current = true;
+    }
+  }, [step]);
   // Each step swaps the panel's content but the view keeps its SCROLL OFFSET, so advancing from a
   // Next button at the bottom of a long step (exactly where a phone user is when they tap it)
   // opened the next one already scrolled past its heading. Same class of bug as the cockpit's

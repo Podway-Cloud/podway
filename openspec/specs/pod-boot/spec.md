@@ -831,6 +831,24 @@ the pod boots from.
 - **THEN** `docker.service` SHALL start only after the `/home/dev` volume is mounted, so its
   `data-root` resolves onto the persistent volume rather than the ephemeral rootfs
 
+### Requirement: The cloud pod-base image provisions per-pod swap so memory pressure thrashes instead of OOM-killing
+
+The Incus/cloud pod-base image SHALL provision a swapfile on the persistent `/home/dev` volume, sized
+`min(RAM, 4GiB)`, with `vm.swappiness` lowered (10) so swap holds cold pages rather than being used
+eagerly. It SHALL be created by a systemd unit ordered `After=` the `/home/dev` block-volume mount (so
+the swapfile lives on the persistent volume, like Docker's data-root), and `swapon` failure SHALL be
+non-fatal (boot proceeds). This is an Incus-only capability: the OSS/self-host OCI-container edition
+SHALL NOT attempt it (a container cannot `swapon`). The purpose is that a pod under memory pressure —
+with page-cache-backed workloads — degrades to disk thrashing (recoverable, and surfaced as a
+size-up hint per pod-observability) rather than an out-of-memory kill, which lets smaller tiers run
+apps that would otherwise OOM at cold-deploy.
+
+#### Scenario: A pod boots with swap active on the persistent volume
+
+- **WHEN** an Incus/cloud pod boots from the pod-base image
+- **THEN** a swapfile of `min(RAM, 4GiB)` SHALL be active on `/home/dev` with `vm.swappiness=10`, and
+  a workload that exceeds RAM SHALL thrash into swap rather than trigger an out-of-memory kill
+
 ### Requirement: An app-pod's container data survives an image update and the stack restarts on boot
 
 Only `/home/dev` survives a pod-base image UPDATE (the rootfs is wiped and recreated from the new

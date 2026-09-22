@@ -51,6 +51,9 @@ export interface SamplerDeps {
   readDisk: () => { totalMb: number; usedMb: number };
   /** Raw /proc/net/dev contents. */
   readNetDev: () => string;
+  /** Raw /proc/pressure/memory contents (kernel PSI), or null when absent (older kernels, tests,
+   * off-Linux). Used to derive `memPressurePct` — the thrashing signal that survives swap. */
+  readPressureMem?: () => string | null;
   /** Claude's status (busy|shell|idle|waiting) or null. */
   readAgentStatus: () => string | null;
   /** Whether the app's preview port is in LISTEN. */
@@ -104,6 +107,16 @@ export function parseMem(memInfo: string): { usedMb: number; totalMb: number } {
   const totalKb = kv("MemTotal");
   const availKb = kv("MemAvailable");
   return { usedMb: Math.max(0, Math.round((totalKb - availKb) / 1024)), totalMb: Math.round(totalKb / 1024) };
+}
+
+/** Kernel PSI: the `some avg10=…` field of /proc/pressure/memory → % of the last ~10s stalled on
+ * memory (0–100). Empty/absent/malformed → 0 (no pressure). */
+export function parsePressure(pressureMem: string | null | undefined): number {
+  if (!pressureMem) return 0;
+  const m = pressureMem.match(/^some\b.*\bavg10=(\d+(?:\.\d+)?)/m);
+  if (!m) return 0;
+  const v = Number(m[1]);
+  return Number.isFinite(v) ? Math.min(100, Math.max(0, v)) : 0;
 }
 
 /**
@@ -240,6 +253,7 @@ export class MetricsSampler {
       netRxKbps,
       netTxKbps,
       agentStatus: this.deps.readAgentStatus(),
+      memPressurePct: parsePressure(safeRead(this.deps.readPressureMem)),
     };
     this.ring.push(sample);
     // Fold older detail into coarser buckets so history reaches 30 days without the
@@ -325,6 +339,13 @@ export class MetricsSampler {
     return { port, listening: port != null ? this.deps.readAppListening(port) : false };
   }
 
+  /** The most recent tick's memory-pressure (kernel PSI "some" avg10), or 0 if no sample yet.
+   * Cheap (reads the ring tail) so the live-signals endpoint can report it every poll without a
+   * full snapshot. Drives the dashboard "under memory pressure" badge. */
+  latestPressurePct(): number {
+    return this.ring[this.ring.length - 1]?.memPressurePct ?? 0;
+  }
+
   /** The full tiered history, or just the requested window (at that window's
    * resolution) when the caller asks for one. */
   snapshot(windowMs?: number): MetricsSnapshot {
@@ -360,6 +381,8 @@ export function realSamplerDeps(opts: {
     readProcStat: () => readFileSync("/proc/stat", "utf8"),
     readMemInfo: () => readFileSync("/proc/meminfo", "utf8"),
     readNetDev: () => readFileSync("/proc/net/dev", "utf8"),
+    // Kernel PSI — absent on very old kernels; tryRead returns null and memPressurePct falls to 0.
+    readPressureMem: () => tryRead("/proc/pressure/memory"),
     // cgroup v2 unified hierarchy (self-host limited containers). Absent on cgroup-v1 hosts or
     // off-Linux → return null so the sampler uses /proc. Each read is independently guarded.
     readCgroupMem: () => {

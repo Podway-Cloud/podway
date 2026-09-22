@@ -1,0 +1,11 @@
+# Documenso per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=documenso
+APP_SERVICE=documenso
+APP_IMAGE_VAR=DOCUMENSO_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+APP_HEALTH_RETRIES=60
+DB_TYPE=postgres
+DB_SERVICE=db
+DB_USER=documenso
+DB_NAME=documenso
+APP_DATA_VOLUMES=""

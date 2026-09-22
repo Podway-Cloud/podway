@@ -16,6 +16,8 @@ metadata:
   author: podway
   sourceUrl: https://github.com/dani-garcia/vaultwarden
   siteUrl: https://github.com/dani-garcia/vaultwarden/wiki
+  # Colored brand PNG — the selfh.st SVG is monochrome (owner: cards should be colored).
+  logo: vaultwarden.png
   tags: [passwords, security, oss]
 
 base:

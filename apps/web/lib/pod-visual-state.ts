@@ -18,6 +18,9 @@ export interface PodCardLive {
   /** Codex activity (`busy` | `idle` | null) from its rollout-log mtime. */
   codexStatus?: string | null;
   agentWaitingFor: string | null;
+  /** Memory-pressure (kernel PSI "some" avg10, %): sustained high = the pod is thrashing into swap.
+   * Drives the "under memory pressure — size up" badge. Undefined/0 on pre-pressure agents. */
+  memPressurePct?: number;
   /** The env's own current first-boot deploy milestone (add-deploy-progress), while its `setup`
    * runs — e.g. "Pulling n8n…". Null once setup is done or on an older image. Onboarding-only
    * signal (the dashboard card doesn't render it), carried through here so the cockpit's

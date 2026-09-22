@@ -7,7 +7,7 @@ name: postiz
 kind: app
 # TRIMMED stack (postiz + postgres + redis + temporal-on-postgres, NO Elasticsearch) idles ~2.5GB.
 # minSize confirmed by the tier-walk smoke.
-minSize: m
+minSize: s
 
 metadata:
   title: "Postiz"

@@ -5,8 +5,8 @@ name: twenty
 # runs the app with `docker compose` (Docker is baked into the cloud pod-base image); the agent is its
 # always-on admin. Hand-written env (multi-service: server + worker + Postgres + Redis).
 kind: app
-# 4 services (server + worker + postgres + redis). minSize confirmed by the tier-walk smoke.
-minSize: m
+# 4 services (server + worker + postgres + redis). Fits s ($7) with swap: idle swap ~50%, mem-PSI <2% (owner call 2026-09-22 — trust low stall over swap-use).
+minSize: s
 
 metadata:
   title: "Twenty"

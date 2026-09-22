@@ -1,24 +1,24 @@
 apiVersion: podway/v0
-name: listmonk
+name: documenso
 
 # APP (the "Apps" tab): a self-hosted OSS app Podway DEPLOYS and KEEPS UPDATED for the user. The pod
 # runs the app with `docker compose` (Docker is baked into the cloud pod-base image); the agent is its
 # always-on admin. Scaffolded via scripts/incus/scaffold-app-env.mjs; minSize confirmed by tier-walk.
 kind: app
-minSize: mini
+minSize: s
 
 metadata:
-  title: "listmonk"
-  # Short line adapted from the project's own README (https://github.com/knadh/listmonk).
+  title: "Documenso"
+  # Short line adapted from the project's own README (https://github.com/documenso/documenso).
   # Folded block so a description containing a ": " (colon) stays valid YAML.
   description: >-
-    Self-hosted newsletter and mailing list manager with a fast dashboard.
+    The open-source DocuSign alternative: sign and send documents with legally-binding e-signatures.
   descriptionLong: >-
-    listmonk is a self-hosted, high-performance newsletter and mailing list manager. It handles large subscriber lists, segments them with SQL queries, and builds campaigns in a rich editor. It runs as a single binary backed by PostgreSQL.
+    Documenso is an open-source alternative to DocuSign for signing documents with legally-binding e-signatures. Upload a PDF, place fields, and send it for signature, all self-hosted so sensitive documents never leave your server.
   author: podway
-  sourceUrl: https://github.com/knadh/listmonk
-  siteUrl: https://listmonk.app
-  tags: [self-host, oss, email, newsletter, marketing]
+  sourceUrl: https://github.com/documenso/documenso
+  siteUrl: https://documenso.com
+  tags: [self-host, oss, documents, e-signature, productivity]
 
 base:
   devcontainer: .devcontainer/devcontainer.json
@@ -39,12 +39,14 @@ preview: private
 
 setup:
   - >-
-    if [ ! -f .env ]; then printf 'LISTMONK_IMAGE=%s\nDB_PASSWORD=%s\n' "listmonk/listmonk:latest" "$(openssl rand -hex 24)" > .env; chmod 600 .env; fi
+    if [ ! -f .env ]; then printf 'DOCUMENSO_IMAGE=%s\nDB_PASSWORD=%s\nNEXTAUTH_SECRET=%s\nENC_KEY=%s\nENC_KEY2=%s\nMAIN_URL=%s\n' "documenso/documenso:latest" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(U=$(podway preview 2>/dev/null | grep -o 'https://[^ )]*' | head -1); echo "${U:-http://localhost:3000}")" > .env; chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
+  - >-
+    if [ ! -f cert.p12 ]; then openssl req -x509 -newkey rsa:2048 -keyout /tmp/dk.pem -out /tmp/dc.pem -days 3650 -nodes -subj '/CN=Documenso' && openssl pkcs12 -export -out cert.p12 -inkey /tmp/dk.pem -in /tmp/dc.pem -passout pass: && chmod 644 cert.p12 && rm -f /tmp/dk.pem /tmp/dc.pem; fi
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
 
 kickoff: |
-  You are the always-on ADMIN for this person's own listmonk instance, deployed on THIS pod with
+  You are the always-on ADMIN for this person's own Documenso instance, deployed on THIS pod with
   `docker compose` and served on the pod's preview (port 3000). Keep it running, keep its data safe,
   and keep it up to date WITHOUT ever breaking it.
 
@@ -56,7 +58,7 @@ kickoff: |
 
   First turn:
   1. Confirm health: `APP_ADMIN_DIR=~/work bin/app-admin.sh status` and open the preview. If it is up,
-     tell the owner their listmonk is live and give them the preview link.
+     tell the owner their Documenso is live and give them the preview link.
   2. Offer, don't assume: back up now? Keep it to 1-2 sharp questions.
 
   Ongoing duties:
@@ -66,5 +68,5 @@ kickoff: |
     AUTO-ROLLS-BACK code AND data if the new version is unhealthy. Apply only upgrades you class as SAFE.
   - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
 
-  END EVERY TURN ORIENTED: one line — "listmonk: <up/updating> · data: <backed-up when> · next: <thing>".
+  END EVERY TURN ORIENTED: one line — "Documenso: <up/updating> · data: <backed-up when> · next: <thing>".
   Lead; only pause at real forks (a risky upgrade, deleting data, exposing the app publicly).

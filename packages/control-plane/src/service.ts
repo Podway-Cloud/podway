@@ -3213,6 +3213,7 @@ export class PodService {
             agentStatus: null,
             codexStatus: null,
             agentWaitingFor: null,
+            memPressurePct: 0,
             setupProgress: null,
             agents: [],
             appListening: null,
@@ -3255,6 +3256,7 @@ export class PodService {
               agentStatus: h.agentStatus ?? null,
               codexStatus: h.codexStatus ?? null,
               agentWaitingFor: h.agentWaitingFor ?? null,
+              memPressurePct: typeof h.memPressurePct === "number" ? h.memPressurePct : 0,
               setupProgress: h.setupProgress ?? null,
               // HONEST activity (newest transcript entry), not idleMs noise. Null only when even the
               // transcript read finds nothing (fresh pod) → client falls back to server-rendered lastActiveAt.

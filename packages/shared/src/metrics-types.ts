@@ -18,6 +18,11 @@ export interface MetricSample {
   netTxKbps: number;
   /** Claude's own state: busy|shell|idle|waiting (null = unknown). */
   agentStatus: string | null;
+  /** Memory-pressure (kernel PSI "some", avg10): the % of the last ~10s the pod stalled waiting on
+   * memory. 0 when there's headroom; a sustained high value means the working set exceeds RAM and the
+   * pod is thrashing into swap (slow-but-alive). Optional — undefined from pre-pressure agents and in
+   * tests / off-Linux (no /proc/pressure/memory). Drives the dashboard "under memory pressure" badge. */
+  memPressurePct?: number;
 }
 
 export interface DiskBreakdownEntry {

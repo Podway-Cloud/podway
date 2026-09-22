@@ -64,6 +64,17 @@ restart-attribution path below.
 - **THEN** a `memory-low` (or `memory-critical`) issue SHALL be raised, so the pod is flagged
   before a kill happens, not only after
 
+#### Scenario: Live memory pressure surfaces on the dashboard as a size-up hint
+
+- **WHEN** a reachable pod is thrashing — the metrics sampler reads a non-trivial kernel PSI
+  memory-pressure figure (`/proc/pressure/memory`, "some" avg over the recent window)
+- **THEN** the sampler SHALL include a `memPressurePct` field on the live metric sample, which the
+  pod-agent live response, provider `PodHealth`, and control-plane `PodLiveSignals` SHALL carry
+  through unchanged, so the dashboard pod card can show a "low on memory · size up" hint at or above
+  a small threshold — a usable-but-slow pod (swap in use, high PSI) is flagged, not only an
+  already-killed one. When the figure is absent or unreadable the field SHALL default to 0 (no hint),
+  never blocking the sample.
+
 ### Requirement: An agent restart the owner did not cause is explained to them, in the session
 
 Any restart of a pod's agent that the owner did not personally initiate SHALL be explained to

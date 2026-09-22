@@ -222,6 +222,9 @@ export interface PodHealth {
   /** What the CLI says it's blocked on (e.g. "dialog open") — distinguishes
    * "needs an answer from you" from plain waiting. Absent on older images. */
   agentWaitingFor?: string | null;
+  /** Memory-pressure (kernel PSI "some" avg10, %) from the pod's sampler — sustained high means the
+   * working set exceeds RAM and it's thrashing into swap. Absent on pre-pressure images. */
+  memPressurePct?: number;
   /** DEPRECATED for activity — time since the last terminal OUTPUT (spinners/redraws tick it), so it
    * "lies" about real work. Kept for older callers; use `lastActivityMs` instead. */
   idleMs?: number | null;

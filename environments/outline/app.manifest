@@ -1,0 +1,11 @@
+# Outline per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=outline
+APP_SERVICE=outline
+APP_IMAGE_VAR=OUTLINE_IMAGE
+APP_HEALTH_URL=http://localhost:3000/
+APP_HEALTH_RETRIES=60
+DB_TYPE=postgres
+DB_SERVICE=postgres
+DB_USER=outline
+DB_NAME=outline
+APP_DATA_VOLUMES="data"

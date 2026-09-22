@@ -3,6 +3,7 @@ import {
   MetricsSampler,
   parseCpu,
   parseMem,
+  parsePressure,
   parseNet,
   parseCgroupMem,
   parseCgroupCpuMax,
@@ -23,6 +24,14 @@ describe("metrics parsers", () => {
     const m = parseMem("MemTotal:       4096000 kB\nMemFree: 100 kB\nMemAvailable:   1024000 kB\n");
     expect(m.totalMb).toBe(4000);
     expect(m.usedMb).toBe(3000); // (4096000-1024000)/1024
+  });
+
+  it("parsePressure reads PSI 'some' avg10, and is 0 when absent/malformed", () => {
+    expect(parsePressure("some avg10=15.30 avg60=5.99 avg300=1.67 total=5520388\nfull avg10=8.00")).toBe(15.3);
+    expect(parsePressure("some avg10=0.00 avg60=0.00 avg300=0.00 total=0")).toBe(0);
+    expect(parsePressure(null)).toBe(0);
+    expect(parsePressure(undefined)).toBe(0);
+    expect(parsePressure("garbage")).toBe(0);
   });
 
   it("parseNet sums real interfaces and skips loopback", () => {

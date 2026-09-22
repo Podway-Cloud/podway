@@ -895,6 +895,7 @@ export class IncusProvider implements SandboxProvider {
       agentStatus: h?.agentStatus ?? null,
       codexStatus: h?.codexStatus ?? null,
       agentWaitingFor: h?.agentWaitingFor ?? null,
+      memPressurePct: typeof h?.memPressurePct === "number" ? h.memPressurePct : undefined,
       idleMs: h?.idleMs ?? null,
       lastActivityMs: h?.lastActivityMs ?? null,
       appListening: h?.appListening,

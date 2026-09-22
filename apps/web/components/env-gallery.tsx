@@ -42,7 +42,8 @@ export default async function EnvGallery() {
     .sort((a, b) => featureRank(a.name) - featureRank(b.name) || a.name.localeCompare(b.name))
     .map((e) => ({ ...e, stars: null, updatedAt: null }));
 
-  // Apps: fetch GitHub meta in parallel (cached 6h), then sort by stars desc (nulls last).
+  // Apps: fetch GitHub meta in parallel (cached 6h; stars still shown on the card), then sort
+  // ALPHABETICALLY by display title (case-insensitive) — owner preference over stars-desc.
   const apps: CardEntry[] = (
     await Promise.all(
       all
@@ -52,7 +53,7 @@ export default async function EnvGallery() {
           return { ...e, stars: meta.stars, updatedAt: meta.updatedAt } as CardEntry;
         }),
     )
-  ).sort((a, b) => (b.stars ?? -1) - (a.stars ?? -1));
+  ).sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
 
   return (
     <EnvTabs
