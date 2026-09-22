@@ -116,7 +116,7 @@ export default function AppCard({
             )}
           </h3>
           {e.description && (
-            <p className="mt-1 line-clamp-3 text-[13px] leading-snug text-muted-foreground">{e.description}</p>
+            <p className="mt-1 text-[13px] leading-snug text-muted-foreground">{e.description}</p>
           )}
         </div>
       </div>

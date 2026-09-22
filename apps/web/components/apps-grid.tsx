@@ -66,7 +66,15 @@ export default function AppsGrid({ apps, enabled }: { apps: CardEntry[]; enabled
     );
   }
   return (
-    <ul ref={ref} onClickCapture={saveScroll} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    // Width-AWARE columns: fit as many cards as hold a ~320px minimum, dropping to fewer when the
+    // available space shrinks (the dashboard content area is narrower than the viewport when a side
+    // panel is open). `min(100%, …)` keeps a single column from overflowing on a phone. This replaces
+    // fixed sm/lg breakpoints, which ignored the real container width and kept cropping card text.
+    <ul
+      ref={ref}
+      onClickCapture={saveScroll}
+      className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,320px),1fr))] gap-4"
+    >
       {apps.map((a) => (
         <li key={a.name}>
           <AppCard entry={a} enabled={enabled} variant="app" />
