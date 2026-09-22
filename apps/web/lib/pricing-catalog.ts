@@ -28,8 +28,8 @@ export const SIGNUP_CREDIT_USD = SIGNUP_CREDIT_CENTS / 100;
 
 const META: Record<PodSize, { blurb: string; tag?: "default" | "light" }> = {
   mini: { tag: "light", blurb: "Bots, static sites, small scripts." },
-  s: { blurb: "Light apps and prototypes." },
-  m: { tag: "default", blurb: "Full-stack apps with a database." },
+  s: { tag: "default", blurb: "Light apps and prototypes." },
+  m: { blurb: "Full-stack apps with a database." },
   l: { blurb: "Production apps and heavier builds." },
   xl: { blurb: "Heavy compute and lots of data." },
 };

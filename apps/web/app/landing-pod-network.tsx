@@ -69,7 +69,7 @@ export default function LandingPodNetwork() {
       <div className={styles.podNetworkHeading}>
         <div>
           <span className={styles.networkIndex}>One fleet, separate jobs</span>
-          <h3 id="pod-network-title">Give each kind of work its own pod.</h3>
+          <h3 id="pod-network-title">Make every pod work for a specific purpose.</h3>
         </div>
         <p>
           Keep research, development, scheduled work, and production in focused workspaces. Your

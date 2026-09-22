@@ -17,6 +17,8 @@
 }
 
 .shell { width: min(1180px, calc(100% - 48px)); margin: 0 auto; }
+.section { position: relative; padding: 26px 0 96px; }
+.section::before { content: ""; position: absolute; top: 0; left: calc(50% - 50vw); width: 100vw; border-top: 1px solid var(--line); }
 .header { display: flex; min-height: 74px; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
 .brand { display: inline-flex; align-items: center; gap: 9px; color: var(--text); text-decoration: none; }
 .brandMark { width: 29px; height: 29px; }
@@ -32,7 +34,7 @@
   grid-template-columns: minmax(0, .82fr) minmax(520px, 1.18fr);
   align-items: center;
   gap: 50px;
-  padding: 60px 0 64px;
+  padding: 60px 0 96px;
 }
 .heroCopy { min-width: 0; }
 .eyebrow { color: var(--blue-soft); font-family: var(--font-mono); font-size: 12px; font-weight: 750; text-transform: uppercase; }
@@ -90,8 +92,6 @@
 .heroVisual figcaption strong { color: #dfe5e7; font-size: 13px; }
 .heroVisual figcaption span { color: #8c999e; font-size: 12px; line-height: 1.45; text-align: right; }
 
-.continuity { position: relative; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 30px 0 24px; }
-.continuity .sectionHeading { margin-bottom: 18px; }
 .continuityVisual { width: min(770px, 100%); margin: 0 auto; }
 .continuityArtwork { position: relative; aspect-ratio: 1825 / 560; overflow: hidden; }
 .continuityArtwork > img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 18%; mix-blend-mode: screen; }
@@ -108,7 +108,6 @@
 .trust h2,
 .finalCta h2 { max-width: 19ch; margin-top: 10px; font-size: var(--section-title-size); line-height: 1.12; letter-spacing: 0; }
 .sectionHeading > p { max-width: 46ch; margin-top: 29px; color: var(--lp-muted); font-size: 17px; line-height: 1.65; }
-.reasonsBand { border-bottom: 1px solid var(--line); background: #101518; padding: 80px 0 86px; }
 .reasons { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); }
 .reasons article { padding: 27px 28px 0 0; }
 .reasons article + article { border-left: 1px solid var(--line); padding-left: 28px; }
@@ -117,8 +116,8 @@
 .reasons article:nth-child(3) svg { color: var(--green); }
 .reasons h3 { margin-top: 22px; font-size: 19px; }
 .reasons p { margin-top: 10px; color: var(--lp-muted); font-size: 14px; line-height: 1.65; }
-.podNetwork { margin: 52px 0 0; }
-.podNetworkHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 42px; border-top: 1px solid var(--line); padding-top: 26px; }
+.podNetwork { margin: 0; }
+.podNetworkHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 42px; }
 .podNetworkHeading > div { max-width: 480px; }
 .networkIndex { color: var(--blue-soft); font-family: var(--font-mono); font-size: 10px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
 .podNetworkHeading h3 { margin-top: 9px; }
@@ -166,16 +165,15 @@
   to { top: 92%; }
 }
 
-.trustBand { border-bottom: 1px solid var(--line); background: #101518; padding: 84px 0; }
 .trust { display: grid; grid-template-columns: .8fr 1.2fr; gap: 72px; align-items: start; }
-.trustGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.trustGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
 .trustGrid article { min-height: 190px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 22px; }
 .trustGrid svg { width: 21px; height: 21px; color: var(--green); }
 .trustGrid article:nth-child(2) svg { color: #71c9e6; }
 .trustGrid article:nth-child(3) svg { color: var(--yellow); }
 .trustGrid h3 { margin-top: 25px; font-size: 17px; line-height: 1.3; }
 .trustGrid p { margin-top: 9px; color: var(--lp-muted); font-size: 13px; line-height: 1.6; }
-.finalCta { padding: 100px 0 104px; text-align: center; }
+.finalCta { text-align: center; }
 .finalCta h2 { max-width: 16ch; margin-right: auto; margin-left: auto; }
 .finalCta .primaryCta { margin-top: 26px; }
 .footer { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line); color: #718087; font-size: 12px; padding: 28px 0 36px; }
@@ -194,10 +192,13 @@
    desktop, and its mobile stacking repeated the "On your laptop"/"With a pod" labels above every
    single answer (eight times on four rows), which is what made it feel bad on a phone. A card states
    each side ONCE. */
-.changeGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 26px; }
-.changeCard { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 17px 18px 15px; }
-.changeCard h3 { display: flex; align-items: center; gap: 9px; margin: 0 0 12px; font-size: 15.5px; font-weight: 640; }
-.changeCard h3 svg { width: 17px; height: 17px; flex: none; color: var(--blue-soft); }
+.changeGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; margin-top: 40px; }
+.changeCard { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px 22px 18px; }
+.changeCard h3 { margin: 0 0 12px; font-size: 17px; font-weight: 650; }
+.changeIcon { width: 28px; height: 28px; margin-bottom: 16px; color: var(--yellow); }
+.changeCard:nth-child(2) .changeIcon { color: #71c9e6; }
+.changeCard:nth-child(3) .changeIcon { color: var(--green); }
+.changeCard:nth-child(4) .changeIcon { color: #a78bf5; }
 .changeCard dl { display: grid; grid-template-columns: 46px minmax(0, 1fr); gap: 3px 14px; margin: 0; font-size: 13.5px; }
 .changeCard dt { color: #717e84; font-family: var(--font-mono); font-size: 10px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; padding-top: 3px; }
 .changeCard dd { margin: 0; color: #8b979c; }
@@ -206,7 +207,6 @@
 .changeCard dd:last-of-type { color: var(--text); }
 .changeCard dt:last-of-type, .changeCard dd:last-of-type { margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
 
-.compareBand { padding-top: 8px; }
 .compareBand h2 { text-wrap: balance; }
 .srOnly {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -226,7 +226,7 @@
 @media (max-width: 900px) {
   .heroCopy h1 { font-size: 46px; }
   .trust { gap: 42px; }
-  .podNetwork { margin-top: 38px; }
+  .podNetwork { margin-top: 0; }
   .podNetworkHeading { align-items: flex-start; flex-direction: column; gap: 12px; }
   .podNetworkHeading > p { margin-top: 0; }
   .podNetworkCanvas { min-height: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto auto auto; gap: 24px 28px; }
@@ -276,15 +276,13 @@
   .continuitySteps span:last-child { justify-content: flex-start; }
   .sectionHeading { align-items: flex-start; flex-direction: column; gap: 17px; }
   .sectionHeading > p { margin-top: 0; }
-  .reasonsBand { padding: 66px 0 70px; }
   .reasons { grid-template-columns: 1fr; }
   .reasons article { padding: 24px 0; }
   .reasons article + article { border-top: 1px solid var(--line); border-left: 0; padding-left: 0; }
-  .trustBand { padding: 68px 0; }
   .trust { grid-template-columns: 1fr; gap: 32px; }
   .trustGrid { grid-template-columns: 1fr; }
   .trustGrid article { min-height: 0; }
-  .finalCta { padding: 80px 0 84px; }
+  .section { padding: 22px 0 64px; }
 }
 
 @media (max-width: 500px) {
@@ -312,10 +310,9 @@
 }
 
 /* ---- pricing ---------------------------------------------------------------------------- */
-/* Sits on the page ground between the #101518 trust band and the final CTA. Cards reuse the
+/* Sits on the page ground between the var(--panel-strong) trust band and the final CTA. Cards reuse the
    panel/line/radius treatment of .trustGrid + .changeCard; the "Most popular" chip echoes the
    mono-uppercase tag language used on .podNodeTags; the CTA reuses .primaryCta. */
-.pricingBand { padding: 84px 0; }
 .pricingGrid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 .pricingCard { position: relative; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); padding: 20px 18px 18px; }
 .pricingCardFeatured { border-color: rgba(77, 130, 255, .55); box-shadow: 0 0 0 1px rgba(77, 130, 255, .24), 0 18px 44px rgba(0, 0, 0, .22); }
@@ -338,8 +335,8 @@
 .pricingIncludes li { display: flex; align-items: center; gap: 9px; color: #c7d0d3; font-size: 13.5px; }
 .pricingIncludes li svg { width: 16px; height: 16px; flex: none; color: var(--green); }
 .pricingAside { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
-.pricingCredit { color: var(--lp-muted); font-size: 14px; }
-.pricingCredit strong { color: var(--text); }
+.pricingCredit { margin: 24px auto 0; text-align: center; color: var(--text); font-size: 18px; font-weight: 600; }
+.pricingCredit strong { color: var(--blue-soft); font-weight: 800; }
 .pricingPause { color: #8b979c; font-size: 13px; line-height: 1.55; }
 
 @media (max-width: 900px) {
@@ -348,7 +345,6 @@
 }
 
 @media (max-width: 700px) {
-  .pricingBand { padding: 66px 0 70px; }
   .pricingGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pricingIncludes ul { grid-template-columns: 1fr; }
   .pricingAside .primaryCta { width: 100%; }

@@ -1,0 +1,141 @@
+/* "The industry already agrees" — social-proof quote wall (built for the podway landing, on the
+   global design tokens: --background #0b1220, --foreground, --muted-foreground, --border,
+   --link-accent). Two rows auto-scroll opposite ways; hover pauses; pointer-drag + touch-swipe
+   scrub; reduced-motion holds it still. Not a copy of the mockup CSS — rebuilt on our tokens. */
+
+.section {
+  /* Flat on the page's dark ground; same section rhythm as the landing bands: a full-width top
+     divider, the heading right under it, and the uniform 96px space above the next divider. */
+  border-top: 1px solid var(--line, var(--line, #2b363b));
+  padding: 26px 0 96px;
+  overflow: hidden;
+}
+.head {
+  width: min(1180px, calc(100% - 48px));
+  margin: 0 auto 40px;
+  text-align: left;
+}
+.eyebrow {
+  color: var(--blue-soft, #9ab6ff);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+.headline {
+  margin: 14px 0 0;
+  font-size: var(--section-title-size, 34px);
+  line-height: 1.12;
+  letter-spacing: 0;
+  color: var(--text, #f4f7f7);
+  text-wrap: balance;
+}
+.headline em {
+  font-style: normal;
+  color: var(--blue-soft, #9ab6ff);
+}
+
+/* --- the rolling rows ---------------------------------------------------------------------- */
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  /* fade the left/right edges so cards emerge/vanish instead of hard-cutting */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 8%, #000 92%, transparent);
+}
+.row {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  /* horizontal gesture scrolls the row natively; vertical passes through to the page */
+  touch-action: pan-x;
+}
+.row::-webkit-scrollbar { display: none; }
+.track {
+  display: flex;
+  gap: 18px;
+  width: max-content;
+}
+.row.dragging { cursor: grabbing; }
+
+/* --- a card ------------------------------------------------------------------------------- */
+.card {
+  flex: 0 0 auto;
+  width: 360px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 22px 20px;
+  border: 1px solid var(--line, #2b363b);
+  border-radius: 14px;
+  background: var(--panel, #141a1d);
+  cursor: grab;
+  user-select: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+/* a big serif open-quote so each card reads as a QUOTE, testimonial-style */
+.card::before {
+  content: "\201C";
+  height: 24px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 46px;
+  line-height: 0.9;
+  color: color-mix(in srgb, var(--blue-soft, #9ab6ff) 55%, transparent);
+}
+.card:hover {
+  border-color: color-mix(in srgb, var(--blue-soft, #9ab6ff) 45%, var(--line, #2b363b));
+  background: var(--panel-strong, #1a2226);
+}
+/* FIXED 3-line quote box → every card is the same height and the divider always lands in the same
+   place. Quotes are authored to fit <=3 lines at 360px. */
+.quote {
+  margin: 4px 0 0;
+  height: calc(3 * 1.5em);
+  font-size: 15px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--text, #f4f7f7);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.divider {
+  margin: 16px 0 12px;
+  border: 0;
+  border-top: 1px solid var(--line, #2b363b);
+}
+.attr {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  text-decoration: none;
+}
+.company {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text, #f4f7f7);
+}
+.company .mark {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 5px;
+  object-fit: contain;
+  background: #fff;
+  padding: 2px;
+  box-sizing: border-box;
+}
+.attr:hover .company {
+  color: var(--blue-soft, #9ab6ff);
+}
+.role {
+  font-size: 12.5px;
+  color: var(--lp-muted, #93a1b8);
+}
+
+

@@ -22,6 +22,8 @@ import GithubMark from "@/components/github-mark";
 import LandingAccountLink from "@/components/landing-account-link";
 import LandingFooter from "@/components/landing-footer";
 import LandingPodNetwork from "./landing-pod-network";
+import QuoteWall from "@/components/landing-quote-wall";
+import { LandingSection } from "./landing-section";
 import {
   PRICING_TIERS,
   INCLUDED_FEATURES,
@@ -109,10 +111,9 @@ export default async function AgentComputerLanding({
         </figure>
       </section>
 
-      <section
-        className={`${styles.shell} ${styles.continuity}`}
+      <LandingSection
         id="workspace"
-        aria-label="Claude on desktop and mobile connected to one running pod"
+        ariaLabel="Claude on desktop and mobile connected to one running pod"
       >
         <div className={styles.sectionHeading}>
           <div>
@@ -137,7 +138,7 @@ export default async function AgentComputerLanding({
             <span><strong>03</strong> Continue on phone</span>
           </div>
         </div>
-      </section>
+      </LandingSection>
 
       {/* The without/with comparison. Asked for by a real reader of this page (Nadya, 2026-09-06):
           "I'm missing a small comparison table — how it is without a pod and how with, what I don't
@@ -148,7 +149,7 @@ export default async function AgentComputerLanding({
           Every row restates a claim this page ALREADY makes further down. A comparison table is the
           easiest place on a landing page to drift into a promise the product does not keep, so the
           rule here is: if a row is not backed by a section below, it does not belong. */}
-      <section className={`${styles.shell} ${styles.compareBand}`} id="compare" aria-label="Claude Code with and without a pod">
+      <LandingSection id="compare" ariaLabel="Claude Code with and without a pod">
         <div className={styles.sectionHeading}>
           <div>
             <p className={styles.eyebrow}>What changes</p>
@@ -156,84 +157,56 @@ export default async function AgentComputerLanding({
           </div>
           <p>Claude Code is the same either way. What changes is where it lives.</p>
         </div>
-        {/* Four before/after cards, not a 3-column table (owner call, 2026-09-06: crowded on
-            desktop, and on a phone it repeated its two column labels eight times). Each card names
-            ONE difference and states both sides once. Icons are chosen to mean the row — ShieldCheck
-            is deliberately the same icon the security section below uses. */}
+        {/* Before/after cards with a large colored icon each. Extended with the copy that used to
+            live in the separate "More than remote access" section (now folded in here). Each card
+            names ONE difference and states both sides once. */}
         <div className={styles.changeGrid}>
         <article className={styles.changeCard}>
-          <h3><MonitorSmartphone aria-hidden />Switch devices</h3>
-          <dl>
-            <dt>Laptop</dt><dd>Your session stays on that machine.</dd>
-            <dt>Pod</dt><dd>Continue the same session from desktop, phone, or web.</dd>
-          </dl>
-        </article>
-        <article className={styles.changeCard}>
-          <h3><Server aria-hidden />Keep your stack running</h3>
+          <Boxes className={styles.changeIcon} aria-hidden />
+          <h3>Keep the whole stack running</h3>
           <dl>
             <dt>Laptop</dt><dd>Servers, databases, workers, and scheduled jobs stop when your laptop does.</dd>
-            <dt>Pod</dt><dd>Your entire development environment is always up and accessible.</dd>
+            <dt>Pod</dt><dd>Dev servers, databases, workers, scheduled jobs, monitors, and project skills stay together and keep running.</dd>
           </dl>
         </article>
         <article className={styles.changeCard}>
-          <h3><FlaskConical aria-hidden />Test the real app</h3>
+          <Eye className={styles.changeIcon} aria-hidden />
+          <h3>Test and verify the real app</h3>
           <dl>
-            <dt>Laptop</dt><dd>Your builds, tests, and Claude agent drain your laptop resources.</dd>
-            <dt>Pod</dt><dd>Claude can run builds and tests on a real app safely, even while you&rsquo;re away.</dd>
+            <dt>Laptop</dt><dd>Builds slow your laptop, and there&rsquo;s no live app to check.</dd>
+            <dt>Pod</dt><dd>Claude builds, runs it, and clicks through the live app to verify &mdash; while you&rsquo;re away.</dd>
           </dl>
         </article>
         <article className={styles.changeCard}>
-          <h3><ShieldCheck aria-hidden />Protect your personal environment</h3>
+          <Globe2 className={styles.changeIcon} aria-hidden />
+          <h3>Develop or run in production</h3>
+          <dl>
+            <dt>Laptop</dt><dd>Localhost only &mdash; going live means deploying to a third-party service.</dd>
+            <dt>Pod</dt><dd>Develop with a live preview, or run your production server directly from the pod.</dd>
+          </dl>
+        </article>
+        <article className={styles.changeCard}>
+          <ShieldCheck className={styles.changeIcon} aria-hidden />
+          <h3>Protect your personal environment</h3>
           <dl>
             <dt>Laptop</dt><dd>Claude works on your everyday computer.</dd>
             <dt>Pod</dt><dd>Claude works in an isolated computer, away from your personal files, browser sessions, and local network.</dd>
           </dl>
         </article>
         </div>
-      </section>
+      </LandingSection>
 
-      <section className={styles.reasonsBand} id="why">
-        <div className={styles.shell}>
-          <div className={styles.sectionHeading}>
-            <div>
-              <p className={styles.eyebrow}>More than remote access</p>
-              <h2>Run the whole project. See the result.</h2>
-            </div>
-            <p>A pod gives Claude a complete environment to build, run, and test your project.</p>
-          </div>
-          <div className={styles.reasons}>
-            <article>
-              <Boxes aria-hidden />
-              <h3>Run more than code</h3>
-              <p>Development servers, databases, workers, scheduled jobs, monitors, and project skills stay together and keep running.</p>
-            </article>
-            <article>
-              <Eye aria-hidden />
-              <h3>Verify the real app</h3>
-              <p>Claude can open the live application, click through real flows, use its database, and verify behavior where it made the change.</p>
-            </article>
-            <article>
-              <Globe2 aria-hidden />
-              <h3>Develop or run in production</h3>
-              <p>Use the pod for development with a live preview, or run your production server directly from the pod.</p>
-            </article>
-          </div>
-          <LandingPodNetwork />
-        </div>
-      </section>
+      <LandingSection id="fleet">
+        <LandingPodNetwork />
+      </LandingSection>
 
-      <section className={styles.trustBand} id="trust">
-        <div className={`${styles.shell} ${styles.trust}`}>
+      <LandingSection id="trust">
+        <div className={styles.trust}>
           <div>
             <p className={styles.eyebrow}>A boundary for agent work</p>
             <h2>Powerful inside the pod. Guarded at the edges.</h2>
           </div>
           <div className={styles.trustGrid}>
-            <article>
-              <ShieldCheck aria-hidden />
-              <h3>Project-scoped machine</h3>
-              <p>The pod gets this project&rsquo;s code and services, not your personal files, browser sessions, or local network.</p>
-            </article>
             <article>
               <KeyRound aria-hidden />
               <h3>Project secrets, outside chat</h3>
@@ -251,10 +224,11 @@ export default async function AgentComputerLanding({
             </article>
           </div>
         </div>
-      </section>
+      </LandingSection>
 
-      <section className={styles.pricingBand} id="pricing">
-        <div className={styles.shell}>
+      <QuoteWall />
+
+      <LandingSection id="pricing">
           <div className={styles.sectionHeading}>
             <div>
               <p className={styles.eyebrow}>Simple, flat pricing</p>
@@ -284,6 +258,9 @@ export default async function AgentComputerLanding({
               </article>
             ))}
           </div>
+          <p className={styles.pricingCredit}>
+            <strong>${SIGNUP_CREDIT_USD} in free credit</strong> when you add a card.
+          </p>
           <div className={styles.pricingFooter}>
             <div className={styles.pricingIncludes}>
               <h3>Every pod includes</h3>
@@ -294,27 +271,14 @@ export default async function AgentComputerLanding({
               </ul>
             </div>
             <div className={styles.pricingAside}>
-              <p className={styles.pricingCredit}>
-                <strong>${SIGNUP_CREDIT_USD} in free credit</strong> when you add a card.
-              </p>
               <p className={styles.pricingPause}>
                 Suspend a pod anytime and it drops to ${SUSPENDED_USD}/mo while we keep your disk safe.
               </p>
-              <TrackedLink
-                className={styles.primaryCta}
-                href={primaryHref}
-                eventName="landing_primary_cta"
-                item="agent-computer-pricing"
-              >
-                {primaryLabel}
-              </TrackedLink>
             </div>
           </div>
-        </div>
-      </section>
+      </LandingSection>
 
-      <section className={`${styles.shell} ${styles.finalCta}`}>
-        <p className={styles.eyebrow}>Private alpha</p>
+      <LandingSection className={styles.finalCta}>
         <h2>Give your <span className={styles.noWrap}>Claude Code</span> a permanent home</h2>
         <TrackedLink
           className={styles.primaryCta}
@@ -324,7 +288,7 @@ export default async function AgentComputerLanding({
         >
           {primaryLabel}
         </TrackedLink>
-      </section>
+      </LandingSection>
 
       <LandingFooter
         className={`${styles.shell} ${styles.footer}`}
