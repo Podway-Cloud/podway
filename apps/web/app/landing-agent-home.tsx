@@ -156,7 +156,7 @@ export default async function AgentHomeLanding({
                 <span className={styles.roomIcon}><LockKeyhole aria-hidden /></span>
                 <small>Live address</small>
                 <strong>Owner-only</strong>
-                <span className={styles.roomUrl}>customer-report.preview.podway.cloud</span>
+                <span className={styles.roomUrl}>customer-report.podway.site</span>
               </div>
             </div>
             <div className={styles.agentResult}>

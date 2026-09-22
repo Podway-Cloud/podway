@@ -275,9 +275,11 @@ async function main(): Promise<void> {
 function relayConnectUrl(): string | undefined {
   if (process.env.PODWAY_RELAY_CONNECT_URL) return process.env.PODWAY_RELAY_CONNECT_URL;
   const base = process.env.PODWAY_PREVIEW_BASE?.replace(/^\.+|\.+$/g, "");
-  // preview.podway.cloud → gateway.podway.cloud
+  // Derivable ONLY from the legacy 3-label preview base (preview.podway.cloud → gateway.podway.cloud).
+  // A 2-label base (podway.site) has no derivable gateway host — the gateway is gw.podway.site, not a
+  // subdomain of the preview base — so DON'T guess a wrong host; prod sets PODWAY_RELAY_CONNECT_URL.
   if (base && base.split(".").length > 2) return `wss://gateway.${base.split(".").slice(1).join(".")}`;
-  return base ? `wss://gateway.${base}` : undefined;
+  return undefined;
 }
 
 /** Pull a cross-domain bridge token from an upgrade/preview request: the `t` query param (on the WS
@@ -314,9 +316,11 @@ function appOrigin(): string | undefined {
   const trusted = process.env.TRUSTED_ORIGINS?.split(",")[0]?.trim();
   if (trusted) return trusted;
   const base = process.env.PODWAY_PREVIEW_BASE?.replace(/^\.+|\.+$/g, "");
-  // Strip the leading preview label: preview.podway.cloud → podway.cloud.
+  // Strip the leading preview label: preview.podway.cloud → podway.cloud. Only the legacy 3-label
+  // base derives the app host this way; a 2-label base (podway.site) is NOT the app host (podway.io),
+  // so DON'T guess a wrong origin — prod sets PODWAY_APP_ORIGIN/TRUSTED_ORIGINS.
   if (base && base.split(".").length > 2) return `https://${base.split(".").slice(1).join(".")}`;
-  return base ? `https://${base}` : undefined;
+  return undefined;
 }
 
 main().catch((e) => {

@@ -43,7 +43,7 @@ RUN npx --yes create-next-app@latest nextjs-starter \
       --typescript --tailwind --eslint --app --use-pnpm --yes \
     && cd nextjs-starter \
     && printf 'onlyBuiltDependencies:\n  - sharp\n  - unrs-resolver\n' > pnpm-workspace.yaml \
-    && printf 'import type { NextConfig } from "next";\n\nconst nextConfig: NextConfig = {\n  // Reached through the Podway preview proxy (a *.preview.podway.cloud host),\n  // cross-origin to localhost:3000. Next blocks cross-origin dev/HMR assets by\n  // default, which stops the client bundle from hydrating. Allow the preview host.\n  allowedDevOrigins: ["*.preview.podway.cloud"],\n};\n\nexport default nextConfig;\n' > next.config.ts \
+    && printf 'import type { NextConfig } from "next";\n\nconst nextConfig: NextConfig = {\n  // Reached through the Podway preview proxy (a *.preview.podway.cloud host),\n  // cross-origin to localhost:3000. Next blocks cross-origin dev/HMR assets by\n  // default, which stops the client bundle from hydrating. Allow the preview host.\n  allowedDevOrigins: ["*.podway.site", "*.preview.podway.cloud"],\n};\n\nexport default nextConfig;\n' > next.config.ts \
     && pnpm install \
     && CI=1 npx --yes shadcn@latest init -d -y \
     && CI=1 npx --yes shadcn@latest add button card input label badge table dialog select dropdown-menu -y -o \
@@ -71,7 +71,7 @@ RUN npx --yes create-next-app@latest doc-qa \
     && cd doc-qa \
     && test ! -d app && test -d src/app \
     && printf 'onlyBuiltDependencies:\n  - sharp\n  - unrs-resolver\n' > pnpm-workspace.yaml \
-    && printf 'import type { NextConfig } from "next";\n\nconst nextConfig: NextConfig = {\n  // Reached through the Podway preview proxy (a *.preview.podway.cloud host),\n  // cross-origin to localhost:3000. Next blocks cross-origin dev/HMR assets by\n  // default, which stops the client bundle from hydrating. Allow the preview host.\n  allowedDevOrigins: ["*.preview.podway.cloud"],\n};\n\nexport default nextConfig;\n' > next.config.ts \
+    && printf 'import type { NextConfig } from "next";\n\nconst nextConfig: NextConfig = {\n  // Reached through the Podway preview proxy (a *.preview.podway.cloud host),\n  // cross-origin to localhost:3000. Next blocks cross-origin dev/HMR assets by\n  // default, which stops the client bundle from hydrating. Allow the preview host.\n  allowedDevOrigins: ["*.podway.site", "*.preview.podway.cloud"],\n};\n\nexport default nextConfig;\n' > next.config.ts \
     && pnpm add ai @ai-sdk/react @ai-sdk/anthropic pg \
     && pnpm add -D @types/pg
 # Overlay the prebuilt chat (source lives in the repo, reviewed like any code) onto

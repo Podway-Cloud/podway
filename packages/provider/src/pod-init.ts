@@ -166,15 +166,15 @@ export async function buildInitFiles(
   const previewBase = process.env.PODWAY_PREVIEW_BASE?.replace(/^\.+|\.+$/g, "");
   const previewUrl = previewBase ? `https://${input.id}.${previewBase}` : null;
 
-  // The app origin (podway.cloud): explicit override, else derived by stripping the
-  // preview label (preview.podway.cloud → podway.cloud), same as the gateway does.
+  // The app origin: explicit override, else derived by stripping the preview label
+  // (preview.podway.cloud → podway.cloud), same as the gateway does. Only the legacy 3-label base
+  // derives this way; a 2-label base (podway.site) is NOT the app host (podway.io), so DON'T guess —
+  // fall to null and let PODWAY_APP_ORIGIN be the source of truth.
   const appOrigin =
     process.env.PODWAY_APP_ORIGIN?.replace(/\/$/, "") ||
     (previewBase && previewBase.split(".").length > 2
       ? `https://${previewBase.split(".").slice(1).join(".")}`
-      : previewBase
-        ? `https://${previewBase}`
-        : null);
+      : null);
   // `/dashboard/pods/<slug>` is the COCKPIT (tabs: control/settings/secrets/stats/…).
   // `/pods/<slug>` is the bare web TERMINAL — a different page. This built the terminal URL and
   // called it the cockpit, so every "open your pod dashboard: …" link an agent handed the owner

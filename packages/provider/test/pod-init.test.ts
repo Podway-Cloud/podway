@@ -64,6 +64,40 @@ describe("buildInitFiles", () => {
     }
   });
 
+  // Domain split: the preview base moved to the 2-label podway.site, while the app is podway.io. The
+  // legacy "strip the preview. label" derivation only works for a 3-label base — for podway.site it
+  // must NOT guess an app host (that produced https://podway.site, which is not the app). Prod sets
+  // PODWAY_APP_ORIGIN; without it the app host is simply unknown (null), never a wrong guess.
+  it("with a 2-label preview base, does NOT derive a wrong app host — preview on .site, app from the explicit origin", async () => {
+    const { resolved, envDir } = await makePod();
+    const prevBase = process.env.PODWAY_PREVIEW_BASE;
+    const prevOrigin = process.env.PODWAY_APP_ORIGIN;
+    const readSpec = async () => {
+      const files = await buildInitFiles({ id: "curly-otter-9f3a", resolved, envDir });
+      const f = files.find((x) => x.guest_path === "/etc/podway/pod-spec.json")!;
+      return JSON.parse(Buffer.from(f.raw_value, "base64").toString());
+    };
+    try {
+      process.env.PODWAY_PREVIEW_BASE = "podway.site";
+      // No explicit app origin → the app host is UNKNOWN, not a guess off the preview base.
+      delete process.env.PODWAY_APP_ORIGIN;
+      let spec = await readSpec();
+      expect(spec.previewUrl).toBe("https://curly-otter-9f3a.podway.site");
+      expect(spec.appOrigin).toBeNull(); // was "https://podway.site" before the fix
+      expect(spec.cockpitUrl).toBeNull();
+      // With the explicit origin (what prod sets), the cockpit lands on the app host — podway.io.
+      process.env.PODWAY_APP_ORIGIN = "https://podway.io";
+      spec = await readSpec();
+      expect(spec.previewUrl).toBe("https://curly-otter-9f3a.podway.site");
+      expect(spec.cockpitUrl).toBe("https://podway.io/dashboard/pods/curly-otter-9f3a");
+    } finally {
+      if (prevBase === undefined) delete process.env.PODWAY_PREVIEW_BASE;
+      else process.env.PODWAY_PREVIEW_BASE = prevBase;
+      if (prevOrigin === undefined) delete process.env.PODWAY_APP_ORIGIN;
+      else process.env.PODWAY_APP_ORIGIN = prevOrigin;
+    }
+  });
+
   it("carries the user's display name as podName (null when unnamed)", async () => {
     const { resolved, envDir } = await makePod();
     const readSpec = async (name?: string) => {

@@ -14,7 +14,7 @@ export default function Harness() {
     <main className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
       <PreviewCard
         slug="demo-pod"
-        url="https://correct-jackal-c6bf.preview.podway.cloud"
+        url="https://correct-jackal-c6bf.podway.site"
         isPublic
         running={false}
       />

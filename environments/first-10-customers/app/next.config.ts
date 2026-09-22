@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  allowedDevOrigins: ["*.preview.podway.cloud"],
+  allowedDevOrigins: ["*.podway.site", "*.preview.podway.cloud"],
 };
 
 export default nextConfig;

@@ -10,7 +10,7 @@ import { getPodAppListening } from "@/lib/actions";
  * The pod's live preview, as a browser-window card rather than a lone button in an
  * empty row (owner feedback, 2026-07-29).
  *
- * The frame is a REAL live view, not a screenshot. The preview host (*.podway.cloud)
+ * The frame is a REAL live view, not a screenshot. The preview host (*.podway.site)
  * is a DIFFERENT registrable domain from the dashboard (podway.io), so the frame is
  * cross-site and the owner's session cookie does NOT ride along. For an owner-only
  * preview the frame instead loads a `frameUrl` carrying a one-time `?__pw_t=` bridge
