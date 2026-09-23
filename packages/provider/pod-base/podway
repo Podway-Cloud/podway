@@ -969,6 +969,35 @@ _agent_npm_env() {
   mkdir -p "$NPM_PREFIX/bin"
 }
 
+# Keep only the RUNNING release (the `current` symlink target) and the PENDING self-update
+# (named in `auto-update-version`) in the codex standalone releases dir; delete the rest.
+# Neither the standalone self-updater nor `agent update codex` prune, so a codex pod's volume
+# fills with dead builds (~320M each) until handoff-note writes fail (reported by test:1,
+# 2026-09-23). FAIL-SAFE: if the running release can't be resolved, prune NOTHING — a full
+# disk beats deleting the binary the daemon is running. Prints the count removed on stdout.
+_codex_prune_releases() {
+  local sa="${1:-$CODEX_SA_DIR}" reldir cur pend d name removed=0
+  reldir="$sa/releases"
+  if [ ! -d "$reldir" ]; then printf 0; return 0; fi
+  cur=$(readlink "$sa/current" 2>/dev/null | sed 's#^releases/##' || true)
+  pend=$(cat "$sa/auto-update-version" 2>/dev/null | tr -d ' \t\r\n' || true)
+  if [ -z "$cur" ] || [ ! -d "$reldir/$cur" ]; then
+    echo "codex prune: cannot resolve current release; skipping" >&2
+    printf 0; return 0
+  fi
+  for d in "$reldir"/*/; do
+    [ -d "$d" ] || continue
+    name=$(basename "$d")
+    [ "$name" = "$cur" ] && continue
+    if [ -n "$pend" ] && [ "$name" = "$pend" ]; then continue; fi
+    if rm -rf "$d" 2>/dev/null; then removed=$((removed+1)); fi
+  done
+  if [ "$removed" -gt 0 ]; then
+    echo "codex prune: removed $removed old release(s); kept current=$cur pending=${pend:-none}" >&2
+  fi
+  printf '%s' "$removed"
+}
+
 agent_update_claude() {
   _agent_npm_env
   echo "updating claude-code (npm → ~/.npm-global, as dev)…"
@@ -997,6 +1026,7 @@ agent_update_codex() {
   [ -n "$rel" ] || die "could not obtain the codex standalone build for $v"
   ln -sfn "releases/$rel" "$CODEX_SA_DIR/current"
   mkdir -p "$(dirname "$CODEX_PIN_FILE")" && printf '%s\n' "$rel" > "$CODEX_PIN_FILE"
+  _codex_prune_releases "$CODEX_SA_DIR" >/dev/null  # drop the builds this update superseded
   # Restart the RC daemon so it picks up the new standalone (the pod-agent respawns it).
   pkill -f 'app-server --remote-control' 2>/dev/null || true
   echo "codex: npm $(codex --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1), standalone $("$CODEX_SA_DIR/current/codex" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1) → pinned $rel"
@@ -1038,6 +1068,7 @@ case "${1:-info}" in
   startup) shift || true; cmd_startup "$@" ;;
   dev) shift || true; cmd_dev "$@" ;;
   agent) shift || true; cmd_agent "$@" ;;
+  __prune-codex-releases) shift || true; _codex_prune_releases "${1:-$CODEX_SA_DIR}" ;;  # internal: used by doctor --fix + tests
   msg) shift || true; cmd_msg "$@" ;;
   link) shift || true; cmd_link "${1:-}" ;;
   visibility) shift || true; cmd_visibility "${1:-}" ;;

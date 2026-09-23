@@ -497,12 +497,16 @@ check_disk() {
     # Caches only — never anything under ~/work, which is the user's work.
     rm -rf "$HOME_DIR/.npm/_cacache" "$HOME_DIR/.cache/ms-playwright-tmp" 2>/dev/null
     find "$HOME_DIR" -maxdepth 4 -type d -name ".next" -prune -exec rm -rf {} + 2>/dev/null
+    # Codex standalone releases pile up (~320M each) and nothing prunes them — usually the
+    # biggest reclaimable chunk on a codex pod. Delegate to podway so the logic lives once.
+    command -v podway >/dev/null 2>&1 && podway __prune-codex-releases "$CODEX_SA_DEST" >/dev/null 2>&1 || true
     local after; after=$(df -P "$HOME_DIR" | awk 'NR==2{gsub("%","",$5); print $5}')
     [ $((100 - after)) -ge "$DISK_WARN_PCT" ] && fixed=true
   fi
   local sev="warn"; [ "$free_pct" -lt 5 ] && sev="critical"
   add "disk-low" "$sev" "Disk is low (${free_pct}% free)" \
-      "Installs, builds and repairs start failing when this runs out." "$fixed"
+      "Installs, builds and repairs start failing when this runs out. Old Codex release builds are usually the biggest reclaimable chunk here; 'podway doctor --fix' clears them along with caches and build output." "$fixed" false \
+      "The volume is nearly full — largely old Codex release builds that pile up on their own. The pod clears these during its automatic repairs; if the warning persists, updating the pod from the dashboard applies the latest fix."
 }
 
 # The pod-agent already computes a set of health findings (session, agent windows,
