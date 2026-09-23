@@ -22,6 +22,6 @@
 - [x] 4.2 gateway `relay_connected` + pod `ws_accepted`; all 4 recently-updated pods consistent (box == DB == 0.8.31).
 
 ## 5. Teardown (owner "go" — see 0asks)
-- [ ] 5.1 Destroy `podway-db-backup` (suspended, dead weight) — safe now.
+- [x] 5.1 Destroy `podway-db-backup` (no volumes, dead weight) — done 2026-09-23.
 - [ ] 5.2 After a few stable days on Neon: `fly apps destroy podway-db`; keep `~/podway-dump*.sql.gz` + CSVs until then.
 - [ ] 5.3 Re-point stale docs from `podway-db` to Neon: `docs/runbooks/agent-ops-access.md`, `scripts/check-migrations.sh`, shipping/deploy runbooks.
