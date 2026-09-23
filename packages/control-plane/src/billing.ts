@@ -122,6 +122,7 @@ export class BillingService {
    */
   async ensureCustomer(ownerId: string, email?: string): Promise<string> {
     const existing = await this.getAccount(ownerId);
+    let recreated = false;
     if (existing.stripeCustomerId) {
       // Verify it still exists in the CURRENT Stripe mode. A customer created in TEST mode is
       // `No such customer` after the LIVE flip — forget it and create a fresh one in this mode.
@@ -134,6 +135,7 @@ export class BillingService {
         if (!isResourceMissing(e)) return existing.stripeCustomerId;
       }
       await this.forgetStaleCustomer(ownerId);
+      recreated = true;
     }
 
     const customer = await this.stripe().customers.create({
@@ -148,7 +150,30 @@ export class BillingService {
         target: billingAccounts.ownerId,
         set: { stripeCustomerId: customer.id, updatedAt: now },
       });
+    // If this REPLACED a stale customer (test→live cutover), the ledger credit was pushed to the OLD
+    // customer, so the fresh one starts at $0 — re-apply the account's granted credit onto it. Guarded
+    // to the re-creation path so a first-time grant (grantCredit pushes the balance itself) is never
+    // doubled.
+    if (recreated) await this.reapplyLedgerCredit(ownerId, customer.id).catch(() => undefined);
     return customer.id;
+  }
+
+  /** Push the account's total granted ledger credit onto `customerId`'s Stripe balance. Used only
+   * when a customer was RE-CREATED (test→live), so a fresh customer inherits the credit the owner
+   * already earned rather than starting at $0. */
+  private async reapplyLedgerCredit(ownerId: string, customerId: string): Promise<void> {
+    const rows = await this.db
+      .select({ cents: creditGrants.cents })
+      .from(creditGrants)
+      .where(eq(creditGrants.ownerId, ownerId));
+    const total = rows.reduce((s, r) => s + r.cents, 0);
+    if (total > 0) {
+      await this.stripe().customers.createBalanceTransaction(customerId, {
+        amount: -total, // negative = credit toward future invoices
+        currency: "usd",
+        description: "Podway credit re-applied after customer re-creation",
+      });
+    }
   }
 
   /** Drop a stale Stripe customer link (e.g. a TEST-mode id after the LIVE flip): null the stored id

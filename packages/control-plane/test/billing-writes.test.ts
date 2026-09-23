@@ -89,6 +89,31 @@ describe("test→live customer cutover (No such customer)", () => {
     const acct = await db.select().from(billingAccounts).where(eq(billingAccounts.ownerId, "u1"));
     expect(acct[0].stripeCustomerId).toBe("cus_live_new");
   });
+
+  it("re-applies the ledger credit onto a re-created customer (so the $15 isn't stranded)", async () => {
+    const db = await freshDb();
+    await seedUser(db, "u1");
+    await seedAccount(db, "u1", "cus_stale", true);
+    // A signup credit already earned (granted in test mode → on the OLD customer).
+    await db.insert(creditGrants).values({ id: "g1", ownerId: "u1", cents: 1500, reason: "signup" });
+    const retrieve = vi.fn(async () => {
+      throw staleErr();
+    });
+    const create = vi.fn(async () => ({ id: "cus_live_new" }));
+    const createBalanceTransaction = vi.fn(async () => ({}));
+    const svc = new BillingService(
+      db,
+      fakeStripe({ customers: { retrieve, create, createBalanceTransaction } }),
+    );
+
+    await svc.ensureCustomer("u1", "u1@example.com");
+
+    // The credit is re-pushed onto the FRESH customer, not left on the stale one.
+    expect(createBalanceTransaction).toHaveBeenCalledWith(
+      "cus_live_new",
+      expect.objectContaining({ amount: -1500 }),
+    );
+  });
 });
 
 describe("grantCredit", () => {

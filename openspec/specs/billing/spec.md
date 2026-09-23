@@ -54,7 +54,9 @@ billing surface SHALL crash on this: every customer-scoped read (invoices, payme
 charge) SHALL treat a `resource_missing` as "no customer" and render the empty/add-a-card state, and
 the platform SHALL forget the stale id so the next add-card creates a fresh customer in the current
 mode. `ensureCustomer` SHALL recreate when the stored customer is genuinely missing, but SHALL keep
-the stored id on any other (transient) error rather than orphan a live customer.
+the stored id on any other (transient) error rather than orphan a live customer. When it RE-CREATES a
+customer, the owner's already-granted ledger credit SHALL be re-applied onto the fresh customer's
+balance (the grant was pushed to the old customer) so a test→live cutover does not strand it.
 
 #### Scenario: Test-mode customer after the live flip
 
