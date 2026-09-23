@@ -13,7 +13,7 @@
 - [x] 3.2 disk-low finding now names the codex-release cause (CLI detail names `podway doctor --fix`; owner-facing detail stays command-free per the cockpit rule).
 
 ## 4. Swapfile default
-- [ ] 4.1 OWNER DECISION: the 3.8G `~/.swapfile` on a 9.8G volume is a lot of fixed reservation. Reducing it risks OOM under load. Leaving as-is pending velsa's call (not changed tonight).
+- [x] 4.1 OWNER DECISION (2026-09-23): keep swap at `min(RAM,4G)` (don't shrink — OOM risk), but stop it eating the user's quota. Moved to its own change: `openspec/changes/swap-on-top-of-disk-quota` (volume = tier disk + swap). The test:1 anomaly (3.8G/9.8G = 39%) was a mis-sized test pod, not a real tier (real tiers are 2–8%).
 
 ## 5. Ship + verify
 - [x] 5.1 Unit tests: `packages/provider/test/codex-prune.test.ts` (keeps current+pending, honours no-pending, two fail-safe paths, no-op on empty). 52/52 in the provider CLI/doctor suite pass.
