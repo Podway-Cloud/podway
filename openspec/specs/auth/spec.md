@@ -35,6 +35,25 @@ state SHALL live in the database.
 - **WHEN** a user signs out
 - **THEN** the session SHALL be invalidated and subsequent requests SHALL be unauthenticated
 
+### Requirement: Session read is resilient to a transient DB blip
+
+Reading the session is an idempotent database READ, so a TRANSIENT connection error (a dropped pool
+connection, a brief network hiccup) SHALL be retried a small, bounded number of times before it
+surfaces — so a momentary blip does not hard-crash the page to an error boundary. A NON-transient
+error (a real query/schema failure) SHALL surface immediately without retry, and if every retry
+still blips (a genuine outage) the error SHALL surface so the page can degrade rather than hang.
+
+#### Scenario: A momentary connection drop is retried, not fatal
+
+- **WHEN** the session read hits a transient connection error but the connection recovers within the
+  retry budget
+- **THEN** the read SHALL succeed on a retry and the request SHALL resolve normally, with no error page
+
+#### Scenario: A real error is not retried
+
+- **WHEN** the session read fails with a non-connection error (e.g. a schema/query fault)
+- **THEN** it SHALL surface immediately, without retrying
+
 ### Requirement: Identity to ownerId bridge
 
 The system SHALL expose a helper that resolves the current session to a user id, and that id SHALL

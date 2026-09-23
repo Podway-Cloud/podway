@@ -175,9 +175,47 @@ export function createAuth(env: AuthEnv) {
   });
 }
 
+/** Error messages that mean a TRANSIENT database/connection blip (a dropped pool connection, a brief
+ * network hiccup) rather than a real failure — so an idempotent READ is safe to retry. Walks the
+ * `cause` chain because the pg error is usually wrapped (better-auth logs "Failed to get session"
+ * over an underlying "Connection terminated unexpectedly"). */
+export function isTransientDbError(e: unknown): boolean {
+  const parts: string[] = [];
+  let cur: unknown = e;
+  for (let i = 0; i < 5 && cur; i++) {
+    parts.push(String((cur as { message?: unknown })?.message ?? cur));
+    cur = (cur as { cause?: unknown })?.cause;
+  }
+  const msg = parts.join(" | ").toLowerCase();
+  return /connection terminated|econnreset|econnrefused|connection refused|terminating connection|server closed the connection|socket hang up|connection timeout|timeout expired|too many clients|etimedout/.test(
+    msg,
+  );
+}
+
+/** Read the session, retrying a TRANSIENT db connection blip a couple of times before surfacing it.
+ * getSession is an idempotent read, so a retry is safe — and it keeps a brief connection drop from
+ * hard-crashing the dashboard to an error page (owner: "REALLY BAD UX", 2026-09-22). A non-transient
+ * error surfaces immediately; if every retry blips, the last error propagates (a genuine outage). */
+export async function getSessionWithRetry(
+  auth: Auth,
+  headers: Headers,
+): Promise<Awaited<ReturnType<Auth["api"]["getSession"]>>> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await auth.api.getSession({ headers });
+    } catch (e) {
+      if (!isTransientDbError(e)) throw e;
+      lastErr = e;
+      if (attempt < 2) await new Promise((r) => setTimeout(r, 120 * (attempt + 1))); // 120ms, 240ms
+    }
+  }
+  throw lastErr;
+}
+
 /** Resolve request headers to the signed-in user's id, or null. */
 export async function getSessionUserId(auth: Auth, headers: Headers): Promise<string | null> {
-  const session = await auth.api.getSession({ headers });
+  const session = await getSessionWithRetry(auth, headers);
   return session?.user?.id ?? null;
 }
 

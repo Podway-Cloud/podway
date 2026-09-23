@@ -1,6 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getSessionWithRetry } from "@podway/auth";
 import { authConfigured, getAuth } from "./auth";
 
 /** OSS / self-host single-tenant edition (one owner, no cloud account surfaces). The owner is
@@ -29,7 +30,8 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   // HOW you sign in (email+password owner vs GitHub) and is "configured" without GitHub creds
   // (see isAuthConfigured). No more hardcoded local owner: the owner is a real, created account.
   if (!authConfigured()) return null;
-  const session = await getAuth().api.getSession({ headers: await headers() });
+  // Retry a transient DB connection blip rather than crash the dashboard to an error page.
+  const session = await getSessionWithRetry(getAuth(), await headers());
   if (!session?.user) return null;
   const u = session.user;
   return { id: u.id, email: u.email, name: u.name, image: u.image, emailVerified: Boolean(u.emailVerified) };
