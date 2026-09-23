@@ -6,6 +6,7 @@ import type { PodCardProps } from "@/components/pod-card";
 import AutoRefresh from "@/components/auto-refresh";
 import DashboardPage from "@/components/dashboard-page";
 import { editionOss } from "@/lib/session";
+import { withDbRetry } from "@podway/auth";
 import { sameDigest } from "@/lib/pod-image";
 import { currentImage } from "@/lib/image-manifest";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,7 @@ export const metadata = { title: "Pods" };
 export default async function Dashboard() {
   const user = await requireApprovedUser();
   const svc = getPodService();
-  const pods = await svc.listPods(user.id);
+  const pods = await withDbRetry(() => svc.listPods(user.id));
   // Live signals (agent activity, :3000 liveness, live-critical trouble) are fetched
   // CLIENT-side in PodCardList — NOT here — so a dashboard navigation renders instantly
   // from lifecycle state instead of blocking on an N-pod /healthz sweep first.

@@ -192,18 +192,16 @@ export function isTransientDbError(e: unknown): boolean {
   );
 }
 
-/** Read the session, retrying a TRANSIENT db connection blip a couple of times before surfacing it.
- * getSession is an idempotent read, so a retry is safe — and it keeps a brief connection drop from
- * hard-crashing the dashboard to an error page (owner: "REALLY BAD UX", 2026-09-22). A non-transient
- * error surfaces immediately; if every retry blips, the last error propagates (a genuine outage). */
-export async function getSessionWithRetry(
-  auth: Auth,
-  headers: Headers,
-): Promise<Awaited<ReturnType<Auth["api"]["getSession"]>>> {
+/** Run an IDEMPOTENT db read, retrying a TRANSIENT connection blip a couple of times before it
+ * surfaces — so a brief connection drop doesn't hard-crash the caller (e.g. the dashboard) to an
+ * error page (owner: "REALLY BAD UX", 2026-09-22). A non-transient error surfaces immediately; if
+ * every retry still blips (a genuine outage) the last error propagates. ONLY wrap reads — retrying a
+ * write could double-apply it. */
+export async function withDbRetry<T>(fn: () => Promise<T>): Promise<T> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await auth.api.getSession({ headers });
+      return await fn();
     } catch (e) {
       if (!isTransientDbError(e)) throw e;
       lastErr = e;
@@ -211,6 +209,14 @@ export async function getSessionWithRetry(
     }
   }
   throw lastErr;
+}
+
+/** Read the session, retrying a transient db blip (the session read is idempotent). */
+export async function getSessionWithRetry(
+  auth: Auth,
+  headers: Headers,
+): Promise<Awaited<ReturnType<Auth["api"]["getSession"]>>> {
+  return withDbRetry(() => auth.api.getSession({ headers }));
 }
 
 /** Resolve request headers to the signed-in user's id, or null. */

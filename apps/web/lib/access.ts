@@ -2,14 +2,17 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { createAppDb, user as userTable, session as sessionTable, pods as podsTable } from "@podway/db";
+import { withDbRetry } from "@podway/auth";
 import { getCurrentUser, editionOss, type CurrentUser } from "./session";
 import { isAdmin, isPreapproved } from "./access-rules";
 
 async function fetchApproved(id: string): Promise<boolean> {
-  const rows = await createAppDb()
-    .select({ approved: userTable.approved })
-    .from(userTable)
-    .where(eq(userTable.id, id));
+  const rows = await withDbRetry(() =>
+    createAppDb()
+      .select({ approved: userTable.approved })
+      .from(userTable)
+      .where(eq(userTable.id, id)),
+  );
   return rows[0]?.approved ?? false;
 }
 

@@ -35,13 +35,15 @@ state SHALL live in the database.
 - **WHEN** a user signs out
 - **THEN** the session SHALL be invalidated and subsequent requests SHALL be unauthenticated
 
-### Requirement: Session read is resilient to a transient DB blip
+### Requirement: Idempotent DB reads are resilient to a transient blip
 
-Reading the session is an idempotent database READ, so a TRANSIENT connection error (a dropped pool
-connection, a brief network hiccup) SHALL be retried a small, bounded number of times before it
-surfaces — so a momentary blip does not hard-crash the page to an error boundary. A NON-transient
-error (a real query/schema failure) SHALL surface immediately without retry, and if every retry
-still blips (a genuine outage) the error SHALL surface so the page can degrade rather than hang.
+The auth layer SHALL expose a reusable `withDbRetry` helper: an IDEMPOTENT database read wrapped in
+it SHALL retry a TRANSIENT connection error (a dropped pool connection, a brief network hiccup) a
+small, bounded number of times before it surfaces — so a momentary blip does not hard-crash the page
+to an error boundary. A NON-transient error (a real query/schema failure) SHALL surface immediately
+without retry, and if every retry still blips (a genuine outage) the error SHALL surface so the page
+can degrade rather than hang. The session read, the approval gate, and the dashboard's pod-list load
+SHALL use it. Only READS are wrapped — retrying a write could double-apply it.
 
 #### Scenario: A momentary connection drop is retried, not fatal
 

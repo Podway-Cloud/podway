@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getSessionWithRetry, isTransientDbError } from "../src/index.js";
+import { getSessionWithRetry, isTransientDbError, withDbRetry } from "../src/index.js";
 
 // Guards the graceful-degradation fix (owner: "REALLY BAD UX", 2026-09-22): a transient DB
 // connection blip during the session read must be retried (an idempotent read) rather than
@@ -48,6 +48,30 @@ describe("getSessionWithRetry", () => {
   it("passes a no-session (null) straight through", async () => {
     const { auth } = fakeAuth([null]);
     expect(await getSessionWithRetry(auth, H)).toBeNull();
+  });
+});
+
+describe("withDbRetry", () => {
+  it("retries an idempotent read past a transient blip, then returns", async () => {
+    let calls = 0;
+    const out = await withDbRetry(async () => {
+      calls++;
+      if (calls < 3) throw new Error("Connection terminated unexpectedly");
+      return ["pod-a", "pod-b"];
+    });
+    expect(out).toEqual(["pod-a", "pod-b"]);
+    expect(calls).toBe(3);
+  });
+
+  it("does not retry a real error", async () => {
+    let calls = 0;
+    await expect(
+      withDbRetry(async () => {
+        calls++;
+        throw new Error('relation "pods" does not exist');
+      }),
+    ).rejects.toThrow(/does not exist/);
+    expect(calls).toBe(1);
   });
 });
 
