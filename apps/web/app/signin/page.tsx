@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Sign in to Podway",
-  description: "Sign in with GitHub to request private-alpha access or return to your projects.",
+  description: "Sign in with GitHub or Google to access your Podway projects.",
 };
 
 export default async function SignIn({

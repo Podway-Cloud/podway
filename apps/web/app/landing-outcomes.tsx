@@ -77,7 +77,7 @@ export default async function OutcomesLanding({
             </TrackedLink>
             <a className={styles.textLink} href="#starters">Explore starting points <span aria-hidden>↓</span></a>
           </div>
-          {!user && <p className={styles.accessNote}>Private alpha · GitHub sign-in</p>}
+          {!user && <p className={styles.accessNote}>GitHub or Google sign-in</p>}
         </div>
         <LandingExamples />
       </section>
@@ -228,7 +228,6 @@ export default async function OutcomesLanding({
       </section>
 
       <section className={`${styles.shell} ${styles.finalCta}`} id="alpha-access">
-        <p className={styles.eyebrow}>Private alpha</p>
         <h2>Your next project starts here.</h2>
         <TrackedLink
           className={styles.primaryCta}

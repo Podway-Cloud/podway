@@ -115,7 +115,7 @@ export default async function AgentHomeLanding({
             </a>
           </div>
           <div className={styles.reassurance} aria-label="Access details">
-            <span><LockKeyhole aria-hidden /> Private alpha · GitHub sign-in</span>
+            <span><LockKeyhole aria-hidden /> GitHub or Google sign-in</span>
             <span><Check aria-hidden /> Your subscription</span>
             <span><Check aria-hidden /> Official CLI</span>
           </div>
@@ -274,7 +274,6 @@ export default async function AgentHomeLanding({
 
       <section className={styles.finalBand}>
         <div className={`${styles.shell} ${styles.finalCta}`}>
-          <p className={styles.eyebrow}>Private alpha</p>
           <h2>Give your agent somewhere it can do real work.</h2>
           <p>One project. One capable home. Ready when you return.</p>
           <TrackedLink className={styles.primaryCta} href={primaryHref} eventName="landing_primary_cta" item="agent-home-footer">

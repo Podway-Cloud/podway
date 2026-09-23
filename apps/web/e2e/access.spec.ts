@@ -27,12 +27,12 @@ test.describe("access gating", () => {
     await expect(page).toHaveURL(/\/dashboard/);
   });
 
-  test("sign-in presents the alpha access path and returns to the landing page", async ({ page }) => {
+  test("sign-in presents the access path and returns to the landing page", async ({ page }) => {
     await page.goto("/signin");
     await expect(page).toHaveTitle(/sign in to podway/i);
     await expect(page.getByRole("heading", { name: "Sign in to Podway" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Continue with GitHub" })).toBeVisible();
-    await expect(page.getByText(/new requests join the private-alpha queue/i)).toBeVisible();
+    await expect(page.getByText(/new requests are reviewed for access/i)).toBeVisible();
     await page.getByRole("link", { name: "Back to home" }).click();
     await expect(page).toHaveURL(/\/$/);
   });

@@ -84,7 +84,6 @@ function CloudForm({ next, hasGoogle }: { next: string; hasGoogle: boolean }) {
 
   return (
     <div className={styles.authContent}>
-      <p className={styles.eyebrow}>Private alpha</p>
       <h1 id="signin-title">Sign in to Podway</h1>
       <p className={styles.intro}>
         Continue with {hasGoogle ? "GitHub or Google" : "GitHub"} to request access or sign in.
@@ -116,7 +115,7 @@ function CloudForm({ next, hasGoogle }: { next: string; hasGoogle: boolean }) {
       <p className={styles.error} aria-live="polite">{error}</p>
 
       <p className={styles.footnote}>
-        Approved accounts go straight to your dashboard; new requests join the private-alpha queue.
+        Approved accounts go straight to your dashboard; new requests are reviewed for access.
         Sign-in is separate from repository access and Claude/Codex.
       </p>
       <p className={styles.legal}>

@@ -15,7 +15,7 @@ export function GET() {
 
 > Podway gives Claude Code a persistent cloud computer with project files, services, automation, skills, and a live URL.
 
-Use these public docs for product behavior and user-facing instructions. Podway is currently in private alpha, so pages say when a capability is limited or still experimental.
+Use these public docs for product behavior and user-facing instructions. Some Podway capabilities are still limited or experimental; pages say so where relevant.
 
 ## Documentation
 
