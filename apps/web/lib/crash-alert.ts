@@ -44,9 +44,14 @@ export async function reportCrash(input: CrashInput): Promise<void> {
 
     const code = input.digest ?? fp;
 
-    // 1) Human alert — the ops Telegram chat (reuses the signup-notify bot).
+    // 1) Human alert — Telegram. Prefer a dedicated ops bot/chat if set, else reuse the existing
+    //    TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID (owner's choice: one feed, no second bot to set up).
     await notifyOps(
       `🚨 Podway crash (${input.kind ?? "server"})\npath: ${path}\ncode: ${code}\n${message.slice(0, 300)}`,
+      {
+        token: process.env.TELEGRAM_OPS_BOT_TOKEN ?? process.env.TELEGRAM_BOT_TOKEN,
+        chatId: process.env.TELEGRAM_OPS_CHAT_ID ?? process.env.TELEGRAM_CHAT_ID,
+      },
     ).catch(() => undefined);
 
     // 2) Wake an agent to triage + fix, via a system pod message (route() is idempotent on the id,
