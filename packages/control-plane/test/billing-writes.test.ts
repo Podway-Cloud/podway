@@ -53,6 +53,44 @@ function grantStripe() {
   return { spy: createBalanceTransaction, create, stripe: fakeStripe({ customers: { createBalanceTransaction, create } }) };
 }
 
+describe("test→live customer cutover (No such customer)", () => {
+  const staleErr = () =>
+    Object.assign(new Error("No such customer: 'cus_stale'"), { code: "resource_missing" });
+
+  it("listInvoices survives a stale (test-mode) customer and forgets it", async () => {
+    const db = await freshDb();
+    await seedUser(db, "u1");
+    await seedAccount(db, "u1", "cus_stale", true);
+    const list = vi.fn(async () => {
+      throw staleErr();
+    });
+    const svc = new BillingService(db, fakeStripe({ invoices: { list } }));
+
+    expect(await svc.listInvoices("u1")).toEqual([]); // no crash
+
+    const acct = await db.select().from(billingAccounts).where(eq(billingAccounts.ownerId, "u1"));
+    expect(acct[0].stripeCustomerId).toBeNull(); // stale id forgotten
+    expect(acct[0].hasCard).toBe(false);
+  });
+
+  it("ensureCustomer recreates when the stored customer is gone in the current mode", async () => {
+    const db = await freshDb();
+    await seedUser(db, "u1");
+    await seedAccount(db, "u1", "cus_stale", true);
+    const retrieve = vi.fn(async () => {
+      throw staleErr();
+    });
+    const create = vi.fn(async () => ({ id: "cus_live_new" }));
+    const svc = new BillingService(db, fakeStripe({ customers: { retrieve, create } }));
+
+    expect(await svc.ensureCustomer("u1", "u1@example.com")).toBe("cus_live_new");
+    expect(create).toHaveBeenCalledTimes(1);
+
+    const acct = await db.select().from(billingAccounts).where(eq(billingAccounts.ownerId, "u1"));
+    expect(acct[0].stripeCustomerId).toBe("cus_live_new");
+  });
+});
+
 describe("grantCredit", () => {
   it("records a ledger row, bumps the mirror, and pushes a NEGATIVE Stripe balance txn", async () => {
     const db = await freshDb();

@@ -46,6 +46,23 @@ pod costs) SHALL still render truthfully.
 - **THEN** the pod cost list still shows real per-size prices, and the Payment method, Invoices,
   Referral, and credit-history sections show placeholder copy with no card/invoice/Stripe read
 
+### Requirement: A stale Stripe customer never crashes billing
+
+A stored Stripe customer id can become invalid — most commonly a customer created in TEST mode being
+used after the LIVE flip, which Stripe answers with `No such customer` (`resource_missing`). No
+billing surface SHALL crash on this: every customer-scoped read (invoices, payment method, next
+charge) SHALL treat a `resource_missing` as "no customer" and render the empty/add-a-card state, and
+the platform SHALL forget the stale id so the next add-card creates a fresh customer in the current
+mode. `ensureCustomer` SHALL recreate when the stored customer is genuinely missing, but SHALL keep
+the stored id on any other (transient) error rather than orphan a live customer.
+
+#### Scenario: Test-mode customer after the live flip
+
+- **WHEN** the billing page loads for an account whose stored Stripe customer was created in test mode
+  and the app is now in live mode
+- **THEN** the page SHALL render the add-a-card state (no crash), the stale id SHALL be forgotten, and
+  a subsequent add-card SHALL create a fresh live customer
+
 ### Requirement: Overview shows spend, credit, and next charge
 
 The Overview tab SHALL show three compact tiles — the real monthly total for the owner's current

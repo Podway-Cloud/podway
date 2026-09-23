@@ -72,6 +72,14 @@ const EMPTY = (ownerId: string): BillingAccount => ({
   hasCard: false,
 });
 
+/** A Stripe error meaning the referenced object doesn't exist in the CURRENT mode — most commonly a
+ * customer/subscription id created in TEST mode used after the LIVE flip (`No such customer`). */
+function isResourceMissing(e: unknown): boolean {
+  const err = e as { code?: string; message?: string };
+  if (err?.code === "resource_missing") return true;
+  return /no such (customer|subscription|payment_method|invoice)/i.test(String(err?.message ?? ""));
+}
+
 export class BillingService {
   /**
    * `stripeClient` is an OPTIONAL injected Stripe client — production leaves it undefined and uses
@@ -114,7 +122,19 @@ export class BillingService {
    */
   async ensureCustomer(ownerId: string, email?: string): Promise<string> {
     const existing = await this.getAccount(ownerId);
-    if (existing.stripeCustomerId) return existing.stripeCustomerId;
+    if (existing.stripeCustomerId) {
+      // Verify it still exists in the CURRENT Stripe mode. A customer created in TEST mode is
+      // `No such customer` after the LIVE flip — forget it and create a fresh one in this mode.
+      try {
+        const c = await this.stripe().customers.retrieve(existing.stripeCustomerId);
+        if (!("deleted" in c && c.deleted)) return existing.stripeCustomerId;
+      } catch (e) {
+        // Only a genuinely-missing customer (resource_missing) should churn the id. Any other error
+        // (a transient Stripe hiccup) → keep using the stored id rather than orphan a live customer.
+        if (!isResourceMissing(e)) return existing.stripeCustomerId;
+      }
+      await this.forgetStaleCustomer(ownerId);
+    }
 
     const customer = await this.stripe().customers.create({
       email: email ?? (await this.emailFor(ownerId)),
@@ -129,6 +149,16 @@ export class BillingService {
         set: { stripeCustomerId: customer.id, updatedAt: now },
       });
     return customer.id;
+  }
+
+  /** Drop a stale Stripe customer link (e.g. a TEST-mode id after the LIVE flip): null the stored id
+   * and clear the has-card mirror, so the account reads as "no customer" and the next add-card
+   * creates a fresh customer in the current mode. */
+  private async forgetStaleCustomer(ownerId: string): Promise<void> {
+    await this.db
+      .update(billingAccounts)
+      .set({ stripeCustomerId: null, hasCard: false, updatedAt: new Date() })
+      .where(eq(billingAccounts.ownerId, ownerId));
   }
 
   /**
@@ -322,18 +352,25 @@ export class BillingService {
     if (!stripeConfigured()) return [];
     const acct = await this.getAccount(ownerId);
     if (!acct.stripeCustomerId) return [];
-    const list = await this.stripe().invoices.list({ customer: acct.stripeCustomerId, limit });
-    return list.data.map((inv) => ({
-      id: inv.id ?? "",
-      number: inv.number ?? null,
-      // `amountCents` kept for back-compat (== amount_due); prefer amountPaidCents for display.
-      amountCents: inv.amount_due,
-      amountDueCents: inv.amount_due,
-      amountPaidCents: inv.amount_paid,
-      status: inv.status ?? "unknown",
-      created: inv.created,
-      url: inv.hosted_invoice_url ?? null,
-    }));
+    try {
+      const list = await this.stripe().invoices.list({ customer: acct.stripeCustomerId, limit });
+      return list.data.map((inv) => ({
+        id: inv.id ?? "",
+        number: inv.number ?? null,
+        // `amountCents` kept for back-compat (== amount_due); prefer amountPaidCents for display.
+        amountCents: inv.amount_due,
+        amountDueCents: inv.amount_due,
+        amountPaidCents: inv.amount_paid,
+        status: inv.status ?? "unknown",
+        created: inv.created,
+        url: inv.hosted_invoice_url ?? null,
+      }));
+    } catch (e) {
+      // A stale customer (e.g. a TEST id after the LIVE flip) must not crash the billing page. Forget
+      // it so the account reads fresh and the next add-card creates a live customer; show no invoices.
+      if (isResourceMissing(e)) await this.forgetStaleCustomer(ownerId).catch(() => undefined);
+      return [];
+    }
   }
 
   /**
