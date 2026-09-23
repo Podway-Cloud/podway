@@ -118,6 +118,32 @@
 .githubButton:hover:not(:disabled) { background: #6996ff; transform: translateY(-1px); }
 .githubButton:disabled { cursor: wait; opacity: 0.72; }
 
+/* Social sign-in (cloud): a shared base + real brand styling per provider. */
+.oauthButtons { margin-top: 30px; display: flex; flex-direction: column; gap: 12px; }
+.oauthButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 50px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 15.5px;
+  font-weight: 640;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+.oauthButton svg { width: 19px; height: 19px; flex: none; }
+.oauthButton:disabled { cursor: wait; opacity: 0.72; }
+.oauthButton:focus-visible { outline: 3px solid #91adff; outline-offset: 3px; }
+/* GitHub — dark surface, octocat. */
+.oauthGithub { border: 1px solid #30363d; background: #1f2328; color: #fff; }
+.oauthGithub:hover:not(:disabled) { background: #2c333a; transform: translateY(-1px); }
+/* Google — white surface, multicolour G, dark text (Google button guidance). */
+.oauthGoogle { border: 1px solid #dadce0; background: #fff; color: #1f1f1f; }
+.oauthGoogle:hover:not(:disabled) { background: #f7f8f8; border-color: #cfd3d9; transform: translateY(-1px); }
+
 /* OSS owner form (self-host-auth-gate) */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; text-align: left; }
 .fieldLabel { color: var(--auth-muted); font-size: 14px; font-weight: 600; }
@@ -188,4 +214,6 @@
 @media (prefers-reduced-motion: reduce) {
   .githubButton { transition: none; }
   .githubButton:hover:not(:disabled) { transform: none; }
+  .oauthButton { transition: none; }
+  .oauthButton:hover:not(:disabled) { transform: none; }
 }
