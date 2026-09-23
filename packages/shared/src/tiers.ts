@@ -97,6 +97,17 @@ export function resolveResources(size: PodSize, diskGb: number): PodResources {
   return { cpus: t.cpus, memoryGb: t.memoryGb, diskGb: Math.max(diskGb, t.diskGb) };
 }
 
+/**
+ * Swap reserved for a pod, in GB = min(RAM, 4). Mirrors the per-pod swapfile in
+ * `scripts/incus/provision-pod-base.sh` (`podway-swap`, size = min(pod RAM, 4GiB)). The provider
+ * provisions this ON TOP of the disk quota so the swapfile does not eat the user's advertised disk —
+ * a pod of tier T gets a volume of `diskGb + swapReserveGb`, leaving `diskGb` usable
+ * (swap-on-top-of-disk-quota). Cloud/Incus only; a self-host Docker pod leaves swap to the host.
+ */
+export function swapReserveGb(memoryGb: number): number {
+  return Math.min(memoryGb, 4);
+}
+
 /** Human label for a stored (size, diskGb): the tier name, plus a disk note when
  * the pod kept a larger disk than its current size implies (a resize-down). */
 export function labelForPod(size: PodSize, diskGb: number): string {

@@ -195,6 +195,26 @@ resolution SHALL be content-type aware: a LEGACY `filesystem` (9p-shared) volume
 - **THEN** the home disk device SHALL be attached WITH a `path` of `/home/dev`, so the legacy pod
   still mounts correctly
 
+### Requirement: Swap is provisioned on top of the disk quota
+
+The per-pod swapfile (size `min(RAM, 4GiB)`) lives ON the home volume, so the provider SHALL
+provision the volume at `diskGb + swapReserve` where `swapReserve = min(RAM, 4GiB)` — leaving the
+tier's advertised `diskGb` fully usable to the owner rather than consumed by swap. Volume sizing
+SHALL remain grow-only: because the home volume is a block device Incus cannot shrink, a resize that
+LOWERS RAM (and therefore the swap reserve) SHALL NOT reduce the volume below its current size.
+(Cloud/Incus only; a self-host Docker pod leaves swap to the host and is unaffected.)
+
+#### Scenario: New pod's volume includes the swap reserve
+
+- **WHEN** a pod of a tier with `diskGb` disk and `RAM` memory is provisioned
+- **THEN** its home volume SHALL be created at `diskGb + min(RAM, 4)` GiB, so the owner keeps the
+  full advertised `diskGb` usable after the swapfile exists
+
+#### Scenario: Lowering RAM never shrinks the volume
+
+- **WHEN** a pod is resized to less RAM (a smaller swap reserve) while its disk high-water is unchanged
+- **THEN** the home volume SHALL stay at its current size rather than attempt a shrink Incus would reject
+
 ### Requirement: Persistent filesystem across suspend and instance replacement
 
 A pod's home volume SHALL persist its contents across suspend/resume and across instance

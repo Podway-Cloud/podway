@@ -320,10 +320,10 @@ export class IncusApi {
   async getVolume(
     pool: string,
     name: string,
-  ): Promise<{ name: string; content_type?: string } | null> {
+  ): Promise<{ name: string; content_type?: string; config?: Record<string, string> } | null> {
     try {
       return (
-        await this.req<{ name: string; content_type?: string }>(
+        await this.req<{ name: string; content_type?: string; config?: Record<string, string> }>(
           "GET",
           `/1.0/storage-pools/${pool}/volumes/custom/${name}`,
         )

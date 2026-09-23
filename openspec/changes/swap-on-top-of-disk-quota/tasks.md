@@ -1,20 +1,21 @@
 # Tasks — allocate pod swap on TOP of the disk quota
 
 ## 1. Sizing helper
-- [ ] 1.1 Add `swapReserveGb(size)` = `min(memoryGb, 4)` in `packages/shared/src/tiers.ts` (single source; matches provision-pod-base's `min(RAM,4G)`).
+- [x] 1.1 Added `swapReserveGb(memoryGb) = min(memoryGb, 4)` in `packages/shared/src/tiers.ts` (mirrors provision-pod-base's `min(RAM,4G)`).
 
 ## 2. Provider volume sizing
-- [ ] 2.1 `createVolume` (`packages/provider/src/incus/provider.ts:334`): provision `diskGb + swapReserveGb` instead of `diskGb`.
-- [ ] 2.2 `resizeVolume` (`:558`): same addend; preserve grow-only (`max(diskGb, tier.diskGb) + swapReserveGb`).
-- [ ] 2.3 Confirm nothing else treats the volume size as the user's quota (dashboard/df copy) — the user-facing number stays `diskGb`, the swap slice is overhead.
+- [x] 2.1 `createVolume` (`incus/provider.ts`): provision `diskGb + swapReserveGb(memoryGb)`.
+- [x] 2.2 `resizeVolume`: `max(current, diskGb + swapReserveGb(memoryGb))` — grow-only (block volume can't shrink; RAM-down keeps the larger volume). `getVolume` now returns `config.size` so the provider can read the current size.
+- [x] 2.3 User-facing number is unchanged: `diskGb` stays the quota; the swap slice is volume overhead (the owner keeps `diskGb` usable).
 
 ## 3. Edition parity
-- [ ] 3.1 Verify OSS/LocalProvider is untouched (Docker container; swap is the host's concern; provision-pod-base already excludes OSS). No self-host regression.
+- [x] 3.1 OSS/LocalProvider untouched — the helper is used only in the Incus provider; `provision-pod-base.sh` already excludes OSS (swap is the Docker host's concern).
 
 ## 4. Verify
-- [ ] 4.1 Launch/resize a cloud pod of a known tier; assert `df /home/dev` total ≈ `tier.diskGb` USABLE after the swapfile exists (i.e. total ≈ diskGb + swap, usable ≈ diskGb).
-- [ ] 4.2 Resize up then down; confirm grow-only high-water + swap addend both hold.
+- [x] 4.1 Unit-tested volume sizing across tiers (Mini 12→13, XL 180→184; per-pod tier create → 44). Live `df` check on a real pod pending the deploy (5.2).
+- [x] 4.2 Grow-only proven: resize XL down to 1G RAM keeps the volume at 184 (not 181); resize disk up → 204. `test/incus-provider.test.ts`.
 
 ## 5. Spec + ship
-- [ ] 5.1 Update the provider volume-sizing behavior in `openspec/specs/sandbox-provider` (or `live-provisioning`) in the SAME commit; flip `.openspec.yaml skip_specs` off.
-- [ ] 5.2 Build + test (`pnpm -r build && pnpm -r test`, provider suite); ship (provider is deployed in web+gateway images — no pod-base build needed for the volume-sizing change; new pods get the bigger volume, existing pods get it on their next resize).
+- [x] 5.1 Spec updated inline: `openspec/specs/sandbox-provider/spec.md` — "Swap is provisioned on top of the disk quota" (create + grow-only scenarios).
+- [x] 5.1a Build + tests green (`@podway/shared` built; provider incus/http-client/codex-prune suites pass).
+- [ ] 5.2 SHIP: the Incus provider runs in the web process → this needs a **web deploy** (🔴, owner yes). New pods get the bigger volume; existing pods get it on their next resize. Then do the live `df` check.

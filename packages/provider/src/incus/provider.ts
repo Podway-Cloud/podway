@@ -1,5 +1,6 @@
 import { createLogger } from "@podway/shared/log";
 import type { PodResources, MetricsSnapshot, BoxStats, BoxPod, PodAgentState , PodIssue } from "@podway/shared";
+import { swapReserveGb } from "@podway/shared";
 import type {
   BaseImage,
   CreatePodInput,
@@ -329,9 +330,14 @@ export class IncusProvider implements SandboxProvider {
     // started-but-unconfigured instance still finishes the job.
     let inst = await this.incus.getInstance(input.id);
     if (!inst) {
-      // Home volume first (survives instance recreation — the upgrade flow).
+      // Home volume first (survives instance recreation — the upgrade flow). Provision the swap
+      // reserve ON TOP of the quota so the swapfile doesn't eat the user's advertised disk.
       if (!(await this.incus.getVolume(this.config.pool, this.homeVolume(input.id)))) {
-        await this.incus.createVolume(this.config.pool, this.homeVolume(input.id), diskGb);
+        await this.incus.createVolume(
+          this.config.pool,
+          this.homeVolume(input.id),
+          diskGb + swapReserveGb(memoryGb),
+        );
       }
       await this.incus.createInstance({
         name: input.id,
@@ -555,7 +561,13 @@ export class IncusProvider implements SandboxProvider {
         "limits.memory": `${resources.memoryGb}GiB`,
       },
     });
-    await this.incus.resizeVolume(this.config.pool, this.homeVolume(id), resources.diskGb);
+    // Grow-only. The swap reserve tracks RAM, so a RAM-DOWN resize computes a smaller target — but
+    // this is a BLOCK volume and Incus rejects a shrink, and the existing (larger) volume already
+    // fits the now-smaller swapfile. So never resize below the current size.
+    const wantGb = resources.diskGb + swapReserveGb(resources.memoryGb);
+    const vol = await this.incus.getVolume(this.config.pool, this.homeVolume(id));
+    const currentGb = Number.parseInt(vol?.config?.size ?? "", 10) || 0; // "60GiB" -> 60
+    await this.incus.resizeVolume(this.config.pool, this.homeVolume(id), Math.max(wantGb, currentGb));
     if (wasRunning) await this.incus.setState(id, "start");
     log.info("pod_resized", { podId: id, ...resources, wasRunning });
     return this.getPod(id);

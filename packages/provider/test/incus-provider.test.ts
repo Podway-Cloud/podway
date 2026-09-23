@@ -48,6 +48,7 @@ function fakeIncus() {
   let alreadyStoppedOnForce = false;
   const instances = new Map<string, IncusInstance>();
   const volumes = new Set<string>();
+  const volumeSizes = new Map<string, number>();
   const calls: string[] = [];
   const pushed: { path: string; instance: string }[] = [];
 
@@ -119,12 +120,13 @@ function fakeIncus() {
       calls.push(`exec:${command.join(" ")}`);
       return { exitCode: 0, stdout: "", stderr: "" };
     },
-    async createVolume(_pool: string, name: string) {
+    async createVolume(_pool: string, name: string, sizeGb: number) {
       calls.push(`create-volume:${name}`);
       volumes.add(name);
+      volumeSizes.set(name, sizeGb);
     },
     async getVolume(_pool: string, name: string) {
-      return volumes.has(name) ? { name } : null;
+      return volumes.has(name) ? { name, config: { size: `${volumeSizes.get(name) ?? 0}GiB` } } : null;
     },
     async deleteVolume(_pool: string, name: string) {
       calls.push(`delete-volume:${name}`);
@@ -135,6 +137,7 @@ function fakeIncus() {
     },
     async resizeVolume(_pool: string, volume: string, sizeGb: number) {
       calls.push(`resize-volume:${volume}:${sizeGb}`);
+      volumeSizes.set(volume, sizeGb);
     },
   } as unknown as IncusApi;
 
@@ -142,6 +145,7 @@ function fakeIncus() {
     api,
     instances,
     volumes,
+    volumeSizes,
     calls,
     pushed,
     alreadyStoppedOnForce: (v: boolean) => {
@@ -344,7 +348,8 @@ describe("IncusProvider", () => {
     const f = fakeIncus();
     const p = mkProvider(f);
     await p.createPod({ ...input("pod-a"), resources: { cpus: 8, memoryGb: 16, diskGb: 40 } });
-    expect(f.calls).toContain("create-volume:pod-a-home"); // (size asserted below)
+    expect(f.calls).toContain("create-volume:pod-a-home");
+    expect(f.volumeSizes.get("pod-a-home")).toBe(44); // 40 disk + 4 swap reserve (min(RAM 16, 4)), on top of quota
     const inst = f.instances.get("pod-a")!;
     expect(inst.config["limits.cpu"]).toBe("8");
     expect(inst.config["limits.memory"]).toBe("16GiB");
@@ -358,12 +363,31 @@ describe("IncusProvider", () => {
     const info = await p.resize("pod-a", { cpus: 8, memoryGb: 16, diskGb: 40 });
 
     expect(f.calls).toContain("state:pod-a:stop"); // brief suspend
-    expect(f.calls).toContain("resize-volume:pod-a-home:40"); // grow-only disk
+    expect(f.calls).toContain("resize-volume:pod-a-home:44"); // 40 disk + 4 swap reserve, on top of quota
     expect(f.calls).toContain("state:pod-a:start"); // was running → back up
     const inst = f.instances.get("pod-a")!;
     expect(inst.config["limits.cpu"]).toBe("8");
     expect(inst.config["limits.memory"]).toBe("16GiB");
     expect(info.status).toBe("running");
+  });
+
+  it("adds the swap reserve on top of the disk quota, and keeps the volume grow-only", async () => {
+    const f = fakeIncus();
+    const p = mkProvider(f);
+    // Mini: 12 disk + min(RAM 1, 4) = 1 swap → 13 GiB volume (user still gets 12 usable).
+    await p.createPod({ ...input("mini"), resources: { cpus: 1, memoryGb: 1, diskGb: 12 } });
+    expect(f.volumeSizes.get("mini-home")).toBe(13);
+    // XL: 180 disk + 4 swap → 184.
+    await p.createPod({ ...input("xl"), resources: { cpus: 6, memoryGb: 16, diskGb: 180 } });
+    expect(f.volumeSizes.get("xl-home")).toBe(184);
+    // Resize XL down to 1 GB RAM (disk stays high-water 180): want = 180 + 1 = 181, but a block
+    // volume can't shrink — grow-only keeps it at 184.
+    await p.resize("xl", { cpus: 1, memoryGb: 1, diskGb: 180 });
+    expect(f.calls).toContain("resize-volume:xl-home:184");
+    expect(f.volumeSizes.get("xl-home")).toBe(184);
+    // Resize the disk up: 200 + 4 = 204.
+    await p.resize("xl", { cpus: 6, memoryGb: 16, diskGb: 200 });
+    expect(f.volumeSizes.get("xl-home")).toBe(204);
   });
 
   it("podAddress resolves the bridge IPv4 for a running pod", async () => {
