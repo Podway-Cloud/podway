@@ -18,4 +18,4 @@
 ## 5. Spec + ship
 - [x] 5.1 Spec updated inline: `openspec/specs/sandbox-provider/spec.md` — "Swap is provisioned on top of the disk quota" (create + grow-only scenarios).
 - [x] 5.1a Build + tests green (`@podway/shared` built; provider incus/http-client/codex-prune suites pass).
-- [ ] 5.2 SHIP: the Incus provider runs in the web process → this needs a **web deploy** (🔴, owner yes). New pods get the bigger volume; existing pods get it on their next resize. Then do the live `df` check.
+- [x] 5.2 SHIPPED 2026-09-23: web deploy (owner-approved), smoke PASS. Real Incus `getVolume` confirmed to return `size: NGiB` (grow-only parse safe). New pods get the bigger volume; existing pods get it on their next resize. (Deploy was first blocked by a stale `check-migrations.sh` pointing at the dead podway-db — fixed to talk to Neon directly.)
