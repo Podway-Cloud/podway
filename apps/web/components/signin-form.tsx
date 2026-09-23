@@ -20,6 +20,7 @@ export default function SignInForm({
   oss = false,
   ownerExists = true,
   ownerEmail = "owner@localhost",
+  hasGoogle = false,
 }: {
   next: string;
   /** Self-host edition: email+password owner instead of the GitHub button. */
@@ -28,33 +29,35 @@ export default function SignInForm({
   ownerExists?: boolean;
   /** OSS only: the owner's login email (pre-filled). */
   ownerEmail?: string;
+  /** Cloud: also offer "Continue with Google" (only when Google OAuth is configured). */
+  hasGoogle?: boolean;
 }) {
   if (oss) {
     return <OwnerForm next={next} setup={!ownerExists} ownerEmail={ownerEmail} />;
   }
-  return <GithubForm next={next} />;
+  return <CloudForm next={next} hasGoogle={hasGoogle} />;
 }
 
-/** Cloud: GitHub OAuth (unchanged). */
-function GithubForm({ next }: { next: string }) {
-  const [busy, setBusy] = useState(false);
+/** Cloud: social sign-in — GitHub, plus Google when it's configured. */
+function CloudForm({ next, hasGoogle }: { next: string; hasGoogle: boolean }) {
+  const [busy, setBusy] = useState<null | "github" | "google">(null);
   const [error, setError] = useState<string | null>(null);
+  const label = (p: "github" | "google") => (p === "github" ? "GitHub" : "Google");
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function start(provider: "github" | "google") {
     if (busy) return;
-    setBusy(true);
+    setBusy(provider);
     setError(null);
-    track("sign_in_initiated", { provider: "github" });
+    track("sign_in_initiated", { provider });
     try {
-      const result = await authClient.signIn.social({ provider: "github", callbackURL: next });
+      const result = await authClient.signIn.social({ provider, callbackURL: next });
       if (result.error) {
-        setError("GitHub sign-in could not start. Please try again.");
-        setBusy(false);
+        setError(`${label(provider)} sign-in could not start. Please try again.`);
+        setBusy(null);
       }
     } catch {
-      setError("GitHub sign-in could not start. Please try again.");
-      setBusy(false);
+      setError(`${label(provider)} sign-in could not start. Please try again.`);
+      setBusy(null);
     }
   }
 
@@ -62,13 +65,30 @@ function GithubForm({ next }: { next: string }) {
     <div className={styles.authContent}>
       <p className={styles.eyebrow}>Private alpha</p>
       <h1 id="signin-title">Sign in to Podway</h1>
-      <p className={styles.intro}>Use GitHub to request access or return to your projects.</p>
+      <p className={styles.intro}>
+        Use {hasGoogle ? "GitHub or Google" : "GitHub"} to request access or return to your projects.
+      </p>
 
-      <form className={styles.authForm} onSubmit={submit} aria-busy={busy}>
-        <button className={styles.githubButton} type="submit" disabled={busy}>
-          {busy ? "Connecting to GitHub…" : "Continue with GitHub"}
+      <div className={styles.authForm} aria-busy={Boolean(busy)}>
+        <button
+          className={styles.githubButton}
+          type="button"
+          disabled={Boolean(busy)}
+          onClick={() => start("github")}
+        >
+          {busy === "github" ? "Connecting to GitHub…" : "Continue with GitHub"}
         </button>
-      </form>
+        {hasGoogle && (
+          <button
+            className={styles.githubButton}
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => start("google")}
+          >
+            {busy === "google" ? "Connecting to Google…" : "Continue with Google"}
+          </button>
+        )}
+      </div>
 
       <div className={styles.authOutcome}>
         <strong>What happens next</strong>
@@ -79,7 +99,8 @@ function GithubForm({ next }: { next: string }) {
       </div>
 
       <p className={styles.identityNote}>
-        GitHub signs you into Podway. Repository access and Claude or Codex sign-in stay separate.
+        {hasGoogle ? "GitHub or Google" : "GitHub"} signs you into Podway. Repository access and
+        Claude or Codex sign-in stay separate.
       </p>
 
       <p className={styles.error} aria-live="polite">{error}</p>

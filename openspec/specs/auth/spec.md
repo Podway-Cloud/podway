@@ -3,11 +3,14 @@
 ## Purpose
 Establishes user authentication via GitHub OAuth, persistent sessions, and the bridge from an authenticated identity to the ownerId used for authorization. It also provides the database foundation — testable in-process Postgres for tests and Neon in production — and keeps secrets server-only.
 ## Requirements
-### Requirement: GitHub OAuth sign-in
+### Requirement: Social sign-in (GitHub, and Google when configured)
 
-Users SHALL authenticate to Podway via GitHub OAuth. On first sign-in a Podway user record SHALL
-be created and linked to the GitHub account; on later sign-ins the existing user SHALL be
-resolved. Podway SHALL NOT store passwords.
+Users SHALL authenticate to Podway via social OAuth. GitHub is always offered; Google is offered
+ADDITIONALLY when its credentials (`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`) are configured, and
+the sign-in page SHALL show the Google button only then. On first sign-in a Podway user record SHALL
+be created and linked to the OAuth account; on later sign-ins the existing user SHALL be resolved.
+Podway SHALL NOT store passwords (cloud). Cloud auth counts as configured when at least one provider
+(GitHub or Google) is set.
 
 #### Scenario: First sign-in creates a linked user
 

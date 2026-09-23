@@ -19,6 +19,8 @@ export interface AuthEnv {
   BETTER_AUTH_URL?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
   /** e.g. ".podway.io" — scopes the session cookie so the app's subdomains can read it. (Pod
    * previews on podway.site are a different registrable domain and use the bridge token, not this.) */
   COOKIE_DOMAIN?: string;
@@ -56,9 +58,10 @@ export function isAuthConfigured(env: AuthEnv): boolean {
   // OSS: no GitHub OAuth — the owner logs in with email+password, so a database + a session secret
   // is all that's required. (The email+password plugin needs no external provider.)
   if (isOssEdition(env)) return Boolean(env.DATABASE_URL && env.BETTER_AUTH_SECRET);
-  return Boolean(
-    env.DATABASE_URL && env.BETTER_AUTH_SECRET && env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET,
-  );
+  // Cloud: at least ONE social provider (GitHub or Google) plus the db + session secret.
+  const github = Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET);
+  const google = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+  return Boolean(env.DATABASE_URL && env.BETTER_AUTH_SECRET && (github || google));
 }
 
 /** Test-only email+password sign-in — enabled for e2e/local, never in production. */
@@ -79,6 +82,7 @@ export function createAuth(env: AuthEnv) {
     .map((s) => s.trim())
     .filter(Boolean);
   const hasGithub = Boolean(env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET);
+  const hasGoogle = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
   // Email+password is the login for OSS (the owner) and for e2e; both have no SMTP, so a created
   // account is trusted-verified (see the create.before hook below).
   const emailPassword = testLogin || oss;
@@ -109,13 +113,25 @@ export function createAuth(env: AuthEnv) {
     ...(Object.keys(advanced).length ? { advanced } : {}),
     // Email+password sign-in — e2e (test) and the OSS owner. Cloud stays GitHub-only.
     ...(emailPassword ? { emailAndPassword: { enabled: true } } : {}),
-    ...(hasGithub
+    ...(hasGithub || hasGoogle
       ? {
           socialProviders: {
-            github: {
-              clientId: env.GITHUB_CLIENT_ID as string,
-              clientSecret: env.GITHUB_CLIENT_SECRET as string,
-            },
+            ...(hasGithub
+              ? {
+                  github: {
+                    clientId: env.GITHUB_CLIENT_ID as string,
+                    clientSecret: env.GITHUB_CLIENT_SECRET as string,
+                  },
+                }
+              : {}),
+            ...(hasGoogle
+              ? {
+                  google: {
+                    clientId: env.GOOGLE_CLIENT_ID as string,
+                    clientSecret: env.GOOGLE_CLIENT_SECRET as string,
+                  },
+                }
+              : {}),
           },
         }
       : {}),

@@ -39,6 +39,8 @@ export default async function SignIn({
   // OSS (self-host-auth-gate): decide first-run SETUP vs normal LOGIN — is there an owner
   // credential yet? Cloud keeps its GitHub button (oss=false).
   const oss = editionOss();
+  // Cloud may offer Google alongside GitHub — only show the button when it's actually configured.
+  const hasGoogle = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
   // Two questions, one db handle. ownerExists stays gated on the PASSWORD CREDENTIAL exactly as
   // before — deriving it from the email lookup instead would flip a real owner to "first-run setup"
   // if their user row were ever missing, which is a worse failure than a wrong pre-fill.
@@ -60,7 +62,13 @@ export default async function SignIn({
             <Link className={styles.backLink} href="/"><span aria-hidden>←</span> Back to home</Link>
           </header>
           <div className={styles.formPosition}>
-            <SignInForm next={safeNext} oss={oss} ownerExists={ownerExists} ownerEmail={ownerEmail} />
+            <SignInForm
+              next={safeNext}
+              oss={oss}
+              ownerExists={ownerExists}
+              ownerEmail={ownerEmail}
+              hasGoogle={hasGoogle}
+            />
           </div>
         </div>
       </section>
