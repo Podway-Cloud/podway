@@ -87,7 +87,7 @@ function CloudForm({ next, hasGoogle }: { next: string; hasGoogle: boolean }) {
       <p className={styles.eyebrow}>Private alpha</p>
       <h1 id="signin-title">Sign in to Podway</h1>
       <p className={styles.intro}>
-        Use {hasGoogle ? "GitHub or Google" : "GitHub"} to request access or return to your projects.
+        Continue with {hasGoogle ? "GitHub or Google" : "GitHub"} to request access or sign in.
       </p>
 
       <div className={styles.oauthButtons} aria-busy={Boolean(busy)}>
@@ -113,20 +113,16 @@ function CloudForm({ next, hasGoogle }: { next: string; hasGoogle: boolean }) {
         )}
       </div>
 
-      <div className={styles.authOutcome}>
-        <strong>What happens next</strong>
-        <p>
-          Approved accounts continue to the Podway dashboard. New requests join the private-alpha
-          queue.
-        </p>
-      </div>
-
-      <p className={styles.identityNote}>
-        {hasGoogle ? "GitHub or Google" : "GitHub"} signs you into Podway. Repository access and
-        Claude or Codex sign-in stay separate.
-      </p>
-
       <p className={styles.error} aria-live="polite">{error}</p>
+
+      <p className={styles.footnote}>
+        Approved accounts go straight to your dashboard; new requests join the private-alpha queue.
+        Sign-in is separate from repository access and Claude/Codex.
+      </p>
+      <p className={styles.legal}>
+        By continuing you agree to our <a href="/terms">Terms</a> and{" "}
+        <a href="/privacy">Privacy&nbsp;Policy</a>.
+      </p>
     </div>
   );
 }
