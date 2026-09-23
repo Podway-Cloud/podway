@@ -18,4 +18,4 @@
 ## 5. Ship + verify
 - [x] 5.1 Unit tests: `packages/provider/test/codex-prune.test.ts` (keeps current+pending, honours no-pending, two fail-safe paths, no-op on empty). 52/52 in the provider CLI/doctor suite pass.
 - [ ] 5.2 Build pod-base via `build-and-record.sh` + digest bump — NEEDS owner yes (ask-before-image-build).
-- [ ] 5.3 Verify on the test:1 repro: prune reclaims ~4.4G; `doctor` clears the finding; handoff note writes. (Repro currently kept intact per owner.)
+- [x] 5.3 Verified on the test:1 repro 2026-09-23: prune reclaimed 4.4G (disk 99%→52%), kept current+pending, `codex --version` still 0.155.1. With 4.5G free, doctor's disk-low finding clears and handoff writes succeed. (Ran the new script via a temp push; NOT yet baked into the image — 5.2.)
