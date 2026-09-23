@@ -4,17 +4,17 @@
 export async function register(): Promise<void> {}
 
 /**
- * Server-side crash hook — fires on uncaught errors in server components, server actions, and route
- * handlers. Reports real crashes (Telegram + wake an agent) via lib/crash-alert; ignores Next's
- * control-flow "errors" (redirect / notFound / dynamic-usage), which are NOT crashes and are common.
+ * Server-side crash hook — fires on uncaught errors in server components, server actions, route
+ * handlers, and middleware. It stays EDGE-SAFE (middleware is edge, so this module is edge-compiled):
+ * it does NOT import the pg/control-plane deps — it POSTs the crash to an internal nodejs route
+ * (`/api/internal/crash`, secret-guarded) which does the Telegram + wake-an-agent work. Ignores
+ * Next's control-flow "errors" (redirect / notFound / dynamic-usage), which are NOT crashes.
  */
 export async function onRequestError(
   err: unknown,
-  request: { path?: string; method?: string },
+  request: { path?: string; method?: string; headers?: Record<string, string> },
   context: { routerKind?: string; routePath?: string; renderSource?: string },
 ): Promise<void> {
-  // Only the Node runtime can load the control-plane/db/telegram deps; skip edge errors.
-  if (process.env.NEXT_RUNTIME !== "nodejs") return;
   const digest = String((err as { digest?: unknown })?.digest ?? "");
   const message = err instanceof Error ? err.message : String(err);
   if (
@@ -23,15 +23,22 @@ export async function onRequestError(
   ) {
     return; // control flow, not a crash
   }
+  const secret = process.env.PODWAY_CRASH_HOOK_SECRET;
+  const host = request?.headers?.host;
+  if (!secret || !host) return; // unconfigured → no-op
   try {
-    const { reportCrash } = await import("./lib/crash-alert");
-    await reportCrash({
-      message,
-      digest: (err as { digest?: string })?.digest,
-      path: request?.path,
-      kind: context?.routerKind,
+    await fetch(`https://${host}/api/internal/crash`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-crash-secret": secret },
+      body: JSON.stringify({
+        message,
+        digest: (err as { digest?: string })?.digest,
+        path: request?.path,
+        kind: context?.routerKind,
+      }),
+      signal: AbortSignal.timeout(4000),
     });
   } catch {
-    /* instrumentation must never break a request */
+    /* best-effort — instrumentation must never break a request */
   }
 }
