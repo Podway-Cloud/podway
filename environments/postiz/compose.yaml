@@ -38,6 +38,29 @@ services:
       - POSTGRES_USER=postiz
       - POSTGRES_PWD=${DB_PASSWORD}
       - POSTGRES_SEEDS=postiz-postgres
+  # One-shot: Postiz needs 2 custom Temporal search attributes (organizationId, postId, both Text), but
+  # Temporal's Postgres visibility caps Text attributes at 3 and auto-setup pre-fills 2 (CustomTextField,
+  # CustomStringField). Postiz adding 2 more → 4 > 3 → its addSearchAttributes throws UNCAUGHT in
+  # onModuleInit, so the backend never binds and every /api route 502s (the frontend /auth still 200s,
+  # which is why a frontend-only health check hid this). Fix, no Elasticsearch, no extra RAM: free the 2
+  # unused default Text slots and pre-register Postiz's 2, BEFORE Postiz boots. Idempotent; attributes
+  # persist in the temporal_visibility DB, so this is a no-op on later boots.
+  temporal-init:
+    image: temporalio/auto-setup:1.28.1
+    restart: "no"
+    depends_on:
+      temporal:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        until temporal operator search-attribute list --address temporal:7233 >/dev/null 2>&1; do
+        echo "waiting for temporal..."; sleep 2; done;
+        temporal operator search-attribute remove --address temporal:7233 --name CustomTextField --yes 2>/dev/null || true;
+        temporal operator search-attribute remove --address temporal:7233 --name CustomStringField --yes 2>/dev/null || true;
+        temporal operator search-attribute create --address temporal:7233 --name organizationId --type Text 2>/dev/null || true;
+        temporal operator search-attribute create --address temporal:7233 --name postId --type Text 2>/dev/null || true;
+        echo "temporal search attributes prepped (organizationId, postId as Text)";
   postiz:
     image: ${POSTIZ_IMAGE}
     restart: unless-stopped
@@ -48,6 +71,8 @@ services:
         condition: service_healthy
       temporal:
         condition: service_started
+      temporal-init:
+        condition: service_completed_successfully
     # The cockpit preview forwards ONLY port 3000 → map Postiz's internal 5000 onto 3000.
     ports: [ "3000:5000" ]
     volumes: [ "config:/config/", "uploads:/uploads/" ]

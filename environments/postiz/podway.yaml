@@ -54,7 +54,7 @@ setup:
     printf 'POSTIZ_IMAGE=%s\nDB_PASSWORD=%s\nJWT_SECRET=%s\nMAIN_URL=%s\n'
     "ghcr.io/gitroomhq/postiz-app:latest" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$URL" > .env;
     chmod 600 .env; fi
-  - chmod +x bin/app-admin.sh
+  - chmod +x bin/app-admin.sh bin/postiz-cli.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
 
 kickoff: |
@@ -68,7 +68,11 @@ kickoff: |
     ~/work/compose.yaml (postiz + postgres + redis + temporal) with `restart: unless-stopped`.
   - The stack is TRIMMED for cost: Temporal (Postiz's scheduling engine) runs on the SAME Postgres with
     Postgres visibility — there is deliberately NO Elasticsearch. Don't "add it back" to fix a problem
-    without checking; the trim is intentional and was smoke-tested.
+    without checking; the trim is intentional and was smoke-tested. A one-shot `temporal-init` service
+    frees 2 of Temporal's default Text search-attribute slots and pre-registers Postiz's own
+    (organizationId, postId) BEFORE Postiz boots — without it Postiz's backend crashes on startup and
+    every /api route 502s while the login page still loads. If the backend is ever down but the login
+    page is up, check `docker compose logs temporal-init` and the Temporal search attributes first.
   - Secrets live in ~/work/.env — NEVER commit or echo them. MAIN_URL there is this pod's public preview
     URL; if the pod's URL ever changes, Postiz's frontend/OAuth need MAIN_URL updated + a redeploy.
   - The maintenance engine is ~/work/bin/app-admin.sh. Always run it with `APP_ADMIN_DIR=~/work`.
@@ -90,6 +94,17 @@ kickoff: |
     AUTO-ROLLS-BACK code AND data if the new version is unhealthy. Apply only upgrades you class as SAFE;
     a Postiz major bump can include a DB migration — snapshot + read the release notes first.
   - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
+
+  STEERING POSTIZ FROM THE TERMINAL (post without the UI): `bin/postiz-cli.sh <cmd>` wraps the official
+  `postiz` CLI and points it at THIS pod's Postiz. On first use it installs the CLI and AUTO-MINTS a
+  Public API key from the pod's own database — so there is nothing for the owner to paste. The ONE
+  prerequisite it cannot do for them: the owner must have REGISTERED their Postiz account first (the key
+  attaches to their organization); until then the helper says so and exits. Common commands:
+  - `bin/postiz-cli.sh integrations:list` — the social channels the owner has connected.
+  - `bin/postiz-cli.sh posts:create ...` / `posts:list` / `posts:delete` — schedule and manage posts.
+  Use it when the owner asks you to schedule or manage posts. The key lives in ~/work/.env
+  (POSTIZ_API_KEY) — never commit or echo it. NOTE: connecting a NEW social network still needs that
+  network's OAuth in the UI; the CLI operates the channels once connected.
 
   END EVERY TURN ORIENTED: one line — "Postiz: <up/updating> · data: <backed-up when> · next: <thing>".
   Lead; only pause at real forks (a risky upgrade, deleting data, exposing the preview publicly for OAuth).

@@ -2,7 +2,10 @@
 APP_PROJECT=postiz
 APP_SERVICE=postiz
 APP_IMAGE_VAR=POSTIZ_IMAGE
-APP_HEALTH_URL=http://localhost:3000/auth
+# Health = a BACKEND endpoint, not the frontend /auth page. The backend (behind nginx /api) is the part
+# that dies if Temporal search-attribute registration fails; a frontend-only check 200s while /api 502s
+# and hides a dead backend. can-register is a cheap GET that only answers when the backend is bound.
+APP_HEALTH_URL=http://localhost:3000/api/auth/can-register
 APP_HEALTH_RETRIES=60
 DB_TYPE=postgres
 DB_SERVICE=postiz-postgres
