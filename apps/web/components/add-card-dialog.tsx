@@ -3,7 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadStripe, type Stripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  LinkAuthenticationElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,7 +39,9 @@ function stripeFor(pubKey: string): Promise<Stripe | null> {
  */
 export default function AddCardButton({ hasCard }: { hasCard: boolean }) {
   const [open, setOpen] = useState(false);
-  const [setup, setSetup] = useState<{ clientSecret: string; pubKey: string } | null>(null);
+  const [setup, setSetup] = useState<{ clientSecret: string; pubKey: string; email: string } | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -75,7 +83,7 @@ export default function AddCardButton({ hasCard }: { hasCard: boolean }) {
             <p className="text-[13.5px] text-muted-foreground" role="status">Preparing secure form…</p>
           ) : (
             <Elements stripe={stripeFor(setup.pubKey)} options={{ clientSecret: setup.clientSecret }}>
-              <CardForm onDone={() => setOpen(false)} />
+              <CardForm email={setup.email} onDone={() => setOpen(false)} />
             </Elements>
           )}
         </DialogContent>
@@ -84,7 +92,7 @@ export default function AddCardButton({ hasCard }: { hasCard: boolean }) {
   );
 }
 
-function CardForm({ onDone }: { onDone: () => void }) {
+function CardForm({ email, onDone }: { email: string; onDone: () => void }) {
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();
@@ -110,6 +118,9 @@ function CardForm({ onDone }: { onDone: () => void }) {
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-4">
+      {/* Stripe Link one-click: the pre-filled email lets Link recognise a returning member and
+          offer their saved cards, so paying is a single tap. Falls back to the normal card fields. */}
+      <LinkAuthenticationElement options={{ defaultValues: { email } }} />
       <PaymentElement />
       {error && <p className="text-[13px] text-destructive">{error}</p>}
       <Button type="submit" disabled={!stripe || submitting} className="self-end">

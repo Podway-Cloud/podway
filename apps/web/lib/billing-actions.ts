@@ -75,7 +75,9 @@ export async function getNextChargeDate(): Promise<number | null> {
  * uses to save the card WITHOUT the number touching our servers. Returns the publishable key too
  * (safe for the browser).
  */
-export async function startAddCard(): Promise<{ clientSecret: string; pubKey: string } | { error: string }> {
+export async function startAddCard(): Promise<
+  { clientSecret: string; pubKey: string; email: string } | { error: string }
+> {
   if (billingOff()) return { error: "Billing isn't enabled." };
   const pubKey = stripePublishableKey();
   if (!pubKey) return { error: "Card payments aren't fully configured yet." };
@@ -84,7 +86,8 @@ export async function startAddCard(): Promise<{ clientSecret: string; pubKey: st
   const user = await requireApprovedUser();
   try {
     const { clientSecret } = await getBillingService().createSetupIntent(user.id, user.email);
-    return { clientSecret, pubKey };
+    // email is returned so the client can prime Stripe Link (one-click for returning Link users).
+    return { clientSecret, pubKey, email: user.email };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Couldn't start card setup." };
   }

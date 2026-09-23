@@ -75,7 +75,8 @@ receipt (`hosted_invoice_url`) when present, and SHALL display the amount actual
 ### Requirement: Owner can view, replace, and remove their card
 
 The Payment method tab SHALL show the default card's brand, last four digits, and expiry (read from
-Stripe), with actions to replace the card (the existing add-card SetupIntent flow) and to remove it.
+Stripe), with actions to replace the card (the existing add-card SetupIntent flow, which primes
+Stripe Link with the owner's email so a returning Link member can pay in one tap) and to remove it.
 Removing the card SHALL require a confirm (the app's `useConfirm` dialog) and SHALL detach the saved
 card(s) from Stripe and clear the has-card mirror. When no card is on file, the tab SHALL instead
 prompt to add one, stating the signup credit the owner gets when they do.
@@ -95,6 +96,12 @@ prompt to add one, stating the signup credit the owner gets when they do.
 
 - **WHEN** the owner has no card and opens Payment method
 - **THEN** the tab shows an "add a card — get free credit" prompt with the add-card action
+
+#### Scenario: Stripe Link one-click for a returning member
+
+- **WHEN** the owner opens the add-card form and their email belongs to a Stripe Link member
+- **THEN** the form SHALL prime Link with that email so the saved card can be used in one tap; a
+  non-member SHALL still see the normal card fields (no regression)
 
 ### Requirement: Referral tab shows link and status
 
