@@ -2,7 +2,9 @@
 APP_PROJECT=docmost
 APP_SERVICE=docmost
 APP_IMAGE_VAR=DOCMOST_IMAGE
-APP_HEALTH_URL=http://localhost:3000/
+# Health hits a backend/DB-aware endpoint (not a static page) so a dead backend or DB outage is caught,
+# not masked. Verified 200-on-healthy by app-smoke 2026-09-23.
+APP_HEALTH_URL=http://localhost:3000/api/health
 APP_HEALTH_RETRIES=60
 DB_TYPE=postgres
 DB_SERVICE=postgres

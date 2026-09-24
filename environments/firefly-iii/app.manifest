@@ -2,7 +2,9 @@
 APP_PROJECT=firefly-iii
 APP_SERVICE=firefly-iii
 APP_IMAGE_VAR=FIREFLY_III_IMAGE
-APP_HEALTH_URL=http://localhost:3000/login
+# Health hits a backend/DB-aware endpoint (not a static page) so a dead backend or DB outage is caught,
+# not masked. Verified 200-on-healthy by app-smoke 2026-09-23.
+APP_HEALTH_URL=http://localhost:3000/health
 DB_TYPE=postgres
 DB_SERVICE=postgres
 DB_USER=firefly
