@@ -64,8 +64,10 @@
   flex: 0 0 auto;
   width: 360px;
   box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  column-gap: 10px;
+  align-content: start;
   padding: 18px 22px 20px;
   border: 1px solid var(--line, #2b363b);
   border-radius: 14px;
@@ -87,26 +89,23 @@
   border-color: color-mix(in srgb, var(--blue-soft, #9ab6ff) 45%, var(--line, #2b363b));
   background: var(--panel-strong, #1a2226);
 }
-/* FIXED 3-line quote box → every card is the same height and the divider always lands in the same
-   place. Quotes are authored to fit <=3 lines at 360px. */
+/* Reserve four lines beside the quote mark; allow longer quotes to remain fully readable. */
 .quote {
-  margin: 4px 0 0;
-  height: calc(3 * 1.5em);
+  margin: 0;
+  min-height: calc(4 * 1.5em);
   font-size: 15px;
   font-style: italic;
   line-height: 1.5;
   color: var(--text, #f4f7f7);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .divider {
+  grid-column: 1 / -1;
   margin: 16px 0 12px;
   border: 0;
   border-top: 1px solid var(--line, #2b363b);
 }
 .attr {
+  grid-column: 1 / -1;
   display: inline-flex;
   flex-direction: column;
   gap: 2px;

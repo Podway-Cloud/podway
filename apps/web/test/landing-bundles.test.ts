@@ -69,26 +69,22 @@ describe("revised landing bundles", () => {
     expect(computer).not.toContain("className={styles.pilotNote}");
     expect(computer).not.toContain("className={styles.pilotBadge}");
     expect(computer).not.toContain("Codex support · Pilot");
-    expect(computer).toContain("Run the whole project. See the result.");
-    expect(computer).toContain("A pod gives Claude a complete environment to build, run, and test your project.");
-    expect(computer).not.toContain("the system around your code");
-    expect(computer).not.toContain("It can run the project, use the application, and keep the result available.");
-    expect(computer).toContain("Run more than code");
-    expect(computer).toContain("Development servers, databases, workers, scheduled jobs, monitors, and project skills");
-    expect(computer).toContain("Verify the real app");
-    expect(computer).not.toContain("Use and verify the real app");
-    expect(computer).toContain(
-      "Claude can open the live application, click through real flows, use its database, and verify behavior where it made the change.",
-    );
+    expect(computer).toContain("Without a pod, and with one.");
+    expect(computer).toContain("Claude Code is the same either way. What changes is where it lives.");
+    expect(computer).toContain("Keep the whole stack running");
+    expect(computer).toContain("Dev servers, databases, workers, scheduled jobs, monitors, and project skills stay together and keep running.");
+    expect(computer).toContain("Test and verify the real app");
+    expect(computer).toContain("Claude builds, runs it, and clicks through the live app to verify");
     expect(computer).toContain("Develop or run in production");
-    expect(computer).toContain("development with a live preview");
+    expect(computer).toContain("Develop with a live preview");
     expect(computer).toContain("run your production server directly from the pod");
+    expect(computer).toContain("Protect your personal environment");
+    expect(computer).toContain("Claude works in an isolated computer, away from your personal files, browser sessions, and local network.");
     expect(computer).toContain("<LandingPodNetwork />");
     expect(computer).not.toContain('/landing/pod-cutaway-v1.jpg');
     expect(computer).toContain("A boundary for agent work");
     expect(computer).toContain("Powerful inside the pod. Guarded at the edges.");
     expect(computer).not.toContain("On Podway Cloud, Claude works in a project-specific machine");
-    expect(computer).toContain("Project-scoped machine");
     expect(computer).toContain("Project secrets, outside chat");
     expect(computer).toContain("Official CLI, your account");
     expect(computer).toContain("You keep full access");
