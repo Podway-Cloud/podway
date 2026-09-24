@@ -65,6 +65,18 @@ for rc in /home/dev/.bashrc /home/dev/.profile; do
 done
 chown -R dev:dev "$NPM_PREFIX" /home/dev/.npmrc /home/dev/.bashrc /home/dev/.profile 2>/dev/null || true
 
+# --- Prune stale Codex standalone releases every boot ------------------------------------
+# Codex's OWN self-updater drops a ~320M release build per update and never removes the old ones;
+# until now only `agent update codex` + `doctor --fix` pruned, so between those the builds pile up
+# and can FILL the volume. A full volume WEDGES the pod — the dashboard's repair buttons and health
+# findings all reach INTO the pod, so they go dead (and freeze on stale state) exactly when the user
+# needs them, with no self-serve way out. Prune on every boot so the disk can't fill from this alone.
+# Safe by construction: keeps current + pending and SKIPS if it can't confirm the running release
+# (never deletes the live binary) — see _codex_prune_releases + codex-prune.test.ts.
+if [ -d /home/dev/.codex/packages/standalone ]; then
+  /usr/local/bin/podway __prune-codex-releases >/dev/null 2>&1 || true
+fi
+
 # Pre-seed the CLI's first-run state so LOGIN IS THE ONLY INTERACTIVE STEP. Every key
 # here suppresses a modal that would otherwise block an unattended session:
 #   theme/hasCompletedOnboarding      — the first-run theme picker
