@@ -252,7 +252,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
 # Claude Code is PINNED (like openspec/pnpm) so "version X did Y" stays a
 # sentence we can say; updates ride a reviewed image bump, not build timing.
 # Bump the pin deliberately when cutting a new image (npm view … version).
-RUN npm install -g @anthropic-ai/claude-code@2.1.278 @openai/codex@0.155.1 pnpm@10 \
+RUN npm install -g @anthropic-ai/claude-code@2.1.281 @openai/codex@0.156.1 pnpm@10 \
     @fission-ai/openspec@1.12.0 \
     && rm -rf /home/dev/.npm /root/.npm \
     && openspec --version   # fail the build if the openspec bin isn't on PATH
