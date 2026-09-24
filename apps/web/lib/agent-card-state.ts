@@ -116,6 +116,13 @@ export function agentCardState(input: {
     // is the real fix here, only signing in with a subscription login is. Codex is unaffected —
     // its rcCapable is always true (see PodAgentState's doc comment).
     if (id !== "codex" && l.authed && l.rcCapable === false) return "needs-subscription-signin";
+    // A signed-OUT Codex (no credential) needs a fresh DEVICE sign-in, not a re-pair — the pod-agent
+    // hands the one-time device code in `authUrl`, and needs-signin renders it (copy code → open
+    // auth.openai.com/codex/device). Codex reports rcState:"login-required" when logged out, which the
+    // clause below would map to "login-expired" → the pairing panel, which can't bootstrap a signed-out
+    // Codex, so "Reconnect Codex" did nothing (owner hit this on a healthy pod, 2026-09-24). Check
+    // !authed FIRST for codex so it routes to the device sign-in that actually works.
+    if (id === "codex" && !l.authed) return "needs-signin";
     // token died (file or live), OR the shared classifier says the login itself is blocking RC (a
     // recognized OAuth-retry/login-menu gate can outrank a still-present-looking credential file —
     // test:1's regression) → same Reconnect treatment either way.

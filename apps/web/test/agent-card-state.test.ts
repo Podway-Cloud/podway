@@ -27,6 +27,20 @@ describe("agentCardState", () => {
     }
   });
 
+  it("a signed-out Codex routes to needs-signin (device sign-in), even when it reports rcState:login-required", () => {
+    // Live-observed on a healthy pod (2026-09-24): Codex logged out reports authed:false +
+    // rcState:"login-required" + the device code in authUrl. That MUST be the device sign-in card, not
+    // "login-expired" → the pairing panel, which can't bootstrap a signed-out Codex ("Reconnect did
+    // nothing"). Fails against the old ordering (rcState:"login-required" won → login-expired).
+    expect(
+      agentCardState({
+        ...base,
+        id: "codex",
+        live: [agent({ id: "codex", authed: false, rcState: "login-required", authUrl: "VQZI-KM8DQ" })],
+      }),
+    ).toBe("needs-signin");
+  });
+
   it("an EXPIRED login reads as login-expired, distinct from never-signed-in", () => {
     expect(
       agentCardState({

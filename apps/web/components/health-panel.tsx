@@ -90,7 +90,12 @@ export default function HealthPanel({
   } = useQuery({
     queryKey: qk.doctor(slug),
     enabled: running,
-    staleTime: Infinity, // don't auto-refetch — the owner runs it on demand
+    // Auto-refresh on remount/refocus (NOT polling): a stale finding must not freeze on screen after
+    // the pod recovers. A real owner saw "disk 0% free" long after it cleared, with no way to clear
+    // it but a hard reload — staleTime:Infinity never re-checked. 15s re-runs the check when the panel
+    // is reopened or the tab is refocused, so a resolved issue disappears on its own.
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
     refetchInterval: false,
     // The comment above promised a bounded retry; the code never set one, so this ran react-query's
     // DEFAULT (3 tries with backoff) against an action that reaches into the pod. A slow or
