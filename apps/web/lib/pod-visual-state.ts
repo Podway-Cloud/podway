@@ -4,6 +4,30 @@
  * functions over lifecycle status + live signals; no React, no JSX, so it's trivially testable.
  */
 
+import type { AgentAuthState } from "@podway/shared";
+
+type LiveAgentAuth = { authed: boolean; loginExpired?: boolean; needsReauth?: boolean; authState?: AgentAuthState };
+
+/** Needs a NEW login (was signed in; expired, rejected, or its login ended). Reads the ONE classified
+ * `authState` (agent-auth-state) so the dashboard and the cockpit can never disagree; the raw fields
+ * are only the fallback for a response without it. */
+export function agentNeedsReconnect(a: LiveAgentAuth): boolean {
+  const s = a.authState;
+  return s ? s.state === "needs-login" && s.reason !== "never" : !!(a.loginExpired || a.needsReauth);
+}
+
+/** Needs a FIRST sign-in, a sign-in in progress, or a subscription sign-in (wrong-mode). */
+export function agentNeedsSignin(a: LiveAgentAuth): boolean {
+  const s = a.authState;
+  if (s) return s.state === "login-pending" || s.state === "wrong-mode" || (s.state === "needs-login" && s.reason === "never");
+  return !a.authed && !a.loginExpired && !a.needsReauth;
+}
+
+/** Signed in (the classified state; raw `authed` only as the fallback). */
+export function agentSignedIn(a: LiveAgentAuth): boolean {
+  return a.authState ? a.authState.state === "signed-in" : a.authed && !a.loginExpired && !a.needsReauth;
+}
+
 /** Live signals for one pod, serialized from control-plane PodLiveSignals. All fields degrade to
  * null/absent when the pod didn't answer or runs an older image — callers then render from lifecycle
  * status alone and CLAIM nothing live. */
@@ -29,7 +53,7 @@ export interface PodCardLive {
   /** The agent's true idle duration in ms (session-file mtime) — the accurate basis for the
    * idle-update dwell + label; null when the pod doesn't report it. */
   agentIdleMs?: number | null;
-  agents: { id: string; authed: boolean; loginExpired?: boolean; needsReauth?: boolean; expiresAt?: number | null }[];
+  agents: { id: string; authed: boolean; loginExpired?: boolean; needsReauth?: boolean; expiresAt?: number | null; authState?: AgentAuthState }[];
   appListening: boolean | null;
   criticalIssue: { title: string; detail: string } | null;
   unreachable: boolean;
@@ -80,7 +104,7 @@ export function deriveState(
     // An EXPIRED agent login outranks activity: a logged-out agent reads as "idle" from its status
     // signal, so without this the card would call a signed-out pod fine. Show it as a "needs you"
     // state (amber, pulsing) so it's visible from the dashboard, not just deep in the cockpit.
-    const expiredAgent = live.agents?.find((a) => a.loginExpired || a.needsReauth);
+    const expiredAgent = live.agents?.find(agentNeedsReconnect);
     if (expiredAgent) {
       const who = expiredAgent.id === "codex" ? "Codex" : "Claude";
       return {
@@ -94,7 +118,7 @@ export function deriveState(
     // /login screen — a "needs sign-in", NOT a command approval. Its `agentWaitingFor:"dialog open"` is
     // the LOGIN dialog; without catching it here it fell through to the generic dialog branch below and
     // mislabeled a signed-out pod as "asking to approve a command" (first10, 2026-08-24).
-    const signInAgent = live.agents?.find((a) => !a.authed && !a.loginExpired && !a.needsReauth);
+    const signInAgent = live.agents?.find(agentNeedsSignin);
     if (signInAgent) {
       const who = signInAgent.id === "codex" ? "Codex" : "Claude";
       return {
@@ -109,7 +133,7 @@ export function deriveState(
     // pod-agent's own tiered warning drives the cockpit. See docs/strategy/agent-auth-lifecycle.md.
     const EXPIRING_MS = 7 * 24 * 60 * 60 * 1000;
     const expiring = live.agents?.find(
-      (a) => !a.loginExpired && !a.needsReauth && a.expiresAt != null && a.expiresAt > Date.now() && a.expiresAt - Date.now() < EXPIRING_MS,
+      (a) => agentSignedIn(a) && a.expiresAt != null && a.expiresAt > Date.now() && a.expiresAt - Date.now() < EXPIRING_MS,
     );
     const expiringRibbon = expiring
       ? `${expiring.id === "codex" ? "Codex" : "Claude"}'s login expires in ~${Math.max(1, Math.round((expiring.expiresAt! - Date.now()) / (24 * 60 * 60 * 1000)))}d — reconnect soon in the Control tab`

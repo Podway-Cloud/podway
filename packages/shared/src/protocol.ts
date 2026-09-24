@@ -1,3 +1,4 @@
+import type { AgentAuthState } from "./agent-auth.js";
 /**
  * Wire protocol between a terminal client (web frontend) and the in-pod agent.
  * JSON text frames in v0. Shared so the agent and the frontend use one contract.
@@ -59,6 +60,9 @@ export interface PodAgentState {
    * Per-agent so an ADDED agent gets the cockpit's link-and-paste sign-in instead
    * of being sent to the terminal. */
   authUrl?: string | null;
+  /** The ONE classified sign-in state (agent-auth-state). Optional: images before it do not send it;
+   * the control plane fills it in for them via `legacyAgentAuthState`. Render from THIS, not the raw fields. */
+  authState?: AgentAuthState;
   /** This agent's OWN remote-control hand-off link, once captured (Claude only).
    * Per-agent because an added Claude's link prints in its own window. */
   sessionUrl?: string | null;

@@ -206,9 +206,10 @@ test.describe("cockpit", () => {
     // is the premature-close bug.
     await expect(page.getByRole("tab", { name: /control/i })).toHaveCount(0);
 
-    // The renew LANDS: the hard expiry jumps ~30d out (a fresh token). THAT is the proof.
+    // The renew LANDS: the hard expiry jumps ~30d out (a fresh token) and the pod drops the spent link
+    // (every pod-agent does on landing). The pod now reads signed-in — THAT is the proof.
     await scriptPodHealth(slug, {
-      claudeAuthUrl: "https://claude.ai/oauth/authorize?reauth=1",
+      claudeAuthUrl: null,
       expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
     });
 

@@ -140,8 +140,15 @@ export function classifyGate(paneText: string): GateKind | null {
  * debounces (must persist across ticks) before acting, and clears it the moment the agent reads authed
  * again. `login method` is EXCLUDED — that is the menu (classifyGate handles it), not a failure.
  */
-const AUTH_FAILURE_RE =
-  /login expired|please run \/login|worker[_ ]auth[_ ]expired|(?:needs to |please )?sign in again|session initialization failed|oauth error/i;
+// Matched only at the START of a line (after the CLI's ⎿/●/✗ gutter), in the last lines of the pane.
+// It used to match ANYWHERE: an agent merely DISCUSSING these words (a chat about sign-in bugs) read as
+// a live logout — the cockpit said "Sign-in expired", then the "recovery" respawn killed the working
+// session and claude.ai archived it (podway dev, 2026-09-24). The CLI prints these as their own line.
+const AUTH_FAILURE_LINE_RE =
+  /^[\s⎿●✗⏺>│|-]*(?:login expired|please run \/login|session initialization failed|oauth error|(?:your computer )?(?:needs to |please )?sign in again)|worker[_ ]auth[_ ]expired/i;
+const AUTH_FAILURE_TAIL_LINES = 15;
 export function authFailureInPane(paneText: string): boolean {
-  return AUTH_FAILURE_RE.test(paneText) && !/select login method/i.test(paneText);
+  if (/select login method/i.test(paneText)) return false;
+  const tail = paneText.split("\n").filter((l) => l.trim()).slice(-AUTH_FAILURE_TAIL_LINES);
+  return tail.some((l) => AUTH_FAILURE_LINE_RE.test(l));
 }

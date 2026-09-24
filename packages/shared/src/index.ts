@@ -25,3 +25,4 @@ export {
   type VerifyResult,
 } from "./fetch-verify.js";
 export * from "./custom-domain.js";
+export * from "./agent-auth.js";

@@ -295,6 +295,12 @@ export function kickoffCommandForAgent(
  * api-key mode there is no login — the agent runs on the BYO key, so it always
  * launches (the key arrives as the reserved secret; a missing key surfaces as the
  * agent's own auth error, which is the honest signal). */
+/** The login command for an agent — the SAME one boot and /agent/relogin run, with app keys stripped
+ * so an app's key can never hijack the login (agent-auth-state D5). */
+export function loginCommandFor(agent: string): string {
+  return agent === "codex" ? `${CODEX} login --device-auth` : `${CLAUDE} /login`;
+}
+
 export function bootCommandForAgent(
   agent: string,
   mode = DEFAULT_PERMISSION_MODE,
@@ -314,7 +320,7 @@ export function bootCommandForAgent(
   // headless pod — bare `codex login` starts a localhost:1455 browser OAuth flow that
   // can't complete without a browser on the machine; `--device-auth` prints a URL +
   // one-time code the user enters from their phone/laptop instead (verified 2026-07-24).
-  const login = cli === "claude" ? `${CLAUDE} /login` : `${CODEX} login --device-auth`;
+  const login = loginCommandFor(cli === "claude" ? "claude-code" : "codex");
   const creds = credentialsPathForAgent(agent);
   return (
     `bash -lc 'cd ~/work 2>/dev/null || cd ~; ` +

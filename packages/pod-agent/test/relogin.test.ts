@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
 import { AgentServer } from "../src/server.js";
 
 const servers: AgentServer[] = [];
@@ -41,10 +42,27 @@ async function relogin(base: string, agent?: string) {
  * literal ok:true — a false yes would leave the owner un-renewed with nothing on screen.
  */
 describe("/agent/relogin — honest refusal", () => {
-  it("refuses for codex: it authenticates via its daemon, not a slash command", async () => {
-    const base = await start({ declaredAgents: ["codex"] } as never);
-    expect(await relogin(base, "codex")).toEqual({ ok: false, reason: "unsupported-agent" });
-  });
+  // Needs a real `codex` binary: without one the login command exits at once, its window closes, and the
+  // pod honestly answers no-window (the CI runner has none — same skip as golden-path). The real-pod
+  // auth-e2e (scripts/incus/auth-e2e.sh) covers this path with the real CLI.
+  it.skipIf(spawnSync("sh", ["-c", "command -v codex"]).status !== 0)("starts a FRESH Codex device login in its OWN signin window (was: refused → no way to sign in)", async () => {
+    // agent-auth-state D5. The old contract refused Codex outright, so once its boot device-auth timed
+    // out a signed-out Codex had NO path to a new code (GTM pod, 2026-09-24).
+    const sessionName = uniq();
+    const server = new AgentServer({
+      sessionName,
+      bootCommand: "bash --norc",
+      host: "127.0.0.1",
+      port: 0,
+      tickMs: 500,
+      declaredAgents: ["codex"],
+    } as never);
+    servers.push(server);
+    const { port } = await server.listen();
+    expect(await relogin(`http://127.0.0.1:${port}`, "codex")).toMatchObject({ ok: true, agent: "codex" });
+    const names = execFileSync("tmux", ["list-windows", "-t", sessionName, "-F", "#{window_name}"], { encoding: "utf8" });
+    expect(names.split("\n")).toContain("signin-codex");
+  }, 30_000);
 
   it("sends the sign-in code to the SAME window that shows the prompt", () => {
     // The login lives in a dedicated `signin` window so an autonomous agent cannot type over the

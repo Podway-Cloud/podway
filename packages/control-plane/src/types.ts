@@ -1,5 +1,5 @@
 import type { PodStatus } from "@podway/provider";
-import type { PodSize, AgentCli, AgentAuth } from "@podway/shared";
+import type { PodSize, AgentCli, AgentAuth, AgentAuthState } from "@podway/shared";
 
 export type { PodStatus };
 
@@ -260,7 +260,7 @@ export interface PodLiveSignals {
    * idle-update dwell + the bulk-update modal's idle label. Null on an image that doesn't report it. */
   agentIdleMs: number | null;
   /** Per-agent activity for multi-agent pods: id + that agent's authed state. */
-  agents: { id: string; authed: boolean; loginExpired?: boolean; needsReauth?: boolean; expiresAt?: number | null }[];
+  agents: { id: string; authed: boolean; loginExpired?: boolean; needsReauth?: boolean; expiresAt?: number | null; authState?: AgentAuthState }[];
   /** true/false = the pod reported whether :3000 is serving; null = unknown
    * (image predates the field, or unreachable) — the card must NOT claim "no app". */
   appListening: boolean | null;

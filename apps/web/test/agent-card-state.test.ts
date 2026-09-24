@@ -330,3 +330,39 @@ describe("agentCardState", () => {
 // apps/web/e2e/multi-agent.spec.ts ("Codex pairing is explicit, Back survives reload, and
 // confirmation returns with the device pill"), which is the level where "no unwanted navigation
 // happened" is actually observable.
+
+describe("agentCardState renders from authState (agent-auth-state 4.1)", () => {
+  const base = { primaryAgent: "claude-code", sessionUrl: null, authedAt: null, legacyCodexRc: false, running: true, startingNow: false, now: 0 };
+  const card = (id: string, extra: Partial<LiveAgent>) =>
+    agentCardState({ ...base, id, live: [{ id, window: 0, authed: true, rcActive: true, ...extra }] });
+
+  it("t3tt: setup-token with T3 off is wrong-mode → subscription sign-in, even though the raw authed says true", () => {
+    expect(card("claude-code", { authState: { state: "wrong-mode" } })).toBe("needs-subscription-signin");
+  });
+  it("GTM: a Codex whose login exited needs a NEW login (Reconnect), never the old code", () => {
+    expect(card("codex", { authed: false, authUrl: "DEAD-12345", authState: { state: "needs-login", reason: "login-exited" } })).toBe("login-expired");
+  });
+  it("login-pending shows the sign-in; never-signed-in asks to sign in; expired/rejected asks to reconnect", () => {
+    expect(card("codex", { authed: false, authState: { state: "login-pending", value: "AB12-CD34", issuedAt: 1, expiresAt: 2 } })).toBe("needs-signin");
+    expect(card("claude-code", { authed: false, authState: { state: "needs-login", reason: "never" } })).toBe("needs-signin");
+    expect(card("claude-code", { authState: { state: "needs-login", reason: "expired" } })).toBe("login-expired");
+    expect(card("claude-code", { authState: { state: "needs-login", reason: "rejected" } })).toBe("login-expired");
+  });
+  it("signed-in: the raw fields cannot drag it back to a sign-in card", () => {
+    // the t3tt symptom: renewed fine, but a stale raw flag kept the card on "expired"
+    expect(card("claude-code", { needsReauth: true, loginExpired: true, sessionUrl: "https://claude.ai/code/s", authState: { state: "signed-in" } })).toBe("claude-linked");
+    expect(card("codex", { authed: false, rcActive: true, authState: { state: "signed-in" } })).toBe("codex-on");
+  });
+  it("unknown authState falls back to the raw fields", () => {
+    expect(card("claude-code", { loginExpired: true, authState: { state: "unknown" } })).toBe("login-expired");
+  });
+});
+
+describe("authState signed-in + rcState login-required (a login gate the file misses)", () => {
+  it("still offers Reconnect", () => {
+    expect(
+      agentCardState({ id: "claude-code", primaryAgent: "claude-code", sessionUrl: null, authedAt: null, legacyCodexRc: false, running: true, startingNow: false, now: 0,
+        live: [{ id: "claude-code", window: 0, authed: true, rcActive: false, rcState: "login-required", authState: { state: "signed-in" } }] }),
+    ).toBe("login-expired");
+  });
+});

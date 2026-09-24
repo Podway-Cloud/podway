@@ -98,7 +98,13 @@ describe("pane safety predicates", () => {
     expect(authFailureInPane("Session initialization failed (worker_auth_expired)")).toBe(true);
     expect(authFailureInPane("Your computer needs to sign in again")).toBe(true);
     // The login-method MENU is not a failure — classifyGate owns that.
+    expect(authFailureInPane("  ⎿  Login expired · Please run /login")).toBe(true);
     expect(authFailureInPane(LOGIN_MENU)).toBe(false);
+    // An agent TALKING about the error is not the error (podway dev killed its own session, 2026-09-24).
+    expect(authFailureInPane('● the old "Login expired · Please run /login" text stays on the screen')).toBe(false);
+    expect(authFailureInPane("we saw worker auth failures and the oauth error dialog earlier")).toBe(false);
+    // A real error that scrolled far up is no longer live.
+    expect(authFailureInPane(["Login expired · Please run /login", ...Array(20).fill("work output")].join("\n"))).toBe(false);
     expect(authFailureInPane('❯ Try "x"')).toBe(false);
   });
 

@@ -1193,6 +1193,7 @@ export default function PodCockpit(props: PodCockpitProps) {
         name={name}
         environmentName={environmentName}
         steps={[{ provider: "claude-code", kind: "claude-setup-token" }]}
+        enableT3AfterToken={wiz === "renew-then-t3"}
         stepIndex={0}
         onStepIndex={() => {}}
         onDone={() => {

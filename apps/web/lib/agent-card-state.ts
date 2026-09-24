@@ -7,6 +7,7 @@
  * "no devices". A regex over the component can't catch that; a unit test can.
  */
 
+import type { AgentAuthState } from "@podway/shared";
 import type { RcState } from "@podway/shared/protocol";
 
 export type LiveAgent = {
@@ -33,6 +34,9 @@ export type LiveAgent = {
    * long RC-restore is retried. Optional: absent on an older pod image ⇒ treat as capable (true),
    * same back-compat posture as `rcState`. */
   rcCapable?: boolean;
+  /** The ONE classified sign-in state (agent-auth-state). When present it decides every sign-in card;
+   * the raw fields above are only the fallback for a response that lacks it. */
+  authState?: AgentAuthState;
 };
 
 export type CardState =
@@ -79,8 +83,8 @@ export function isManagedableState(st: CardState): boolean {
     st === "claude-recovering" ||
     st === "claude-rc-unknown" ||
     // A setup-token pod under T3'S control is the one case where an rcCapable:false login is NOT a
-    // problem — T3 drives the CLI over its own channel, no native RC needed (setupTokenAuthed's own
-    // comment in control-plane/service.ts). So this state must still dim to "Managed by T3" rather
+    // problem — T3 drives the CLI over its own channel, no native RC needed (the shared
+    // classifier's setup-token rule in @podway/shared agent-auth.ts). So this state must still dim to "Managed by T3" rather
     // than show a confusing "sign in to enable remote control" prompt while T3 is in control; it's
     // only the real fix when Podway itself (not T3) is meant to own remote control.
     st === "needs-subscription-signin" ||
@@ -109,7 +113,24 @@ export function agentCardState(input: {
   if (!running) return "unknown";
 
   const l = live?.find((s) => s.id === id);
+  if (l?.authState && l.authState.state !== "unknown") {
+    // agent-auth-state: sign-in is decided ONCE, by the shared classifier — no re-derivation here.
+    const a = l.authState;
+    if (a.state === "wrong-mode") return "needs-subscription-signin";
+    if (a.state === "login-pending") return "needs-signin";
+    if (a.state === "needs-login") return a.reason === "never" ? "needs-signin" : "login-expired";
+    // signed-in: only the remote-control picture is left to decide.
+    if (id === "codex") return l.rcActive ? "codex-on" : "codex-off";
+    if (l.rcCapable === false) return "needs-subscription-signin"; // setup-token under T3: dims to "Managed by T3"
+    // The RC classifier saw a login gate (OAuth retry / login menu) the credential file cannot show.
+    if (l.rcState === "login-required") return "login-expired";
+    if (l.rcState === "down") return "claude-down";
+    if (l.rcState === "recovering") return "claude-recovering";
+    if (l.rcState === "unknown") return "claude-rc-unknown";
+    return l.sessionUrl || input.sessionUrl ? "claude-linked" : "claude-ready";
+  }
   if (l) {
+    // Fallback: a response without authState (should not happen once the control plane fills it in).
     // An AUTHED Claude whose login itself can never drive RC (api-key/setup-token) — checked before
     // login-expired/claude-down so it always wins over both: neither "Reconnect" (re-login on the
     // SAME incapable mode) nor "Restore remote control" (retrying a bridge that will never come up)

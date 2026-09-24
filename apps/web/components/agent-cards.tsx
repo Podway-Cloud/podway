@@ -12,10 +12,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { CopyCodeButton } from "@/components/copy-code-button";
 import { CodexPairPanel } from "@/components/codex-pair-panel";
 import { CodexContinueSession } from "@/components/codex-continue-session";
-import { PasteCodeInput } from "@/components/paste-code-input";
 import { SettingRow } from "@/components/setting-row";
 import { RowSkeleton } from "@/components/ui/skeleton";
 import { useConfirm } from "@/components/ui/use-confirm";
@@ -25,7 +23,6 @@ import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-quer
 import { qk } from "@/lib/query-keys";
 import {
   addPodAgent,
-  reconnectAgent,
   restoreRemoteControl,
   revertToSubscription,
   getAgentStates,
@@ -33,7 +30,6 @@ import {
   getCodexDevices,
   setCodexRc,
   forgetCodexDevice,
-  sendAgentSigninCode,
 } from "@/lib/actions";
 
 const LABELS: Record<string, string> = { "claude-code": "Claude", codex: "Codex" };
@@ -67,90 +63,6 @@ function Dot({ tone }: { tone: "ok" | "warn" | "bad" | "spin" | "mute" }) {
  * predates it. The terminal is deliberately absent here except as a
  * transactional sign-in step — it lives in the Admin tab.
  */
-/**
- * An agent's sign-in, in the cockpit — the SAME shape the onboarding wizard uses
- * (open the link / copy the code, paste what it gives back), scoped to one agent.
- * Never a "go to the terminal" hand-off: the terminal is the Admin surface, not a
- * step in the login flow.
- */
-function SignIn({
-  agent,
-  name,
-  authValue,
-  code,
-  onCode,
-  onSubmit,
-  sent,
-}: {
-  agent: string;
-  name: string;
-  /** undefined = this pod's image doesn't report per-agent sign-in values yet;
-   * null = reported but not captured yet (spinner); string = ready to show. */
-  authValue: string | null | undefined;
-  code: string;
-  onCode: (v: string) => void;
-  onSubmit: () => void;
-  sent: boolean;
-}) {
-  const isCodex = agent === "codex";
-  if (authValue === undefined) {
-    // Old pod image: it can't hand us this agent's sign-in value. Say so — an
-    // eternal spinner here would be a lie.
-    return (
-      <p className="text-[12.5px] text-muted-foreground">
-        Signing {name} in from here needs this pod&rsquo;s software update — Settings → Update, then
-        come back to this card.
-      </p>
-    );
-  }
-  if (!authValue) {
-    return (
-      <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
-        <Loader2 className="size-3.5 shrink-0 animate-spin" />
-        Getting {name}&rsquo;s sign-in {isCodex ? "code" : "link"}…
-      </p>
-    );
-  }
-  // Codex: authValue is the one-time DEVICE CODE (its URL is static). Claude:
-  // authValue is the OAuth URL, and the CLI wants the code pasted back.
-  if (isCodex) {
-    return (
-      <div className="flex flex-col gap-2.5 rounded-lg border border-primary/70 bg-primary/10 px-3.5 py-3">
-        <span className="text-[13px] text-muted-foreground">
-          1. Copy this code &nbsp; 2. Open OpenAI and enter it to authorize:
-        </span>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <CopyCodeButton code={authValue} className="px-3 py-2 text-lg tracking-[0.15em]" />
-          <Button asChild variant="outline" size="sm">
-            <a href="https://auth.openai.com/codex/device" target="_blank" rel="noopener noreferrer">
-              Open OpenAI sign-in <ArrowUpRight />
-            </a>
-          </Button>
-        </div>
-        <span className="text-[12.5px] text-muted-foreground">
-          This card updates itself once {name} is signed in.
-        </span>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-2.5">
-      <a
-        className="flex flex-col gap-0.5 rounded-lg border border-primary/70 bg-primary/10 px-3.5 py-3 transition-shadow hover:shadow-[0_0_0_3px_rgba(47,107,255,0.18)]"
-        href={authValue}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        <span className="text-sm font-semibold">Open the {name} sign-in page</span>
-        <span className="text-[12.5px] text-[var(--link-accent)]">
-          then copy the code it gives you ↗
-        </span>
-      </a>
-      <PasteCodeInput value={code} onChange={onCode} onSubmit={onSubmit} submitted={sent} />
-    </div>
-  );
-}
-
 /** Shown only after RC genuinely fails to come up within the grace window (see toggleCodexRc). Kept as
  * a constant so the auto-clear effect can recognise and drop it the moment live state says RC is up. */
 const CODEX_RC_DOWN_MSG =
@@ -205,7 +117,7 @@ export default function AgentCards({
    * not provided (e.g. a harness rendering AgentCards standalone). */
   onPairCodex?: () => void;
   /** Open the full-page Claude sign-in / reconnect wizard (cockpit takeover) for that agent. */
-  onSignin?: (agentId: string, mode: "signin" | "reconnect") => void;
+  onSignin: (agentId: string, mode: "signin" | "reconnect") => void;
   /** The pod's Claude auth MODE — a setup-token pod renews non-destructively (§5.1) rather than doing
    * the subscription reconnect's full, session-interrupting re-login. */
   agentAuth?: "subscription" | "api-key" | "setup-token" | null;
@@ -217,21 +129,14 @@ export default function AgentCards({
   const [pairOpen, setPairOpen] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [starting, setStarting] = useState<string | null>(null);
-  const [reconnecting, setReconnecting] = useState<string | null>(null);
-  // The agent currently running a Restore-remote-control attempt — mirrors `reconnecting` so only one
+  // The agent currently running a Restore-remote-control attempt — mirrors `starting` so only one
   // attempt can be in flight per agent at a time (rc-reconnect-hardening §4.2: "prevent concurrent
   // attempts").
   const [restoringFor, setRestoringFor] = useState<string | null>(null);
   // The agent currently switching from setup-token/api-key back to a subscription login
   // (needs-subscription-signin's "Sign in to your Claude account" button) — mirrors
-  // `restoringFor`/`reconnecting` so only one attempt is in flight at a time.
+  // `restoringFor` so only one attempt is in flight at a time.
   const [revertingFor, setRevertingFor] = useState<string | null>(null);
-  const [codes, setCodes] = useState<Record<string, string>>({});
-  const [sentFor, setSentFor] = useState<string | null>(null);
-  // The agent whose sign-in code was just submitted — drives the "Signing in…" progress that REPLACES
-  // the paste box until the card advances (authed → claude-ready/linked), so the reconnect flow reads
-  // as progress instead of a frozen box that teleports to "Open in Claude" (velsa, 2026-08-23).
-  const [submittingFor, setSubmittingFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirm();
   /** First time each agent was seen MISSING from a non-empty live report. A young
@@ -249,7 +154,7 @@ export default function AgentCards({
     queryKey: qk.agents(slug),
     queryFn: () => getAgentStates(slug),
     enabled: running,
-    refetchInterval: running ? (submittingFor ? 2_000 : 10_000) : false,
+    refetchInterval: running ? 10_000 : false,
     placeholderData: keepPreviousData,
   });
   const live: LiveAgent[] | null = liveData ?? null;
@@ -272,20 +177,6 @@ export default function AgentCards({
   const devices = devicesData ?? null;
   const deviceList = devices ?? [];
   const refreshDevices = () => void refetchDevices();
-
-  // Clear "Signing in…" once the agent actually advances (authed → the card moves to
-  // claude-ready/linked, which show their own progress) — or after a safety timeout so a login that
-  // never completes falls back to the paste box instead of spinning forever.
-  useEffect(() => {
-    if (!submittingFor) return;
-    const a = live?.find((s) => s.id === submittingFor);
-    if (a && (a.authed || a.loginExpired || a.needsReauth)) {
-      setSubmittingFor(null);
-      return;
-    }
-    const t = window.setTimeout(() => setSubmittingFor(null), 90_000);
-    return () => window.clearTimeout(t);
-  }, [live, submittingFor]);
 
   const stateFor = (id: string): CardState => {
     const l = live?.find((s) => s.id === id);
@@ -365,17 +256,6 @@ export default function AgentCards({
       .finally(() => setStarting(null));
   };
 
-  const doReconnect = (id: string) => {
-    setReconnecting(id);
-    setError(null);
-    // Wipe the dead token + respawn into /login; the sign-in link then appears here on the next poll.
-    void reconnectAgent(slug, id)
-      .then((r) => {
-        if (r?.error) setError(`Couldn't reconnect ${label(id)}: ${r.error}`);
-      })
-      .finally(() => setReconnecting(null));
-  };
-
   /** rc-reconnect-hardening §4.2: the explicit Restore-remote-control action for `claude-down`. Calls
    * the same bounded primitive doctor uses and renders what it OBSERVED — never assumes success just
    * because the request completed — then refetches the shared health query so the card re-derives its
@@ -424,7 +304,7 @@ export default function AgentCards({
           setError(`Couldn't switch ${label(id)} to a subscription login: ${r.error}`);
           return;
         }
-        if (id === "claude-code" && onSignin) onSignin(id, "reconnect");
+        onSignin(id, "reconnect");
         void queryClient.invalidateQueries({ queryKey: qk.agents(slug) });
       })
       .finally(() => setRevertingFor(null));
@@ -442,14 +322,14 @@ export default function AgentCards({
 
   /** Reconnect a login that is expiring but STILL VALID — optional, so it's confirmed first (it's a full
    * re-login that interrupts the session; there's no way to extend a refresh token past its hard expiry).
-   * Claude routes through the full-page wizard; codex wipes + respawns in place. */
+   * Both agents route through the one full-page sign-in wizard. */
   const reconnectExpiring = async (id: string) => {
     const left = expiringInMs(id);
     const days = left != null ? Math.max(1, Math.round(left / (24 * 60 * 60 * 1000))) : null;
     const inN = days != null ? ` for ~${days} more day${days === 1 ? "" : "s"}` : "";
     // A setup-token pod renews NON-destructively — mint a fresh ~1-year token, no forced sign-out — so
     // it skips the session-interrupt warning and opens the renew wizard, not the reconnect wizard (§5.1).
-    if (id === "claude-code" && claudeReauthMode(agentAuth) === "renew" && onRenewToken) {
+    if (id === "claude-code" && externalControl && claudeReauthMode(agentAuth) === "renew" && onRenewToken) {
       const ok = await confirm({
         title: `Renew ${label(id)}'s login now?`,
         message: `${label(id)}'s 1-year login still works${inN}. Renewing mints a fresh token now — it does NOT sign the agent out or interrupt the session.`,
@@ -466,28 +346,7 @@ export default function AgentCards({
       confirmLabel: `Reconnect ${label(id)}`,
     });
     if (!ok) return;
-    if (id === "claude-code" && onSignin) onSignin(id, "reconnect");
-    else doReconnect(id);
-  };
-
-  /** Send the pasted sign-in code to THAT agent's window, server-side. The old
-   * path typed it over the terminal WebSocket, which follows the active window —
-   * wrong the moment a pod runs two agents. */
-  const submitCode = (id: string) => {
-    const code = (codes[id] ?? "").trim();
-    if (!code) return;
-    setError(null);
-    void sendAgentSigninCode(slug, id, code).then((r) => {
-      if (r?.error) setError(`Couldn't send the code: ${r.error}`);
-      else {
-        setCodes((c) => ({ ...c, [id]: "" }));
-        setSentFor(id);
-        window.setTimeout(() => setSentFor(null), 4000);
-        // Show "Signing in…" until the card actually advances (cleared by the effect below on authed,
-        // or a safety timeout). Login can take ~10-30s; the poll also accelerates meanwhile.
-        setSubmittingFor(id);
-      }
-    });
+    onSignin(id, "reconnect");
   };
 
   const card = (id: string) => {
@@ -552,28 +411,16 @@ export default function AgentCards({
         {starting === id ? (<><Loader2 className="size-3.5 animate-spin" /> Starting…</>) : (<>Start {name}</>)}
       </Button>
     ) : st === "login-expired" ? (
-      // A setup-token pod RENEWS (mints a fresh 1-year token) instead of a subscription re-login; the
-      // login is already dead so neither path needs a confirm (§5.1).
+      // A setup-token pod RENEWS (mints a fresh 1-year token) instead of a subscription re-login — but
+      // only while T3 drives it: the token is inference-only, so without T3 renewing it can never fix the
+      // card (t3tt, 2026-09-24; that case now classifies as wrong-mode anyway). Both paths open a wizard;
+      // the login is already dead so neither needs a confirm (§5.1).
       (() => {
-        const renew = id === "claude-code" && claudeReauthMode(agentAuth) === "renew" && !!onRenewToken;
+        const renew =
+          id === "claude-code" && externalControl && claudeReauthMode(agentAuth) === "renew" && !!onRenewToken;
         return (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={reconnecting !== null}
-            onClick={() =>
-              renew
-                ? onRenewToken!()
-                : id === "claude-code" && onSignin
-                  ? onSignin(id, "reconnect")
-                  : doReconnect(id)
-            }
-          >
-            {reconnecting === id ? (
-              <><Loader2 className="size-3.5 animate-spin" /> {renew ? "Renewing…" : "Reconnecting…"}</>
-            ) : (
-              <>{renew ? "Renew" : "Reconnect"} {name}</>
-            )}
+          <Button size="sm" variant="outline" onClick={() => (renew ? onRenewToken!() : onSignin(id, "reconnect"))}>
+            {renew ? "Renew" : "Reconnect"} {name}
           </Button>
         );
       })()
@@ -679,28 +526,12 @@ export default function AgentCards({
 
         {/* Rich states + the (i) popover live full-width below the header. */}
         <div className="mt-2.5 flex flex-col gap-2.5 empty:mt-0 empty:hidden">
-          {!managed && st === "needs-signin" &&
-            (submittingFor === id ? (
-              <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
-                <Loader2 className="size-3.5 shrink-0 animate-spin" />
-                Signing in… <span className="text-muted-foreground/70">this can take a moment</span>
-              </p>
-            ) : id === "claude-code" && onSignin ? (
-              // Claude sign-in is a full-page wizard (cockpit takeover); the card just launches it.
-              <Button variant="outline" size="sm" className="self-start" onClick={() => onSignin(id, "signin")}>
-                Sign in to {name}…
-              </Button>
-            ) : (
-              <SignIn
-                agent={id}
-                name={name}
-                authValue={live?.find((s) => s.id === id)?.authUrl}
-                code={codes[id] ?? ""}
-                onCode={(v) => setCodes((c) => ({ ...c, [id]: v }))}
-                onSubmit={() => submitCode(id)}
-                sent={sentFor === id}
-              />
-            ))}
+          {!managed && st === "needs-signin" && (
+            // Sign-in is ONE full-page wizard for both agents (cockpit takeover); the card just opens it.
+            <Button variant="outline" size="sm" className="self-start" onClick={() => onSignin(id, "signin")}>
+              Sign in to {name}…
+            </Button>
+          )}
           {!managed && id === "codex" && pairOpen && st === "codex-on" && (
             <CodexPairPanel
               slug={slug}
@@ -726,14 +557,9 @@ export default function AgentCards({
                 size="sm"
                 variant="outline"
                 className="shrink-0 self-start border-warning/40 text-warning hover:bg-warning/10 hover:text-warning sm:self-auto"
-                disabled={reconnecting !== null}
                 onClick={() => void reconnectExpiring(id)}
               >
-                {reconnecting === id ? (
-                  <><Loader2 className="size-3.5 animate-spin" /> Reconnecting…</>
-                ) : (
-                  <>Reconnect {name}…</>
-                )}
+                Reconnect {name}…
               </Button>
             </div>
           )}

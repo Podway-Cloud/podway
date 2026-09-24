@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/pod-status";
 import { AgentLogo } from "@/components/agent-logo";
 import { useConfirm } from "@/components/ui/use-confirm";
-import { deriveState, codexChipFor, type PodCardLive } from "@/lib/pod-visual-state";
+import { deriveState, codexChipFor, agentSignedIn, type PodCardLive } from "@/lib/pod-visual-state";
 import { cn } from "@/lib/utils";
 
 /**
@@ -275,7 +275,8 @@ export default function PodCard({
     )
   ) : null;
 
-  const codexAuthed = live?.agents?.find((a) => a.id === "codex")?.authed ?? true;
+  const codexAgent = live?.agents?.find((a) => a.id === "codex");
+  const codexAuthed = codexAgent ? agentSignedIn(codexAgent) : true;
 
   return (
     <li

@@ -269,10 +269,24 @@ wipe-the-credential-and-respawn path on anything other than an explicit success.
 the dangerous failure: it would skip the fallback and leave the owner with a login that was never
 renewed and no error on screen. Unreachability is therefore NOT success.
 
-The pod SHALL refuse when it cannot safely type into the pane: a codex agent (which authenticates
-through its own daemon), a setup-token or api-key pod (which never goes through `/login`), a pane
-with no agent window, a pane whose agent has exited, and a pane showing a blocking modal that eats
-keystrokes.
+The pod SHALL refuse when it cannot safely type into the pane: a setup-token or api-key pod (which
+never goes through `/login`), a pane with no agent window, a pane whose agent has exited, and a pane
+showing a blocking modal that eats keystrokes.
+
+A **codex** agent has no in-session `/login`. Reconnecting it SHALL start a fresh
+`codex login --device-auth` in its OWN signin window (`signin-codex`), separate from Claude's
+(`signin`), so one agent's login never closes or overwrites the other's. The agent's own pane is not
+touched. The reconnect lands when the Codex credentials file changes to a signed-in one.
+
+The sign-in value (Claude's OAuth URL, Codex's device code) SHALL be served to the cockpit ONLY while
+the login that printed it is still running and less than 15 minutes old. It is the value printed
+after the LAST login prompt in the pane, not the first. A login that exits, times out, or succeeds
+ends that value: it SHALL NOT be served again. A new reconnect or `/agent/restart` clears it.
+(The GTM pod served a timed-out Codex code for hours; OpenAI rejected it, 2026-09-24.)
+
+The pod-agent SHALL read the pod's `agentAuth` mode FRESH from the pod-spec on every boot command,
+respawn, and greeter check — never a value cached at pod-agent start — so a mode change takes effect
+without a pod-agent restart.
 
 Refusal SHALL be decided by OBSERVING the outcome, not only by inspecting the pane beforehand: a
 pane that is a bare shell for a reason other than the supervisor's exit marker looks "present" to a
@@ -287,10 +301,72 @@ failure if it does not.
 
 #### Scenario: The pane cannot be driven
 
-- **WHEN** the agent has exited, a blocking modal is up, the agent is codex, the pod is on a setup
-  token or api key, or the login menu never appears after typing
+- **WHEN** the agent has exited, a blocking modal is up, the pod is on a setup token or api key, or
+  the login menu never appears after typing
 - **THEN** the pod SHALL report failure with a reason, and the reconnect SHALL fall back to wiping
   the credential and respawning the window
+
+#### Scenario: Codex is reconnected
+
+- **WHEN** the owner reconnects Codex
+- **THEN** the pod SHALL start `codex login --device-auth` in the `signin-codex` window, report
+  success, and serve the NEW device code printed there
+
+#### Scenario: A renewal that lands clears a stale "Login expired"
+
+- **WHEN** a relogin lands (the credential expiry moved forward) while the agent's own pane still
+  shows the old "Login expired" text
+- **THEN** the pod SHALL stop reporting needsReauth and SHALL respawn the agent onto the new
+  credential; while a relogin is in flight it SHALL NOT respawn the agent
+
+#### Scenario: An agent talking about sign-in is not signed out
+
+- **WHEN** the auth-failure words appear only inside the agent's own chat text (not as the CLI's own
+  error line near the bottom of the pane)
+- **THEN** the pod SHALL NOT report needsReauth; and if a flag was raised while the credential file
+  never changed, the pod SHALL NOT respawn the agent when it clears (a respawn ends the session and
+  claude.ai archives it)
+
+#### Scenario: The pod reports one classified sign-in state
+
+- **WHEN** the cockpit reads `/healthz`
+- **THEN** every agent SHALL carry `authState` from the shared `classifyAgentAuth` classifier
+  (signed-in, login-pending with its value and times, needs-login with a reason, wrong-mode, or
+  unknown), with the auth mode read fresh, T3 control taken from the durable `t3-code` startup entry,
+  and a setup-token or api-key counted present only when its reserved secret is set
+
+#### Scenario: A pod on an older image still gets one sign-in state
+
+- **WHEN** a pod's `/healthz` carries no `authState` (its image predates it)
+- **THEN** the control plane SHALL compute it with the same classifier from the raw fields and its own
+  record of the auth mode and T3 control, so every surface receives `authState` for every agent
+
+#### Scenario: A sign-in action finishes only when the pod shows it
+
+- **WHEN** the owner reconnects an agent, completes a setup-token, or reverts to the subscription login
+- **THEN** the action SHALL return success only after the pod's `authState` shows the result (a NEW
+  sign-in value or signed-in; the token mode applied; the subscription login back), polling for a
+  bounded time, and SHALL return an error when it does not — a value that was already shown before
+  the action does not count
+
+#### Scenario: Renewing the 1-year token does not turn T3 on
+
+- **WHEN** the owner completes a setup-token renewal outside the enable-T3 flow
+- **THEN** the system SHALL NOT start a T3 enable; only the renew-then-T3 wizard SHALL
+
+#### Scenario: Every surface renders the one classified state
+
+- **WHEN** the cockpit agent card, the sign-in wizard, or the dashboard pod card shows an agent's sign-in
+- **THEN** it SHALL derive it from `authState` alone (the raw fields only when it is absent), so the
+  surfaces cannot disagree; the wizard SHALL close only on `signed-in` after a not-signed-in frame; one
+  wizard SHALL serve both agents (Codex: the device code with a copy button, the OpenAI device page,
+  a countdown, and "Get a new code"); a value from an ended login SHALL NOT be shown; "Renew" SHALL be
+  offered only while T3 drives the pod, and `wrong-mode` SHALL offer the subscription sign-in
+
+#### Scenario: A login that ended is not served
+
+- **WHEN** the login that printed a code or URL exits, times out, succeeds, or is older than 15 minutes
+- **THEN** the pod SHALL NOT report that value to the cockpit
 
 #### Scenario: The pod cannot be reached
 

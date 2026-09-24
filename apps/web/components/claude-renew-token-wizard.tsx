@@ -20,6 +20,7 @@ export default function ClaudeRenewTokenWizard({
   onClose,
   embedded = false,
   onComplete,
+  enableT3 = false,
 }: {
   slug: string;
   name: string | null;
@@ -28,6 +29,8 @@ export default function ClaudeRenewTokenWizard({
   /** Rendered as a STEP inside ProviderAuthWizard — drop the chrome, report success via onComplete. */
   embedded?: boolean;
   onComplete?: () => void;
+  /** The owner is enabling T3 (renew-then-T3): start the T3 enable once the token is stored. */
+  enableT3?: boolean;
 }) {
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -59,7 +62,7 @@ export default function ClaudeRenewTokenWizard({
     if (!code.trim()) return;
     setSubmitting(true);
     setError(null);
-    const r = await completeSetupToken(slug, code.trim());
+    const r = await completeSetupToken(slug, code.trim(), { enableT3 });
     if (r?.error) {
       setSubmitting(false);
       setError(r.error);

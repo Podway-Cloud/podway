@@ -29,6 +29,7 @@ export default function ProviderAuthWizard({
   onDone,
   onCancel,
   reconnect = false,
+  enableT3AfterToken = false,
 }: {
   slug: string;
   name: string | null;
@@ -39,6 +40,8 @@ export default function ProviderAuthWizard({
   onDone: () => void;
   onCancel: () => void;
   reconnect?: boolean;
+  /** A claude-setup-token step starts the T3 enable once the token is stored (renew-then-T3 only). */
+  enableT3AfterToken?: boolean;
 }) {
   const step = steps[stepIndex];
   // Defensive: an out-of-range / empty step list means the flow is already satisfied — finish cleanly.
@@ -68,6 +71,7 @@ export default function ProviderAuthWizard({
         name={name}
         environmentName={environmentName}
         embedded
+        enableT3={enableT3AfterToken}
         onComplete={advance}
         onClose={onCancel}
       />

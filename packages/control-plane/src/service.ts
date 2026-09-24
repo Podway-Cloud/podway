@@ -37,7 +37,7 @@ import {
 } from "./claude-settings.js";
 import { formatWarnDigest } from "./warn-digest.js";
 import { createLogger, type Logger } from "@podway/shared/log";
-import type { PodAgentState, PodIssue } from "@podway/shared";
+import { legacyAgentAuthState, type AgentAuthState, type PodAgentState, type PodIssue } from "@podway/shared";
 import type {
   PodInfo,
   SandboxProvider,
@@ -243,22 +243,20 @@ const RESERVED_SECRET_KEYS = new Set([
   ...Object.values(AGENT_API_KEY_SECRET),
 ]);
 
-/** The setup-token is INFERENCE-ONLY — it cannot do Claude's native Remote Control. So it is "enough"
- * ONLY when T3 is driving (T3 runs the CLI over its own channel, no native RC needed). A setup-token pod
- * still under PODWAY control genuinely DOES need a subscription sign-in (for RC), so we must NOT mask its
- * "needs sign-in" there. Only when `t3Control` is true is the token the complete auth — then report
- * Claude authed (the pod-agent's file-based `authed` reads false because `.credentials.json` is relocated
- * by design; the token IS the auth, verified via `claude -p`). The 1-year hard expiry still surfaces via
- * `expiresAt`. Proper long-term fix: a token-aware healthz in the pod-agent (needs an image). */
-function setupTokenAuthed<T extends { id: string; authed: boolean; loginExpired?: boolean; needsReauth?: boolean }>(
+/** Every agent leaves the control plane with `authState` (agent-auth-state): the pod's own, or — for an
+ * image that predates it — the same shared classifier run on its raw fields plus this record's auth mode
+ * and T3 control. This REPLACES `setupTokenAuthed`, which faked `authed:true` for a setup-token pod
+ * under T3; that mask was one of three places deciding sign-in, and they disagreed. */
+function withAuthState<T extends { id: string; authed: boolean; loginExpired?: boolean; needsReauth?: boolean; authUrl?: string | null; authState?: PodAgentState["authState"] }>(
   agents: T[],
   agentAuth: string | null | undefined,
   t3Control: boolean | null | undefined,
 ): T[] {
-  if (agentAuth !== "setup-token" || !t3Control) return agents;
-  return agents.map((a) =>
-    a.id === "claude-code" ? { ...a, authed: true, loginExpired: false, needsReauth: false } : a,
-  );
+  const now = Date.now();
+  return agents.map((a) => ({
+    ...a,
+    authState: a.authState ?? legacyAgentAuthState(a, agentAuth as never, t3Control, now),
+  }));
 }
 
 export interface LaunchOptions {
@@ -312,6 +310,10 @@ export interface LaunchOptions {
  * (non-zero exit), an empty body, an unparsable body, a truthy-but-not-true `ok` ("true", 1),
  * and any honest `{ok:false, reason}` all mean "fall back and respawn".
  */
+/** How long a sign-in action waits for the pod to CONFIRM the new state (agent-auth-state D7). Mutable
+ * so tests can shrink it. ponytail: fixed poll, no backoff — 30s of 1.5s reads is cheap. */
+export const AUTH_WAIT = { tries: 20, everyMs: 1_500 };
+
 export function reloginSucceeded(exitCode: number, stdout: string): boolean {
   if (exitCode !== 0 || !stdout.trim()) return false;
   try {
@@ -2726,7 +2728,8 @@ export class PodService {
    * disagree about a pod at a single moment, and a fleet view would multiply it. */
   async podHealth(ownerId: string, id: string): Promise<PodHealth> {
     const rec = await this.owned(ownerId, id);
-    return this.readHealth(rec);
+    const h = await this.readHealth(rec);
+    return { ...h, agents: withAuthState(h.agents, rec.agentAuth, rec.t3Control) };
   }
 
   private async readHealth(rec: PodRecord): Promise<PodHealth> {
@@ -2738,9 +2741,7 @@ export class PodService {
   }
 
   async agentStates(ownerId: string, id: string): Promise<PodAgentState[]> {
-    const rec = await this.owned(ownerId, id);
-    const agents = (await this.podHealth(ownerId, id)).agents;
-    return setupTokenAuthed(agents, rec.agentAuth, rec.t3Control);
+    return (await this.podHealth(ownerId, id)).agents; // podHealth checks ownership + attaches authState
   }
 
   /** Send the sign-in code the owner pasted in the cockpit to a specific agent's
@@ -2778,17 +2779,27 @@ export class PodService {
     // un-archive by hand after every reconnect (velsa, 2026-09-05). Keeping the process alive also
     // makes the conversation continue by construction rather than by transcript resume.
     //
-    // The pod answers honestly (`{ok:false, reason}`) when it cannot do this — a dead pane, a codex
-    // agent, a setup-token/api-key pod — and only THEN do we fall through to the historical
-    // wipe-and-respawn below. Never treat an unreachable pod as success: an exec failure or an
-    // unparsable body falls back too.
-    if (agent === "claude-code") {
+    // The pod answers honestly (`{ok:false, reason}`) when it cannot do this — a dead pane, a
+    // setup-token/api-key pod, or an image older than Codex relogin (agent-auth-state) — and only THEN
+    // do we fall through to the historical wipe-and-respawn below. Never treat an unreachable pod as
+    // success: an exec failure or an unparsable body falls back too.
+    //
+    // Either way the action is done only when the POD shows a NEW sign-in value (or is signed in) —
+    // not when the request returned (D7). A stale value from before must not count.
+    const before = await this.authStateOf(ownerId, id, agent);
+    const beforeValue = before?.state === "login-pending" ? before.value : null;
+    const gotNewLogin = (st: AgentAuthState) =>
+      st.state === "signed-in" || (st.state === "login-pending" && !!st.value && st.value !== beforeValue);
+    {
       const r = await this.providerFor(rec.provider).exec(id, [
         "bash",
         "-lc",
         `curl -fsS -m 30 -X POST -H 'content-type: application/json' --data '{"agent":"${agent}"}' http://127.0.0.1:8080/agent/relogin`,
       ]);
-      if (reloginSucceeded(r.exitCode, r.stdout)) return;
+      if (reloginSucceeded(r.exitCode, r.stdout)) {
+        await this.waitForAuthState(ownerId, id, agent, gotNewLogin, "show a new sign-in code");
+        return;
+      }
     }
     const credPath = agent === "codex" ? "/home/dev/.codex/auth.json" : "/home/dev/.claude/.credentials.json";
     await this.providerFor(rec.provider).exec(id, [
@@ -2796,6 +2807,28 @@ export class PodService {
       "-lc",
       `rm -f ${credPath}; curl -fsS -m 20 -X POST -H 'content-type: application/json' --data '{"agent":"${agent}"}' http://127.0.0.1:8080/agent/restart >/dev/null 2>&1 || true`,
     ]);
+    await this.waitForAuthState(ownerId, id, agent, gotNewLogin, "show a new sign-in code");
+  }
+
+  private async authStateOf(ownerId: string, id: string, agent: string): Promise<AgentAuthState | undefined> {
+    return (await this.podHealth(ownerId, id)).agents.find((a) => a.id === agent)?.authState;
+  }
+
+  /** An action is done when the POD shows the result, not when the request returned (D7): the wizard
+   * used to close on "ok" and the cockpit then showed the same "Sign-in expired" (t3tt, 2026-09-24). */
+  private async waitForAuthState(
+    ownerId: string,
+    id: string,
+    agent: string,
+    ok: (s: AgentAuthState) => boolean,
+    what: string,
+  ): Promise<void> {
+    for (let i = 0; i < AUTH_WAIT.tries; i++) {
+      const st = await this.authStateOf(ownerId, id, agent);
+      if (st && ok(st)) return;
+      await new Promise((res) => setTimeout(res, AUTH_WAIT.everyMs));
+    }
+    throw new ControlError(`the pod did not ${what} in time — try again`, "invalid");
   }
 
   /** Ask the pod to restore Claude's remote-control session — the SAME bounded primitive doctor uses
@@ -2907,6 +2940,7 @@ export class PodService {
     // as the secrets outage, so it must not vanish.
     await this.bestEffort("push_secrets_after_agent_auth", id, () => this.pushSecrets(id));
     await this.store.update(id, { agentAuth: "setup-token" });
+    const tokenApplied = (st: AgentAuthState) => st.state === "signed-in" || st.state === "wrong-mode";
     await prov.patchPodSpec?.(id, { agentAuth: "setup-token" }).catch(() => undefined);
     // Relocate the subscription credential so the 1-year token ACTUALLY takes effect: `claude` prefers
     // `.credentials.json` over `CLAUDE_CODE_OAUTH_TOKEN` when both exist (verified 2026-08-24, test:1),
@@ -2928,6 +2962,7 @@ export class PodService {
         `curl -fsS -m 20 -X POST -H 'content-type: application/json' --data '{"agent":"claude-code"}' http://127.0.0.1:8080/agent/restart >/dev/null 2>&1 || true`,
       ])
       .catch(() => undefined);
+    await this.waitForAuthState(ownerId, id, "claude-code", tokenApplied, "switch Claude onto the 1-year token");
   }
 
   // ---- T3 Connect (t3-connect-account-wizard) -----------------------------------------------------
@@ -3031,6 +3066,8 @@ export class PodService {
       ])
       .catch(() => undefined);
     await this.store.update(id, { agentAuth: "subscription" });
+    const subscriptionBack = (st: AgentAuthState) =>
+      st.state === "signed-in" || (st.state === "login-pending" && !!st.value);
     await prov.patchPodSpec?.(id, { agentAuth: "subscription" }).catch(() => undefined);
     // Respawn Claude so it re-reads its auth mode: boot.ts no longer maps the token, so it boots on the
     // restored subscription cred (or drops to /login for a fresh sign-in).
@@ -3041,6 +3078,7 @@ export class PodService {
         `curl -fsS -m 20 -X POST -H 'content-type: application/json' --data '{"agent":"claude-code"}' http://127.0.0.1:8080/agent/restart >/dev/null 2>&1 || true`,
       ])
       .catch(() => undefined);
+    await this.waitForAuthState(ownerId, id, "claude-code", subscriptionBack, "bring back the subscription sign-in");
   }
 
   /** Run the pod's doctor, owner-scoped. `fix` applies the SAFE repairs only —
@@ -3261,7 +3299,7 @@ export class PodService {
               // HONEST activity (newest transcript entry), not idleMs noise. Null only when even the
               // transcript read finds nothing (fresh pod) → client falls back to server-rendered lastActiveAt.
               agentIdleMs: activityMs,
-              agents: setupTokenAuthed(h.agents.map((a) => ({ id: a.id, authed: a.authed, loginExpired: a.loginExpired ?? false, needsReauth: a.needsReauth ?? false, expiresAt: a.expiresAt ?? null })), p.agentAuth, p.t3Control),
+              agents: withAuthState(h.agents.map((a) => ({ id: a.id, authed: a.authed, loginExpired: a.loginExpired ?? false, needsReauth: a.needsReauth ?? false, expiresAt: a.expiresAt ?? null, authUrl: a.authUrl ?? null, authState: a.authState })), p.agentAuth, p.t3Control),
               appListening,
               secretRequests: typeof h.secretRequests === "number" ? h.secretRequests : null,
               criticalIssue: critical ? { title: critical.title, detail: critical.detail } : null,

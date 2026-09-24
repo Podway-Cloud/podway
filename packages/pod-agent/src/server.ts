@@ -8,7 +8,7 @@ import { RelayProxy } from "./relay-proxy.js";
 import { hostname } from "node:os";
 import { WebSocketServer, WebSocket } from "ws";
 import { handleControlMessage, takeOutcomes, type ControlDeps } from "./control-link.js";
-import { parseClientMessage, RELAY_LIMITS, type AgentMessage, type WindowInfo } from "@podway/shared";
+import { classifyAgentAuth, parseClientMessage, RELAY_LIMITS, type AgentAuthState, type AgentMessage, type WindowInfo } from "@podway/shared";
 import { createLogger, type Logger } from "@podway/shared/log";
 import { PtySession, type PtySessionOptions } from "./session.js";
 import {
@@ -42,7 +42,8 @@ import {
 import { recoverContextOverflow, type RecoveryState } from "./context-recovery.js";
 import type { RcState } from "@podway/shared/protocol";
 import { classifyRcState, isOrphanedRcYield, shouldAttemptRcRestore } from "./rc-state.js";
-import { credentialsPathForAgent, sanitizeSessionName, podNameFromSpec } from "./boot.js";
+import { parseLoginPane, nextLoginAttempt, type LoginAttempt } from "./login-capture.js";
+import { credentialsPathForAgent, sanitizeSessionName, podNameFromSpec, loginCommandFor, RESERVED_ANTHROPIC_KEY, RESERVED_CLAUDE_OAUTH_TOKEN } from "./boot.js";
 import { shouldRepair, pruneHistory, isCapped, recoveryDue, type RepairAttempt } from "./repair-policy.js";
 import {
   collectDescendants,
@@ -344,7 +345,9 @@ export class AgentServer {
   private codexRcActive = false;
   /** agent id → its captured sign-in value (Claude: OAuth URL, Codex: device code).
    * Sticky: the value scrolls out of the pane seconds after it prints. */
-  private readonly agentAuthValues = new Map<string, string>();
+  // agent id → its current login attempt (value + issuedAt/expiresAt + running). Survives scroll-away,
+  // but ends when the login exits (agent-auth-state D4) — the old sticky string served dead codes.
+  private readonly loginAttempts = new Map<string, LoginAttempt>();
   /** Added agents whose login menu we've already driven (once each). */
   private readonly loginDriven = new Set<string>();
   /**
@@ -365,7 +368,7 @@ export class AgentServer {
    * Cleared when the reconnect resolves (a new credential lands, or the flow gives up), so this can
    * never keep a stale sign-in link alive on a healthy pod.
    */
-  private readonly reconnectInFlight = new Map<string, { startedAt: number; baseExpiry: number | null }>();
+  private readonly reconnectInFlight = new Map<string, { startedAt: number; baseExpiry: number | null; baseHash?: string }>();
   /**
    * The tmux window a RECONNECT drives its `/login` in — never the agent's own pane.
    *
@@ -453,6 +456,8 @@ export class AgentServer {
   /** Set when credentials are seen ABSENT or EXPIRED while running, so the next renewal
    * respawns the window (and therefore `--continue`s) even though boot was authenticated. */
   private credsWentBad = false;
+  /** Hash of the credential when it was flagged bad while the FILE still read usable (pane-only). */
+  private badCredsHash: string | null = null;
   private respawned = false;
   private greeterStarted = false;
   private loginAssistantStarted = false;
@@ -1009,6 +1014,7 @@ export class AgentServer {
               return;
             }
             const target = `${this.session.sessionName}:${w}`;
+            this.loginAttempts.delete(agent); // a restart starts a NEW login — never serve the old attempt's value
             await new Promise<void>((resolve) =>
               execFile(
                 "tmux",
@@ -1090,7 +1096,21 @@ export class AgentServer {
             const requested = String(JSON.parse(body || "{}").agent ?? "");
             const agent = requested || this.declaredAgents[0] || "claude-code";
             // Codex authenticates through its own daemon, not a slash command in a pane.
-            if (agent === "codex") return reply(200, { ok: false, reason: "unsupported-agent" });
+            if (agent === "codex") {
+              // Codex has no in-session /login: a fresh device-auth login in ITS OWN signin window mints a
+              // new code (agent-auth-state D5). The old refusal left a timed-out Codex with no way to sign in.
+              await this.closeSigninWindow(this.signinWindowFor("codex")); // a previous Codex attempt only
+              const cw = await spawnAgentWindow(this.session.sessionName, this.signinWindowFor("codex"), loginCommandFor("codex"), {
+                uid: this.tmuxUid,
+                gid: this.tmuxGid,
+              });
+              if (cw == null) return reply(200, { ok: false, reason: "no-window" });
+              const cs = credentialState("codex", this.credPathFor("codex"));
+              this.reconnectInFlight.set("codex", { startedAt: Date.now(), baseExpiry: cs.expiresAt, baseHash: cs.hash });
+              this.loginAttempts.set("codex", { value: null, issuedAt: null, expiresAt: null, running: true });
+              await this.refreshWindows().catch(() => undefined);
+              return reply(200, { ok: true, agent: "codex", window: cw });
+            }
             // A setup-token / api-key pod launches the agent on its token and never goes through
             // /login at all — driving a login menu at it fights a session that is actually fine
             // (the test:2 lesson recorded on /agent/restart above).
@@ -1122,7 +1142,7 @@ export class AgentServer {
             const signinIdx = await spawnAgentWindow(
               this.session.sessionName,
               AgentServer.SIGNIN_WINDOW,
-              "claude /login",
+              loginCommandFor("claude-code"),
               { uid: this.tmuxUid, gid: this.tmuxGid },
             );
             // Fall back to the agent's own window if tmux refused to open one: a racy login still beats
@@ -1143,7 +1163,8 @@ export class AgentServer {
               startedAt: Date.now(),
               baseExpiry: credentialState(agent, this.credPathFor(agent)).expiresAt,
             });
-            this.agentAuthValues.delete(agent);   // never hand back a link from a previous attempt
+            // A new login is starting: pending with no value yet — never a previous attempt's value.
+            this.loginAttempts.set(agent, { value: null, issuedAt: null, expiresAt: null, running: true });
             if (w == null) return reply(200, { ok: false, reason: "no-window" });
             const target = `${this.session.sessionName}:${w}`;
             const pane = stripAnsiText(await capturePane(target, { uid: this.tmuxUid, gid: this.tmuxGid }));
@@ -2400,7 +2421,8 @@ export class AgentServer {
       // Claude: its sign-in URL. Codex: its one-time device CODE. Both scraped
       // from THAT agent's own window, so an added agent gets the cockpit's
       // link-and-paste sign-in instead of being sent to the terminal.
-      authUrl: this.agentAuthValues.get(id) ?? null,
+      authUrl: this.servableLoginValue(id),
+      authState: this.authStateFor(id, cred, isPrimaryClaude),
       rcCapable,
       };
     });
@@ -2410,8 +2432,32 @@ export class AgentServer {
   /** Index of a window by NAME, or null. Used to find the dedicated signin window, which
    *  belongs to no agent and so is invisible to windowForAgent(). */
   /** Retire the dedicated sign-in window once its login has landed. Best-effort by contract. */
-  private async closeSigninWindow(): Promise<void> {
-    const idx = this.windowIndexByName(AgentServer.SIGNIN_WINDOW);
+  /** The ONE sign-in state the cockpit renders (agent-auth-state D1) — every raw signal goes through
+   * the shared classifier here instead of being re-derived in the web app. */
+  private authStateFor(id: string, cred: { authed: boolean; expired: boolean }, isPrimaryClaude: boolean): AgentAuthState {
+    const mode = id === "codex" ? null : (this.greeter?.agentAuth ?? null);
+    const tokenKey = mode === "api-key" ? RESERVED_ANTHROPIC_KEY : RESERVED_CLAUDE_OAUTH_TOKEN;
+    const secrets = process.env.PODWAY_SECRETS_ENV ?? "/etc/podway/secrets.env";
+    return classifyAgentAuth({
+      agent: id,
+      mode,
+      t3Control: this.t3StartupRegistered(),
+      reporting: true,
+      credentials: cred.authed ? "valid" : cred.expired ? "expired" : "absent",
+      tokenPresent: mode === "setup-token" || mode === "api-key" ? setKeysIn(secrets).has(tokenKey) : false,
+      needsReauth: isPrimaryClaude ? this.primaryNeedsReauth : false,
+      login: this.loginAttempts.get(id) ?? null,
+      now: Date.now(),
+    });
+  }
+
+  /** Each agent logs in in its OWN signin window, so one agent's relogin can never kill the other's. */
+  private signinWindowFor(agent: string): string {
+    return agent === "codex" ? "signin-codex" : AgentServer.SIGNIN_WINDOW;
+  }
+
+  private async closeSigninWindow(name: string = AgentServer.SIGNIN_WINDOW): Promise<void> {
+    const idx = this.windowIndexByName(name);
     if (idx == null) return;
     const target = `${this.session.sessionName}:${idx}`;
     const run = (args: string[]) =>
@@ -2458,6 +2504,12 @@ export class AgentServer {
   /** Per-agent sign-in value, sticky once captured (it scrolls away). Claude → the
    * OAuth URL; Codex → the device code. Scraped per WINDOW because the pod-level
    * capture only ever watched the primary agent's. */
+  /** The sign-in value the dashboard may show: only from a login that is RUNNING and not expired. */
+  private servableLoginValue(id: string): string | null {
+    const a = this.loginAttempts.get(id);
+    return a?.running && a.value && a.expiresAt != null && a.expiresAt > Date.now() ? a.value : null;
+  }
+
   private async refreshAgentAuthValues(): Promise<void> {
     const exec = { uid: this.tmuxUid, gid: this.tmuxGid };
     for (const id of this.agentsOnPod()) {
@@ -2467,9 +2519,7 @@ export class AgentServer {
       // URL is printed — reading the agent's own pane would find nothing and the cockpit would wait
       // forever, which is the bug this whole path exists to fix. Falls back to the agent's window
       // when no signin window is open (a first-boot login, or tmux refused to create one).
-      const signinW = this.windowIndexByName(AgentServer.SIGNIN_WINDOW);
-      const readW = signinW ?? w;
-      const target = `${this.session.sessionName}:${readW}`;
+      const signinW = this.windowIndexByName(this.signinWindowFor(id));
       // Signed in → the sign-in value is spent. Drop it so a stale OAuth link can
       // never be shown as if the agent still needed it.
       // Is the OWNER mid-reconnect on this agent? Then a credentials file existing means nothing:
@@ -2480,6 +2530,10 @@ export class AgentServer {
       const reconnecting =
         startedAt != null && Date.now() - startedAt < AgentServer.RECONNECT_WINDOW_MS;
       if (startedAt != null && !reconnecting) this.reconnectInFlight.delete(id);
+      // Read the signin window ONLY for the agent that is mid-relogin: a leftover signin window used to
+      // be read for EVERY agent, hiding Codex's real code behind Claude's (agent-auth-state D4).
+      const readW = reconnecting && signinW != null ? signinW : w;
+      const target = `${this.session.sessionName}:${readW}`;
       // A reconnect has LANDED only when the credential's HARD expiry moved forward — a fresh login
       // resets the ~30-day clock. This used to key on the credential file's MTIME, but a still-valid
       // login refreshes its access token every few minutes, rewriting the file and bumping mtime
@@ -2487,8 +2541,12 @@ export class AgentServer {
       // pasted the code, and the code then fell back to the AGENT's own pane: it leaked into the running
       // session and the login never completed (velsa, podway dev, 2026-09-13). Compare the expiry.
       if (reconnecting && inflight) {
-        const cur = credentialState(id, this.credPathFor(id)).expiresAt;
-        if (reconnectLanded(inflight.baseExpiry, cur)) {
+        const cs = credentialState(id, this.credPathFor(id));
+        const landed =
+          reconnectLanded(inflight.baseExpiry, cs.expiresAt) ||
+          // Codex's auth.json carries no expiry — a NEW credential shows up as a changed file.
+          (id === "codex" && cs.authed && inflight.baseHash !== undefined && cs.hash !== inflight.baseHash);
+        if (landed) {
           this.reconnectInFlight.delete(id);
           // …and CLOSE the sign-in window. claude ends a successful login on
           // "Login successful. Press Enter to continue…" and waits for a keypress nobody is going to
@@ -2498,11 +2556,23 @@ export class AgentServer {
           // Send the Enter it is waiting for, then kill the window: it exists only to host a login, and
           // that login is done. Best-effort — a window that will not close must never affect the
           // reconnect, which has already succeeded by the time we get here.
-          void this.closeSigninWindow();
-          this.agentAuthValues.delete(id);
+          void this.closeSigninWindow(this.signinWindowFor(id));
+          this.loginAttempts.delete(id);
+          // The agent's own pane still shows the OLD "Login expired" text, and the pane watchdog would
+          // keep reading it as a live failure — which blocks the very respawn that clears it (t3tt,
+          // 2026-09-24: renewed, still "Sign-in expired"). The new credential is proof: clear the flag
+          // and let maybeRespawnAuthed restart the agent onto it now.
+          if (id === this.credential?.agent && (this.primaryNeedsReauth || this.credsWentBad)) {
+            this.primaryAuthFailTicks = 0;
+            this.primaryNeedsReauth = false;
+            this.credsWentBad = true;
+            this.respawned = false;
+            this.badCredsHash = null; // a LANDED renewal is never a false alarm
+            this.maybeRespawnAuthed();
+          }
         }
       }
-      if (existsSync(this.credPathFor(id)) && !reconnecting) this.agentAuthValues.delete(id);
+      if (existsSync(this.credPathFor(id)) && !reconnecting) this.loginAttempts.delete(id);
       // AUTHED claude: capture its own RC session URL (the hand-off link).
       if (id !== "codex" && existsSync(this.credPathFor(id)) && !reconnecting) {
         if (!this.agentSessionUrls.has(id)) {
@@ -2516,23 +2586,21 @@ export class AgentServer {
         }
         continue;
       }
-      if (this.agentAuthValues.has(id)) continue; // sticky
       // "Already signed in" is NOT a reason to skip when the owner is deliberately reconnecting.
       if (existsSync(this.credPathFor(id)) && !reconnecting) continue;
+      // Scrape EVERY tick (agent-auth-state D4). The attempt keeps its value across scroll-away but
+      // stops running when the login exits, and carries issuedAt/expiresAt so an expired value is never served.
       try {
-        if (id === "codex") {
-          const pane = stripAnsiText(await capturePane(target, exec));
-          if (pane.includes("codex/device")) {
-            const m = pane.match(/\b[A-Z0-9]{4}-[A-Z0-9]{4,6}\b/);
-            if (m) this.agentAuthValues.set(id, m[0]);
-          }
-        } else {
-          const urls = await extractLinks(target, exec);
-          const url = urls.find(
-            (u) => AUTH_URL_RE.test(u) && !SESSION_URL_RE.test(u) && isCompleteAuthUrl(u),
-          );
-          if (url) this.agentAuthValues.set(id, url);
-        }
+        const pane = stripAnsiText(await capturePane(target, exec));
+        const urls =
+          id === "codex"
+            ? []
+            : (await extractLinks(target, exec)).filter(
+                (u) => AUTH_URL_RE.test(u) && !SESSION_URL_RE.test(u) && isCompleteAuthUrl(u),
+              );
+        const next = nextLoginAttempt(this.loginAttempts.get(id) ?? null, parseLoginPane(id, pane, urls), Date.now());
+        if (next) this.loginAttempts.set(id, next);
+        else this.loginAttempts.delete(id);
       } catch {
         // best-effort; a capture hiccup must not break the tick
       }
@@ -2748,7 +2816,13 @@ export class AgentServer {
     const authBad = authFailureInPane(pane);
     this.primaryAuthFailTicks = authBad ? this.primaryAuthFailTicks + 1 : 0;
     const needs = this.primaryAuthFailTicks >= 2;
-    if (needs && !this.primaryNeedsReauth) this.log.warn("agent_auth_failure_detected", { agent: this.credential.agent });
+    if (needs && !this.primaryNeedsReauth) {
+      this.log.warn("agent_auth_failure_detected", { agent: this.credential.agent });
+      // Remember WHICH credential looked bad, at the moment it is flagged. If the file never changes,
+      // the "recovery" was a false alarm — respawning would kill a working session for nothing. (Taken
+      // here, not lazily in maybeRespawnAuthed: a renewal landing within one tick got recorded as bad.)
+      if (!this.credsWentBad) this.badCredsHash = credentialState(this.credential.agent, this.credential.path).hash || null;
+    }
     if (needs) this.pendingRcRestore = true; // we now owe an RC restore once the login recovers
     this.primaryNeedsReauth = needs;
     if (needs) return; // logged out — nothing to restore until the owner re-logs-in (surfaced on healthz)
@@ -3045,8 +3119,8 @@ export class AgentServer {
     // `expired:false, authed:true`. Watching the file therefore never sees the failure at all
     // (observed on test:1, 2026-09-05: pane said "Login expired · Please run /login" while the file
     // read healthy). The pane is where the truth is, and the watchdog already computes it.
-    const usable =
-      existsSync(credsPath) && credentialState(this.credential?.agent ?? "claude", credsPath).authed;
+    const cs = existsSync(credsPath) ? credentialState(this.credential?.agent ?? "claude", credsPath) : null;
+    const usable = cs?.authed === true;
     if (!usable || this.primaryNeedsReauth) {
       // Login is dead right now — by the file OR by what the pane says. Remember it and RE-ARM:
       // `respawned` alone is once-per-process, and a pod is renewed many times over its life.
@@ -3054,10 +3128,21 @@ export class AgentServer {
       this.respawned = false;
       return;
     }
+    // A relogin in flight owns the login: respawning now would kill the agent mid-renewal. The landing
+    // check in refreshAgentAuthValues calls back here once the new credential is in.
+    if (this.reconnectInFlight.has(this.credential?.agent ?? "claude-code")) return;
     if (!this.bootedUnauthed && !this.credsWentBad) return; // authed all along — nothing to resume
     if (this.respawned) return;
+    if (this.credsWentBad && this.badCredsHash != null && cs!.hash === this.badCredsHash) {
+      // Same credential as when it "went bad": nothing was renewed, so there is nothing to resume onto.
+      this.log.warn("respawn_skipped_same_credential", { session: this.session.sessionName });
+      this.credsWentBad = false;
+      this.badCredsHash = null;
+      return;
+    }
     this.respawned = true;
     this.credsWentBad = false;
+    this.badCredsHash = null;
     // No kickoff to respawn into (OSS/bare pod): the CLI is already running in the now-authed
     // window, so DON'T respawn it — just greet it to enable remote control (RC = claude↔claude.ai,
     // not gateway-dependent, so it works for a local pod too). Without this a signed-in

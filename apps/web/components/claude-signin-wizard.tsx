@@ -7,7 +7,9 @@ import { PhaseHeader } from "@/components/phase-header";
 import { PasteCodeInput } from "@/components/paste-code-input";
 import { qk } from "@/lib/query-keys";
 import { getAgentStates, getPodAuthUrl, reconnectAgent, sendAgentSigninCode } from "@/lib/actions";
-import { shouldCloseSignin, renewConfirmed, expiryExtended } from "@/lib/agent-signin-flow";
+import { signinDone, signinValue } from "@/lib/agent-signin-flow";
+import { CopyCodeButton } from "@/components/copy-code-button";
+import { Button } from "@/components/ui/button";
 
 /**
  * Full-page takeover for Claude sign-in / reconnect (agent-control-wizards). The cockpit early-returns
@@ -47,101 +49,71 @@ export default function ClaudeSigninWizard({
     refetchInterval: 3_000, // fast while a sign-in is in flight
   });
   const agent = agents?.find((a) => a.id === agentId);
-  // Has the agent poll resolved at least once? Before it does, `agents` is undefined and `authed`
-  // below reads false — a phantom "unauthed" frame that must NOT count as the reconnect going
-  // unauthed, or a COLD load into the wizard (a refresh / deep-link to ?wiz=reconnect, where the
-  // cockpit's cache isn't warm) sets sawUnauthed on that first frame and the wizard bounces straight
-  // back to the cockpit the instant real data (authed:true) lands (velsa, 2026-09-13).
+  // Has the agent poll resolved at least once? Before it does, every field reads empty — a phantom
+  // "not signed in" frame that must not count (a cold load into ?wiz=reconnect bounced shut, 2026-09-13).
   const agentsLoaded = agents !== undefined;
-  // The sign-in URL can reach us two ways: the LIVE agent state (healthz scrape) and the PERSISTED pod
-  // row (the gateway's push, or the reconcile's reconnect-capture). Read BOTH — whichever has it — so a
-  // gap in one path (e.g. a reconnect the live scrape lags on) still surfaces the link instead of
-  // hanging on "Getting the sign-in link…" (owner, makore.app dev, 2026-08-26).
+  const st = agent?.authState;
+  const authed = st?.state === "signed-in";
+  // The persisted pod row can carry Claude's link when the live scrape lags (makore.app dev, 2026-08-26).
   const { data: rowAuthUrl } = useQuery({
     queryKey: ["pod", slug, "authUrl"],
     queryFn: () => getPodAuthUrl(slug),
     refetchInterval: 3_000,
+    enabled: agentId !== "codex",
   });
-  const polledAuthUrl = agent?.authUrl ?? rowAuthUrl ?? null;
-  const authed = agent?.authed ?? false;
-  // The login is UNHEALTHY while it's expiring / needs re-auth (what triggers "Reconnect" in the first
-  // place). It flips healthy once the new token lands — the real "reconnect succeeded" signal, which
-  // does NOT require the agent to have gone fully unauthed.
-  const loginUnhealthy = (agent?.needsReauth ?? false) || (agent?.loginExpired ?? false);
-
-  // STICKY sign-in link. The link is scraped from the pod's `claude /login` screen, but the moment the
-  // owner APPROVES in the browser the pod advances past that screen, so the poll stops returning a URL —
-  // which used to bounce the wizard back to "Getting the sign-in link…" and HIDE the paste box right when
-  // the owner has the code in hand (velsa, 2026-09-12, "we fixed that flow 20 times"). Remember the last
-  // URL we saw and keep showing the sign-in step from it, so the paste box stays put through approval.
-  const [seenAuthUrl, setSeenAuthUrl] = useState<string | null>(null);
+  const polled = agent?.authUrl ?? (agentId !== "codex" ? rowAuthUrl ?? null : null);
+  const [sticky, setSticky] = useState<string | null>(null);
+  const { value: authUrl, ended } = signinValue(st, polled, sticky);
   useEffect(() => {
-    if (polledAuthUrl && polledAuthUrl !== seenAuthUrl) setSeenAuthUrl(polledAuthUrl);
-  }, [polledAuthUrl, seenAuthUrl]);
-  const authUrl = polledAuthUrl ?? seenAuthUrl;
+    if (ended) setSticky(null); // a dead value must never come back
+    else if (authUrl && authUrl !== sticky) setSticky(authUrl);
+  }, [authUrl, ended, sticky]);
+  const isCodex = agentId === "codex";
+  const expiresAt = st?.state === "login-pending" ? st.expiresAt : null;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isCodex || expiresAt == null) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(t);
+  }, [isCodex, expiresAt]);
+  const minsLeft = expiresAt != null ? Math.max(0, Math.ceil((expiresAt - now) / 60_000)) : null;
 
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Reconnect wipes the dead token + respawns into /login; the new authUrl then appears via the poll.
+  // Reconnect / "Get a new code": the action returns once the pod SHOWS a new value (or errors).
   const [preparing, setPreparing] = useState(mode === "reconnect");
   const didReconnect = useRef(false);
-
-  useEffect(() => {
-    if (mode !== "reconnect" || didReconnect.current) return;
-    didReconnect.current = true;
+  const freshLogin = () => {
+    setPreparing(true);
+    setError(null);
+    setSent(false);
+    setSigningIn(false);
+    setCode("");
     void reconnectAgent(slug, agentId)
       .then((r) => {
-        if (r?.error) setError(`Couldn't reconnect: ${r.error}`);
+        if (r?.error) setError(`Couldn't get a new sign-in: ${r.error}`);
       })
       .finally(() => {
         setPreparing(false);
         void queryClient.invalidateQueries({ queryKey: qk.agents(slug) });
       });
+  };
+  useEffect(() => {
+    if (mode !== "reconnect" || didReconnect.current) return;
+    didReconnect.current = true;
+    freshLogin();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Signed in → advance the flow (or, standalone, back to the cockpit). A RECONNECT starts on a
-  // STILL-authed agent (its login is only expiring, not yet dead), so closing on that initial `authed`
-  // would flash the wizard shut before the wipe even runs — the bug where "Reconnect" just bounced back
-  // to the card (owner, 2026-08-26). Only treat `authed` as "done" once we've seen the agent go unauthed
-  // first (the reconnect landed); a plain sign-in has nothing to un-auth, so it advances immediately.
-  const sawUnauthed = useRef(mode !== "reconnect");
-  // Baselines for "did the renew actually LAND?" — proof, never just "a code was typed". A still-valid
-  // expiring login is healthy the whole time, so closing on submit-alone shut the wizard before the renew
-  // completed and the cockpit still showed "expires soon · Reconnect" (velsa, podway dev, 2026-09-13).
-  // Proof is a positive change vs the wizard's opening state: the ill-health CLEARED, or the hard expiry
-  // moved FORWARD (a fresh login resets the ~30d clock).
-  const baseExpiry = useRef<number | null>(null);
-  const unhealthyEver = useRef(false);
-  const curExpiry = agent?.expiresAt ?? null;
+  // Close only on signed-in, and only after a not-signed-in frame (lib/agent-signin-flow.ts).
+  const sawNotSignedIn = useRef(mode !== "reconnect");
   useEffect(() => {
-    if (!agentsLoaded) return;
-    if (baseExpiry.current == null && curExpiry != null) baseExpiry.current = curExpiry;
-    if (loginUnhealthy) unhealthyEver.current = true;
-  }, [agentsLoaded, curExpiry, loginUnhealthy]);
-
-  useEffect(() => {
-    // Ignore the pre-first-poll frame: `authed` is a phantom false until the agent state loads, and
-    // treating it as an unauthed gap bounces a cold-loaded reconnect wizard (see agentsLoaded above).
-    if (!agentsLoaded) return;
-    if (!authed) {
-      sawUnauthed.current = true;
-      return;
-    }
-    // The close RULE lives in lib/agent-signin-flow.ts (unit-tested). Close when EITHER we saw an unauthed
-    // gap (dead-token reconnect / plain sign-in land on authed), OR the owner submitted a code AND the
-    // renewal is PROVEN — the login's ill-health cleared, or its hard expiry jumped forward. NOT on
-    // submit alone: that closed the wizard before an expiring-but-valid renew actually completed.
-    const confirmed = renewConfirmed({
-      unhealthyCleared: unhealthyEver.current && !loginUnhealthy,
-      expiryExtended: expiryExtended(baseExpiry.current, curExpiry),
-    });
-    if (shouldCloseSignin({ authed, sawUnauthed: sawUnauthed.current, sent, renewConfirmed: confirmed })) {
-      (onComplete ?? onClose)();
-    }
-  }, [agentsLoaded, authed, loginUnhealthy, curExpiry, sent, onComplete, onClose]);
+    if (!agentsLoaded || !st) return;
+    if (st.state !== "signed-in") sawNotSignedIn.current = true;
+    if (signinDone(st, sawNotSignedIn.current)) (onComplete ?? onClose)();
+  }, [agentsLoaded, st, onComplete, onClose]);
 
   // Stall recovery. A DEAD (bare-shell) agent — e.g. after `/logout`, or a crash — produces NO
   // sign-in link, and signin mode (unlike reconnect) never restarts it, so the wizard would hang on
@@ -150,7 +122,7 @@ export default function ClaudeSigninWizard({
   // menu — the same recovery reconnect uses. Fires once; the capture then surfaces the URL next poll.
   const didRecover = useRef(false);
   useEffect(() => {
-    if (authUrl || authed || signingIn || preparing || didRecover.current) return;
+    if (authUrl || authed || ended || signingIn || preparing || didRecover.current) return;
     const t = window.setTimeout(() => {
       if (didRecover.current) return;
       didRecover.current = true;
@@ -159,7 +131,7 @@ export default function ClaudeSigninWizard({
       });
     }, 8_000);
     return () => window.clearTimeout(t);
-  }, [authUrl, authed, signingIn, preparing, slug, agentId, queryClient]);
+  }, [authUrl, authed, ended, signingIn, preparing, slug, agentId, queryClient]);
 
   // Safety: if "Signing in…" never resolves (wrong code / stall), fall back to the paste box so the
   // owner can retry instead of watching a spinner forever.
@@ -226,13 +198,60 @@ export default function ClaudeSigninWizard({
             Signing in… <span className="text-muted-foreground">— returns to the cockpit when ready.</span>
           </span>
         </div>
-      ) : preparing || !authUrl ? (
+      ) : preparing ? (
+        <div className="mt-6 flex items-center gap-3 rounded-lg border border-border/60 bg-surface-1 px-4 py-3">
+          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+          <span className="text-[13.5px] text-muted-foreground">Preparing a fresh sign-in…</span>
+        </div>
+      ) : ended ? (
+        <div className="mt-6 flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3">
+          <span className="text-[13.5px] text-warning">
+            That sign-in ended before it finished. Its {isCodex ? "code" : "link"} no longer works.
+          </span>
+          <Button size="sm" className="self-start" onClick={freshLogin}>
+            Get a new {isCodex ? "code" : "link"}
+          </Button>
+        </div>
+      ) : !authUrl ? (
         <div className="mt-6 flex items-center gap-3 rounded-lg border border-border/60 bg-surface-1 px-4 py-3">
           <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
           <span className="text-[13.5px] text-muted-foreground">
-            {preparing ? "Preparing a fresh sign-in…" : `Getting ${providerLabel}'s sign-in link…`}
+            Getting {providerLabel}&rsquo;s sign-in {isCodex ? "code" : "link"}…
           </span>
         </div>
+      ) : isCodex ? (
+        <>
+          <p className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            Step 1 — copy this one-time code
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <CopyCodeButton code={authUrl} className="font-mono text-lg tracking-widest" />
+            {minsLeft != null && (
+              <span className="text-[12.5px] text-muted-foreground">
+                {minsLeft > 0 ? `Expires in ${minsLeft} min` : "Expired"}
+              </span>
+            )}
+          </div>
+          <p className="mt-5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+            Step 2 — enter it on OpenAI
+          </p>
+          <a
+            className="mt-2 flex flex-col gap-0.5 rounded-lg border border-primary/70 bg-primary/10 px-3.5 py-3 transition-shadow hover:shadow-[0_0_0_3px_rgba(47,107,255,0.18)]"
+            href="https://auth.openai.com/codex/device"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold">
+              Open the OpenAI sign-in page <ArrowUpRight className="size-4" />
+            </span>
+            <span className="text-[12.5px] text-[var(--link-accent)]">
+              Sign in, paste the code, approve. This page returns to the cockpit on its own.
+            </span>
+          </a>
+          <Button variant="ghost" size="sm" className="mt-4" onClick={freshLogin}>
+            Get a new code
+          </Button>
+        </>
       ) : (
         <>
           <p className="mt-6 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
@@ -256,6 +275,9 @@ export default function ClaudeSigninWizard({
             Step 2 — paste the code
           </p>
           <PasteCodeInput value={code} onChange={setCode} onSubmit={submit} submitted={sent} submitLabel="Connect" />
+          <Button variant="ghost" size="sm" className="mt-4" onClick={freshLogin}>
+            Get a new link
+          </Button>
         </>
       )}
     </div>

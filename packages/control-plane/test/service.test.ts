@@ -837,6 +837,19 @@ describe("podHealth (one read, many surfaces)", () => {
     expect(health.issues).toEqual(issues);
   });
 
+  it("every agent carries authState: the pod's own, or the classifier on an older image's raw fields", async () => {
+    // agent-auth-state: the web renders ONE state; a pod image that predates authState must not leave it blank.
+    const rec = await svc.launchPod("u", "nextjs-starter");
+    await svc.provisionPending();
+    provider.agentStatesResult = [
+      { id: "claude-code", window: 0, authed: false, loginExpired: true, rcActive: false },
+      { id: "codex", window: 1, authed: false, rcActive: false, authState: { state: "needs-login", reason: "login-exited" } },
+    ];
+    const agents = await svc.agentStates("u", rec.id);
+    expect(agents.find((a) => a.id === "claude-code")?.authState).toEqual({ state: "needs-login", reason: "expired" });
+    expect(agents.find((a) => a.id === "codex")?.authState).toEqual({ state: "needs-login", reason: "login-exited" });
+  });
+
   it("an asleep pod reports empty, not an error — surfaces degrade, they don't break", async () => {
     const rec = await svc.launchPod("u", "nextjs-starter");
     await svc.provisionPending();

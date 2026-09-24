@@ -28,6 +28,7 @@ import { apiGet } from "@/lib/api-fetch";
 import { Button } from "@/components/ui/button";
 import { BulkUpdateDialog, type BulkTargetImage } from "@/components/bulk-update-dialog";
 import { RefreshCw } from "lucide-react";
+import { agentNeedsReconnect, agentSignedIn } from "@/lib/pod-visual-state";
 
 /** Idle DWELL for the bulk button — a pod idle < this is skipped (a pause between turns, not
  * genuinely inactive). Must match IDLE_UPDATE_DWELL_MS in lib/actions.ts (the server re-checks). */
@@ -249,9 +250,8 @@ export default function PodCardList({
   const needReconnect = Object.values(live).filter((l) =>
     l.agents?.some(
       (a) =>
-        a.loginExpired ||
-        a.needsReauth ||
-        (a.expiresAt != null && a.expiresAt > Date.now() && a.expiresAt - Date.now() < RECONNECT_MS),
+        agentNeedsReconnect(a) ||
+        (agentSignedIn(a) && a.expiresAt != null && a.expiresAt > Date.now() && a.expiresAt - Date.now() < RECONNECT_MS),
     ),
   ).length;
 

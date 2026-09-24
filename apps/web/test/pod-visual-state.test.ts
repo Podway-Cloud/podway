@@ -108,3 +108,20 @@ describe("waiting on the owner for a secret", () => {
     expect(s.ribbon).toBe("Agent is down");
   });
 });
+
+describe("deriveState reads the classified authState (agent-auth-state) — dashboard == cockpit", () => {
+  const run = (agents: PodCardLive["agents"]) => deriveState("running", false, live({ agentStatus: "idle", agentWaitingFor: null, agents }), true);
+  it("t3tt: renewed and signed-in → no 'Sign-in expired', even with stale raw flags", () => {
+    const r = run([{ id: "claude-code", authed: true, needsReauth: true, loginExpired: true, authState: { state: "signed-in" } }]);
+    expect(r.chip?.label).not.toBe("Sign-in expired");
+    expect(r.activity?.text ?? "").not.toMatch(/sign-in|needs sign/i);
+  });
+  it("GTM: a Codex whose login ended → 'Sign-in expired' (reconnect), even though raw fields look merely unsigned", () => {
+    const r = run([{ id: "codex", authed: false, authState: { state: "needs-login", reason: "login-exited" } }]);
+    expect(r.chip?.label).toBe("Sign-in expired");
+  });
+  it("wrong-mode (setup-token, T3 off) → needs you, even though a raw mask said authed", () => {
+    const r = run([{ id: "claude-code", authed: true, authState: { state: "wrong-mode" } }]);
+    expect(r.activity?.text).toBe("Claude needs sign-in");
+  });
+});

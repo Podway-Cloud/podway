@@ -1,5 +1,7 @@
 "use server";
 
+import type { AgentAuthState } from "@podway/shared";
+
 import { revalidatePath } from "next/cache";
 import { createLogger } from "@podway/shared/log";
 import { getPostHogClient } from "./posthog-server";
@@ -104,6 +106,7 @@ export async function getAgentStates(
     rcActive: boolean;
     authUrl?: string | null;
     sessionUrl?: string | null;
+    authState?: AgentAuthState;
   }[]
 > {
   const user = await requireUser();
@@ -515,7 +518,11 @@ export async function startSetupToken(slug: string): Promise<{ authUrl: string }
 
 /** Finish the setup-token renewal: feed the approval code, store the 1-year token, switch to setup-token
  * auth, restart the agent. Never logs the token. */
-export async function completeSetupToken(slug: string, code: string): Promise<ActionResult> {
+export async function completeSetupToken(
+  slug: string,
+  code: string,
+  opts: { enableT3?: boolean } = {},
+): Promise<ActionResult> {
   const user = await requireUser();
   try {
     await getPodService().completeSetupToken(user.id, slug, code);
@@ -523,13 +530,13 @@ export async function completeSetupToken(slug: string, code: string): Promise<Ac
     log.error("setup_token_complete_failed", { userId: user.id, podId: slug, err: e });
     return { error: message(e) };
   }
-  // The 1-year token is inference-only (useless under Podway control), so a pod that just minted one is
-  // bound for T3 — start the enable HERE, server-side, so it never depends on a client hand-off (which
-  // silently dropped, stranding pods on "token minted, T3 off"). Best-effort: the token is already
-  // stored, and the cockpit's setup-token auto-enable effect is the backstop if this misses.
+  // Enable T3 HERE, server-side, only when the owner asked for it (the renew-then-T3 wizard) — never on
+  // a plain renewal: that silently turned T3 back on for an owner who had just switched it off (t3tt,
+  // agent-auth-state 3.3). Server-side so it never depends on a client hand-off, which once dropped and
+  // stranded pods on "token minted, T3 off". Best-effort: the token is already stored.
   try {
     const pod = await getPodService().getPod(user.id, slug);
-    if (!pod.t3Control && harnessEnabled("t3")) {
+    if (opts.enableT3 && !pod.t3Control && harnessEnabled("t3")) {
       const backendUrl = await t3BackendUrl(slug);
       if (backendUrl) await getPodService().startT3Enable(user.id, slug, backendUrl);
     }

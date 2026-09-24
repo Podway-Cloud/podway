@@ -63,7 +63,8 @@ async function main(): Promise<void> {
 
   const agent = readAgent();
   const mode = readPermissionMode();
-  const agentAuth = readAgentAuth();
+  // The auth mode is read FRESH at every use (agent-auth-state D6): it changes at runtime (Renew,
+  // revert-to-subscription) and a value frozen at pod-agent start booted the wrong login command.
   const sessionName = readSessionName();
   // The pod's unprivileged user owns the home volume. pod-agent runs as root
   // only to seed (podway-init above); the shell must run as `dev` so ~/.claude,
@@ -84,12 +85,12 @@ async function main(): Promise<void> {
     },
     uid: isRoot ? 1000 : undefined,
     gid: isRoot ? 1000 : undefined,
-    bootCommand: bootCommandForAgent(agent, mode, agentAuth),
+    bootCommand: bootCommandForAgent(agent, mode, readAgentAuth()),
     credential: { agent, path: credentialsPathForAgent(agent) },
     // Adding an agent to a LIVE pod (slice 3): main.ts owns the pod-spec, so it
     // builds the command. The ADDED agent joins a worked-in pod, so this is the
     // boot (resume) path — never the first-run kickoff, which would re-greet.
-    agentCommandFor: (a: string) => bootCommandForAgent(a, mode, agentAuth),
+    agentCommandFor: (a: string) => bootCommandForAgent(a, mode, readAgentAuth()),
     // The declared shape the watchdog repairs toward.
     declaredAgents: readAgents(),
     // Same name Claude uses for its RC session title, so the Codex app, the Claude
@@ -105,7 +106,9 @@ async function main(): Promise<void> {
     authedRespawn: existsSync(KICKOFF_PATH)
       ? {
           credsPath: credentialsPathForAgent(agent),
-          command: bootCommandForAgent(agent, mode, agentAuth),
+          get command() {
+            return bootCommandForAgent(agent, mode, readAgentAuth());
+          },
         }
       : undefined,
     // Greeter (claude only): enable remote control (titled with the pod's
@@ -114,7 +117,9 @@ async function main(): Promise<void> {
       agent !== "codex"
         ? {
             rcTitle: sanitizeSessionName(sessionName),
-            agentAuth,
+            get agentAuth() {
+              return readAgentAuth();
+            },
             kickoffTrigger: existsSync(KICKOFF_PATH) ? KICKOFF_TRIGGER : undefined,
             // Cold restart of an already-greeted pod: nudge the resumed agent so it orients instead of
             // sitting silent in a seemingly-empty session (when the restart was an OOM, the nudge leads
@@ -140,7 +145,7 @@ async function main(): Promise<void> {
   if (extraAgents.length > 0) {
     const { spawnAgentWindow } = await import("./signals.js");
     for (const a of extraAgents) {
-      spawnAgentWindow("main", a, bootCommandForAgent(a, mode, agentAuth), {
+      spawnAgentWindow("main", a, bootCommandForAgent(a, mode, readAgentAuth()), {
         uid: isRoot ? 1000 : undefined,
         gid: isRoot ? 1000 : undefined,
       })
