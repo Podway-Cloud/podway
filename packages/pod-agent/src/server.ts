@@ -3400,6 +3400,8 @@ export class AgentServer {
       this.log.info("codex_rc_start", { reason });
       execFile(
         CODEX_STANDALONE,
+        // Permissions come from init.sh's persisted Codex defaults. The managed
+        // daemon in Codex 0.155.1 drops -c overrides; TUI bypass flags don't reach it.
         ["remote-control", "start"],
         { env, uid: this.tmuxUid, gid: this.tmuxGid },
         (err, stdout) => {

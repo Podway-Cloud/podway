@@ -52,7 +52,7 @@ test.describe("access gating", () => {
     const requestPromise = page.waitForRequest((request) =>
       request.url().includes("/api/auth/sign-in/social"),
     );
-    const button = page.locator('form button[type="submit"]');
+    const button = page.getByRole("button", { name: /GitHub/ });
     await button.focus();
     await page.keyboard.press("Enter");
     const request = await requestPromise;

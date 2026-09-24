@@ -160,10 +160,12 @@ if os.path.exists(p):
     except Exception:
         raise SystemExit(0)          # unreadable: leave it alone
 present = set()
+config = {}
 if text.strip():
     try:
         import tomllib
-        projects = tomllib.loads(text).get("projects", {})
+        config = tomllib.loads(text)
+        projects = config.get("projects", {})
         if isinstance(projects, dict):
             present = set(projects.keys())
     except Exception:
@@ -180,7 +182,16 @@ for path in TRUST:
 # PREPENDED, not appended: a bare key written after a [table] header belongs to
 # that table, so appending it would have set projects."/home/dev".
 # check_for_update_on_startup — silently the wrong key (caught by the test below).
-prefix = "" if "check_for_update_on_startup" in text else "check_for_update_on_startup = false\n"
+# TUI launch flags do NOT reach the separate remote-control app-server. Give
+# every Codex entry point the same unattended pod defaults. The pod itself is
+# the isolation boundary; workspace-write's nested bwrap can fail before even
+# a read command runs. Preserve explicit owner settings and unrelated TOML.
+defaults = {
+    "check_for_update_on_startup": "false",
+    "approval_policy": '"never"',
+    "sandbox_mode": '"danger-full-access"',
+}
+prefix = "".join(f"{key} = {value}\n" for key, value in defaults.items() if key not in config)
 if add or prefix:
     body = (text.rstrip("\n") + "\n" + add) if text.strip() else add.lstrip("\n")
     new = prefix + body
@@ -190,7 +201,7 @@ if add or prefix:
     with os.fdopen(fd, "w") as f:
         f.write(new)
     os.replace(tmp, p)
-    print("init: seeded codex directory trust")
+    print("init: seeded codex pod defaults and directory trust")
 PY
 # <<< podway:codex-config-seed
 chown dev:dev /home/dev/.codex /home/dev/.codex/config.toml 2>/dev/null || true

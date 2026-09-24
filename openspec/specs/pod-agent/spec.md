@@ -134,8 +134,20 @@ persistent session. On subsequent connections it SHALL boot straight into the ag
 - **AND** the gate on outbound actions SHALL be the loaded instruction rule (confirm in chat before
   anything leaves the pod), consistent with the containment security model where the disposable pod
   is the blast radius
-- **AND** an approval policy that merely suppresses the prompt without permitting escalation SHALL
-  NOT be used, since legitimate work outside the workspace would then fail silently instead of asking
+- **AND** disabling approval prompts while retaining a restrictive workspace sandbox SHALL NOT be used,
+  since legitimate work outside the workspace would then fail without a way to escalate
+
+#### Scenario: Codex remote-control sessions receive the same pod permissions as terminal sessions
+
+- **WHEN** the pod-agent or `podway doctor --fix` starts the separate Codex remote-control daemon
+- **THEN** it SHALL inherit the persisted pod defaults `approval_policy = "never"` and
+  `sandbox_mode = "danger-full-access"` seeded at boot; terminal launch flags alone do not configure
+  that daemon, and the managed daemon may discard launcher command-line overrides
+- **AND** routine commands SHALL execute without a nested workspace sandbox or a command approval prompt
+- **AND** the loaded confirm-before-outbound instruction SHALL continue to govern publishing and other
+  external side effects
+- **AND** an already running daemon SHALL not be restarted just to apply defaults or invalidate pairing;
+  explicitly selected owner config/client/thread permission overrides remain under the owner's control
 
 ### Requirement: The auto dev server targets a web app on the preview port, and is skipped for projects that do not serve one
 
@@ -1239,4 +1251,3 @@ of a stuck RC attempt.
 - **WHEN** an update is requested for a pod whose agent login is expired
 - **THEN** the update's handoff and shutdown proceed within their bounded timeouts and are not held
   open by a remote-control attempt that cannot succeed
-

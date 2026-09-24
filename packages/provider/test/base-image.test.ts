@@ -214,6 +214,8 @@ describe("pod-base runtime-literacy layer", () => {
         const cfg = await runSeed(dir);
         expect(cfg.projects["/home/dev/work"].trust_level).toBe("trusted");
         expect(cfg.projects["/home/dev"].trust_level).toBe("trusted");
+        expect(cfg.approval_policy).toBe("never");
+        expect(cfg.sandbox_mode).toBe("danger-full-access");
       } finally {
         await fs.rm(dir, { recursive: true, force: true });
       }
@@ -224,6 +226,8 @@ describe("pod-base runtime-literacy layer", () => {
       try {
         const cfg = await runSeed(dir, '[tui]\ntheme = "dark"\n');
         expect(cfg.tui.theme).toBe("dark"); // codex's own setting untouched
+        expect(cfg.approval_policy).toBe("never");
+        expect(cfg.sandbox_mode).toBe("danger-full-access");
         expect(cfg.projects["/home/dev/work"].trust_level).toBe("trusted");
         expect(cfg.projects["/home/dev"].trust_level).toBe("trusted");
       } finally {
@@ -238,6 +242,32 @@ describe("pod-base runtime-literacy layer", () => {
         const cfg = await runSeed(dir, '[projects."/home/dev/work"]\ntrust_level = "untrusted"\n');
         expect(cfg.projects["/home/dev/work"].trust_level).toBe("untrusted"); // respected
         expect(cfg.projects["/home/dev"].trust_level).toBe("trusted"); // fallback still added
+      } finally {
+        await fs.rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("preserves explicit permission settings and is idempotent", async () => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "podway-codex-"));
+      try {
+        const cfg = await runSeed(dir, 'approval_policy = "on-request"\nsandbox_mode = "read-only"\n');
+        expect(cfg.approval_policy).toBe("on-request");
+        expect(cfg.sandbox_mode).toBe("read-only");
+        const text = await fs.readFile(path.join(dir, "config.toml"), "utf8");
+        expect(await runSeed(dir, text)).toEqual(cfg);
+        expect(await fs.readFile(path.join(dir, "config.toml"), "utf8")).toBe(text);
+      } finally {
+        await fs.rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("seeds root defaults even when similarly named keys exist in a profile", async () => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "podway-codex-"));
+      try {
+        const cfg = await runSeed(dir, '[profiles.review]\napproval_policy = "on-request"\nsandbox_mode = "read-only"\n');
+        expect(cfg.approval_policy).toBe("never");
+        expect(cfg.sandbox_mode).toBe("danger-full-access");
+        expect(cfg.profiles.review.sandbox_mode).toBe("read-only");
       } finally {
         await fs.rm(dir, { recursive: true, force: true });
       }

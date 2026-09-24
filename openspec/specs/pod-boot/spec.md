@@ -681,6 +681,17 @@ so an explicit decline is respected.
 - **WHEN** a project path is already present as `untrusted`
 - **THEN** the seed leaves that path unchanged
 
+#### Scenario: Codex has unattended pod defaults across entry points
+
+- **WHEN** first-boot setup creates or repairs Codex's configuration
+- **THEN** missing root-level `approval_policy` and `sandbox_mode` settings SHALL default to `"never"`
+  and `"danger-full-access"`, respectively, for both cloud and self-host pods
+- **AND** settings SHALL be written at the TOML root, even if a project or profile table already exists
+- **AND** existing explicit values, profiles, unrelated settings, and invalid/unreadable files SHALL be
+  preserved; repeating the seed SHALL not duplicate or rewrite existing settings
+- **AND** remote-control daemon starts, including doctor recovery, SHALL receive these persisted defaults
+  without relying on a terminal flag or daemon launcher override reaching the separate server process
+
 ### Requirement: A Codex pod receives its environment's skills
 
 An environment ships skills in Claude shape (`.claude/skills/<name>/SKILL.md` plus support
