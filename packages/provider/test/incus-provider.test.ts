@@ -48,6 +48,7 @@ function fakeIncus() {
   let alreadyStoppedOnForce = false;
   const instances = new Map<string, IncusInstance>();
   const volumes = new Set<string>();
+  const filesystemVolumes = new Set<string>(); // LEGACY 9p/virtiofs homes (pre block-volume pods)
   const volumeSizes = new Map<string, number>();
   const calls: string[] = [];
   const pushed: { path: string; instance: string }[] = [];
@@ -126,7 +127,13 @@ function fakeIncus() {
       volumeSizes.set(name, sizeGb);
     },
     async getVolume(_pool: string, name: string) {
-      return volumes.has(name) ? { name, config: { size: `${volumeSizes.get(name) ?? 0}GiB` } } : null;
+      return volumes.has(name)
+        ? {
+            name,
+            config: { size: `${volumeSizes.get(name) ?? 0}GiB` },
+            ...(filesystemVolumes.has(name) ? { content_type: "filesystem" } : {}),
+          }
+        : null;
     },
     async deleteVolume(_pool: string, name: string) {
       calls.push(`delete-volume:${name}`);
@@ -145,6 +152,7 @@ function fakeIncus() {
     api,
     instances,
     volumes,
+    filesystemVolumes,
     volumeSizes,
     calls,
     pushed,
@@ -369,6 +377,40 @@ describe("IncusProvider", () => {
     expect(inst.config["limits.cpu"]).toBe("8");
     expect(inst.config["limits.memory"]).toBe("16GiB");
     expect(info.status).toBe("running");
+  });
+
+  describe("guest memory is private so KSM can merge it (ksm-private-guest-memory)", () => {
+    const PRIVATE = /\[object "mem0"\]\s*\n\s*share = "off"/;
+    it("createPod sets share=off for mem0", async () => {
+      const f = fakeIncus();
+      await mkProvider(f).createPod(input("pod-a"));
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toMatch(PRIVATE);
+    });
+    it("updateImage keeps it on the recreated instance (existing pods migrate on Update)", async () => {
+      const f = fakeIncus();
+      const p = mkProvider(f);
+      await p.createPod(input("pod-a"));
+      delete f.instances.get("pod-a")!.config["raw.qemu.conf"]; // an OLD pod, created before this change
+      await p.updateImage("pod-a", "pod-base-v2");
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toMatch(PRIVATE);
+    });
+    it("resize sets it too", async () => {
+      const f = fakeIncus();
+      const p = mkProvider(f);
+      await p.createPod(input("pod-a"));
+      delete f.instances.get("pod-a")!.config["raw.qemu.conf"];
+      await p.resize("pod-a", { cpus: 2, memoryGb: 4, diskGb: 20 });
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toMatch(PRIVATE);
+    });
+    it("NOT for a legacy filesystem home — its virtiofs/9p share needs shared guest memory", async () => {
+      const f = fakeIncus();
+      const p = mkProvider(f);
+      await p.createPod(input("pod-a"));
+      f.filesystemVolumes.add("pod-a-home");
+      delete f.instances.get("pod-a")!.config["raw.qemu.conf"];
+      await p.updateImage("pod-a", "pod-base-v2");
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBeUndefined();
+    });
   });
 
   it("adds the swap reserve on top of the disk quota, and keeps the volume grow-only", async () => {

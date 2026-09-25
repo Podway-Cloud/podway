@@ -228,6 +228,15 @@ describe("pidfileState", () => {
     expect(pidfileState("/p/none.pid", read, alive)).toBe("never-ran");
   });
 
+  it("a pidfile from a PREVIOUS boot is never 'alive' — its pid was reused (makore.app prod, 2026-09-25)", () => {
+    // prod-tunnel's pidfile said 3160; after the restart pid 3160 was some OTHER process, so the
+    // tunnel read 'alive', was never launched, and the site served 530s until a human restarted it.
+    const read = files({ "/p/tunnel.pid": "4242\n" });
+    const fromOldBoot = () => true;
+    expect(pidfileState("/p/tunnel.pid", read, alive, fromOldBoot)).toBe("never-ran"); // boot owns the launch
+    expect(pidfileState("/p/tunnel.pid", read, alive, () => false)).toBe("alive");
+  });
+
   it("treats a corrupt pidfile as dead (it ran; we lost the pid)", () => {
     const read = files({ "/p/garbage.pid": "not-a-pid", "/p/one.pid": "1" });
     expect(pidfileState("/p/garbage.pid", read, alive)).toBe("dead");

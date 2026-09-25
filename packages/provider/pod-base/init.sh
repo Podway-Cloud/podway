@@ -653,6 +653,18 @@ chown dev:dev "$WORK" /home/dev/.claude 2>/dev/null || true
 # non-fatal, and NOT marker-guarded — the process doesn't survive sleep/wake, so
 # it must be re-run on EVERY boot (called after the postgres block for wake, and
 # from the background setup phase after the first-boot source copy).
+# >>> podway:pid-alive
+# A pidfile counts only if it was written THIS boot: after a restart its pid is reused by some other
+# process, so `kill -0` answers for the wrong one — makore.app prod's tunnel read "running", was never
+# launched, and the site served 530s (2026-09-25). PB_PROC_STAT is a test seam.
+pb_pid_alive() {
+  local f="$1" bt
+  [ -f "$f" ] || return 1
+  bt=$(awk '/^btime /{print $2}' "${PB_PROC_STAT:-/proc/stat}" 2>/dev/null)
+  if [ -n "$bt" ] && [ "$(stat -c %Y "$f" 2>/dev/null || echo 0)" -lt "$bt" ]; then return 1; fi
+  kill -0 "$(cat "$f" 2>/dev/null)" 2>/dev/null
+}
+# <<< podway:pid-alive
 DEV_PIDFILE=/home/dev/.podway-dev.pid
 DEV_LOG=/home/dev/.podway-dev.log
 start_dev_server() {
@@ -665,7 +677,7 @@ start_dev_server() {
     return 0
   fi
   su dev -c "jq -e '.scripts.dev // empty' '$WORK/package.json'" >/dev/null 2>&1 || return 0
-  if [ -f "$DEV_PIDFILE" ] && kill -0 "$(cat "$DEV_PIDFILE" 2>/dev/null)" 2>/dev/null; then return 0; fi
+  if pb_pid_alive "$DEV_PIDFILE"; then return 0; fi
   curl -sf -o /dev/null --max-time 1 http://localhost:3000 2>/dev/null && return 0
   echo "podway: starting dev server (pnpm dev) on :3000"
   su - dev -c "cd '$WORK' && nohup pnpm dev >> '$DEV_LOG' 2>&1 & echo \$! > '$DEV_PIDFILE'" \
@@ -694,10 +706,11 @@ run_startup_commands() {
     [ -n "$slug" ] || continue
     pidfile="$STARTUP_DIR/$slug.pid"
     logfile="$STARTUP_DIR/$slug.log"
-    if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile" 2>/dev/null)" 2>/dev/null; then continue; fi
+    if pb_pid_alive "$pidfile"; then continue; fi
     echo "podway: starting declared startup command '$slug'"
     su - dev -c "cd '$WORK' && nohup bash -lc '$cmd' >> '$logfile' 2>&1 & echo \$! > '$pidfile'" \
       || echo "podway: startup command '$slug' FAILED to launch"
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) [podway] '$slug' started at boot (pid $(cat "$pidfile" 2>/dev/null))" >> "$logfile" 2>/dev/null || true
     chown dev:dev "$pidfile" "$logfile" 2>/dev/null || true
   done < <(su dev -c "jq -r '.commands[]? | select(.enabled != false and (.command // \"\") != \"\") | [(.slug // \"cmd\"), .command] | @tsv' '$STARTUP_JSON'" 2>/dev/null)
 }

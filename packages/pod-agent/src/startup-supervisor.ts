@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 /**
@@ -228,6 +228,7 @@ export function pidfileState(
   pidfile: string,
   readFile: (p: string) => string = (p) => readFileSync(p, "utf8"),
   signal0: (pid: number) => void = (pid) => process.kill(pid, 0),
+  fromPreviousBoot: (p: string) => boolean = pidfileFromPreviousBoot,
 ): "alive" | "dead" | "never-ran" {
   let raw: string;
   try {
@@ -235,6 +236,10 @@ export function pidfileState(
   } catch {
     return "never-ran";
   }
+  // A pidfile written before this boot names a pid the kernel has since REUSED — `kill -0` on it
+  // answers for some other process (makore.app prod's tunnel read "alive" and never launched,
+  // 2026-09-25). This boot has not started it yet: boot owns that launch.
+  if (fromPreviousBoot(pidfile)) return "never-ran";
   const pid = Number.parseInt(raw.trim(), 10);
   if (!Number.isFinite(pid) || pid <= 1) return "dead"; // corrupt pidfile = not running
   try {
@@ -318,4 +323,25 @@ export function leadingCdPath(command: string): string | null {
   const path = m[2] ?? m[3] ?? m[1];
   if (!path || /[$`*?~]|\\\$/.test(path)) return null; // unexpanded — don't guess
   return path.startsWith("/") ? path : null; // relative to an unknown cwd — can't check it
+}
+
+/** Boot time (ms) from /proc/stat `btime`; null when unreadable (non-Linux, tests). */
+function bootTimeMs(): number | null {
+  try {
+    const m = /^btime (\d+)$/m.exec(readFileSync("/proc/stat", "utf8"));
+    return m ? Number(m[1]) * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Was this pidfile last written before the current boot? Unknown → false (keep the old behaviour). */
+export function pidfileFromPreviousBoot(p: string): boolean {
+  const boot = bootTimeMs();
+  if (boot == null) return false;
+  try {
+    return statSync(p).mtimeMs < boot;
+  } catch {
+    return false;
+  }
 }

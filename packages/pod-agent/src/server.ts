@@ -1835,7 +1835,8 @@ export class AgentServer {
    * it sees what the supervisor did — the visibility first10 was missing. Best-effort. */
   private appendStartupLog(p: StartupProcess, line: string): void {
     try {
-      appendFileSync(p.logfile, `${line}\n`);
+      // Timestamped: without it a boot-time start was indistinguishable from a stale line (makore.app).
+      appendFileSync(p.logfile, `${new Date().toISOString()} ${line}\n`);
     } catch {
       /* logfile not writable yet — non-fatal */
     }

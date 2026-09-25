@@ -900,6 +900,15 @@ treated as unknown rather than guessed.
   a glob, or a relative path)
 - **THEN** the pod SHALL NOT claim the directory is missing
 
+#### Scenario: A pidfile from a previous boot never counts as running
+
+- **WHEN** a pod restarts and a startup command's pidfile names a pid the kernel has since reused
+- **THEN** boot, the supervisor, and `podway startup list` SHALL treat that command as NOT running (a
+  pidfile counts only if written this boot), so boot launches it — makore.app prod's tunnel read
+  "on", never launched, and the site served 530s (2026-09-25)
+- **AND** `podway startup list` SHALL show each command's process state (running / NOT RUNNING / off),
+  and every startup log line SHALL carry an ISO timestamp
+
 ### Requirement: The agent is never left silently stuck at a known menu
 
 The pod SHALL continuously ensure the Claude agent is not wedged at one of its known interactive

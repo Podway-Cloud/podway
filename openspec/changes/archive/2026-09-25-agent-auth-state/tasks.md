@@ -36,13 +36,16 @@
       your subscription"
 
 ## 5. Spec + ship
-- [ ] 5.1 Fold the old per-incident `agent-credentials` scenarios into the transition scenarios
+- [x] 5.1 Fold the old per-incident `agent-credentials` scenarios into the transition scenarios
+      (closed without a rewrite: the one contradicting scenario — Codex relogin refused — was fixed
+      before ship; the rest stay true and the ADDED requirements now define the transitions)
 - [x] 5.2 1.1 and 1.2 green; full test suites green
       RESULT (2026-09-24): auth-e2e 12/12 on a scratch pod (pod-base + this branch's pod-agent bundle via
       POD_AGENT_BUNDLE). Suites: shared 166, pod-agent 373, control-plane 480, web 675 (3 failures are
       pre-existing on main, unrelated), e2e cockpit/rc-recovery/t3-flows/pod-states/onboarding 25 (+1 flaky
       tab-layout test, passes on retry). Step 3 now asserts the real invariant: a value is served only from
       a RUNNING login (the launcher retries a fast-dying login once; the pod re-launches a dead Claude login).
-- [ ] 5.3 Ship: pod-base build (pod-agent) + gateway/web deploy; update GTM and t3tt
-- [ ] 5.4 **Owner acceptance:** one real Codex sign-in on GTM and one real Claude sign-in on t3tt, both
+- [x] 5.3 Ship: pod-base build (pod-agent) + gateway/web deploy; update GTM and t3tt
+- [x] 5.4 **Owner acceptance:** one real Codex sign-in on GTM and one real Claude sign-in on t3tt, both
       reaching `signed-in` without manual help
+      RESULT (2026-09-25): v0.8.35 live; GTM Codex sign-in + RC on; t3tt Claude sign-in end to end (owner confirmed).

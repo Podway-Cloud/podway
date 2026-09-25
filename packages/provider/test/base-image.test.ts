@@ -711,6 +711,31 @@ describe("pod-base runtime-literacy layer", () => {
     });
   });
 
+  describe("pb_pid_alive — a pidfile from a previous boot never counts (makore.app prod tunnel)", () => {
+    it("live pid + pidfile older than boot → NOT alive; written this boot → alive", async () => {
+      const src = await fs.readFile(initSh, "utf8");
+      const block = src.split(">>> podway:pid-alive")[1]?.split("<<< podway:pid-alive")[0];
+      expect(block, "sentinel-delimited pid-alive block must exist").toBeTruthy();
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "podway-pid-"));
+      try {
+        const pidfile = path.join(dir, "tunnel.pid");
+        await fs.writeFile(pidfile, `${process.pid}\n`); // a LIVE pid, like a reused one after reboot
+        const now = Math.floor(Date.now() / 1000);
+        const stat = path.join(dir, "stat");
+        const check = async (btime: number) => {
+          await fs.writeFile(stat, `cpu 1 2 3\nbtime ${btime}\n`);
+          const script = `${block.slice(block.indexOf("\n") + 1)}\npb_pid_alive "${pidfile}" && echo ALIVE || echo NOT`;
+          return execFileSync("bash", ["-c", script], { env: { ...process.env, PB_PROC_STAT: stat } }).toString().trim();
+        };
+        await fs.utimes(pidfile, now - 3600, now - 3600); // written an hour ago
+        expect(await check(now - 60)).toBe("NOT"); // booted a minute ago → stale pidfile
+        expect(await check(now - 7200)).toBe("ALIVE"); // booted two hours ago → this boot's pidfile
+      } finally {
+        await fs.rm(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe("guest hostname from the pod name", () => {
     async function sanitize(name: string): Promise<string> {
       const src = await fs.readFile(initSh, "utf8");

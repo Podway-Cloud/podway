@@ -312,6 +312,14 @@ export class IncusProvider implements SandboxProvider {
    * block custom volume. LEGACY pods created before the 9p→block switch have a
    * `filesystem` volume, which REQUIRES a path (the 9p share mountpoint); detect
    * that so recreating an old pod (updateImage) still works. */
+  /** Private guest RAM so the host's KSM can merge identical pages across pods (ksm-private-guest-memory).
+   * Incus's default `mem0` is a SHARED memfd, which KSM never scans: it merged ~130MB across 17 VMs;
+   * private memory measured ~35% of pod RAM (2026-09-25). Only for a BLOCK home — a legacy filesystem
+   * home is a virtiofs/9p share, and that needs shared guest memory. */
+  private guestMemoryConfig(home: Record<string, string>): Record<string, string> {
+    return home.path ? {} : { "raw.qemu.conf": '[object "mem0"]\nshare = "off"\n' };
+  }
+
   private async homeDevice(id: string): Promise<Record<string, string>> {
     const vol = await this.incus.getVolume(this.config.pool, this.homeVolume(id));
     const base = { type: "disk", pool: this.config.pool, source: this.homeVolume(id) };
@@ -339,6 +347,7 @@ export class IncusProvider implements SandboxProvider {
           diskGb + swapReserveGb(memoryGb),
         );
       }
+      const home = await this.homeDevice(input.id);
       await this.incus.createInstance({
         name: input.id,
         imageAlias: this.config.imageAlias,
@@ -348,13 +357,14 @@ export class IncusProvider implements SandboxProvider {
           // user.* keys are free-form metadata (keepAwake + our configure marker).
           "user.podway.owner": input.owner,
           "user.podway.keep_awake": "false",
+          ...this.guestMemoryConfig(home),
         },
         devices: {
           // Block volume — NO `path` (Incus forbids a path on a block custom
           // volume). It attaches as a raw device; podway-home-mount.service in the
           // guest formats ext4 (first boot) + mounts it at /home/dev before the
           // agent. This replaces the old 9p filesystem share (broken POSIX).
-          home: await this.homeDevice(input.id),
+          home,
         },
       });
       await input.onMachineCreated?.(input.id); // machineId == instance name on Incus
@@ -559,6 +569,7 @@ export class IncusProvider implements SandboxProvider {
       config: {
         "limits.cpu": String(resources.cpus),
         "limits.memory": `${resources.memoryGb}GiB`,
+        ...this.guestMemoryConfig(await this.homeDevice(id)),
       },
     });
     // Grow-only. The swap reserve tracks RAM, so a RAM-DOWN resize computes a smaller target — but
@@ -665,6 +676,7 @@ export class IncusProvider implements SandboxProvider {
     if (wasRunning) await this.stopForMaintenance(id, "update");
     await this.incus.deleteInstance(id);
     stage("recreating");
+    const home = await this.homeDevice(id);
     await this.incus.createInstance({
       name: id,
       imageAlias: sourceAlias,
@@ -673,11 +685,12 @@ export class IncusProvider implements SandboxProvider {
         "limits.memory": memory,
         "user.podway.owner": owner,
         "user.podway.keep_awake": keepAwake ? "true" : "false",
+        ...this.guestMemoryConfig(home),
       },
       devices: {
         // Same home volume, re-attached. homeDevice() picks block (no path) vs a
         // legacy filesystem volume (path) so recreating an OLD pod still works.
-        home: await this.homeDevice(id),
+        home,
       },
     });
     // Suspended pods stay stopped — "applies on next start", same as Fly.

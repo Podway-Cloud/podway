@@ -585,6 +585,15 @@ cmd_schedule() {
 # relaunches on every boot (see run_startup_commands). This is the durable answer to
 # "keep this server running" — a bare `nohup &` dies on the next restart.
 STARTUP_JSON=${PODWAY_STARTUP_JSON:-$HOME/.podway/startup.json}
+STARTUP_DIR=$(dirname "$STARTUP_JSON")/startup
+# Running THIS boot? A pidfile from a previous boot names a reused pid (see init.sh pb_pid_alive).
+_startup_running() {
+  local f="$STARTUP_DIR/$1.pid" bt
+  [ -f "$f" ] || return 1
+  bt=$(awk '/^btime /{print $2}' "${PB_PROC_STAT:-/proc/stat}" 2>/dev/null)
+  if [ -n "$bt" ] && [ "$(stat -c %Y "$f" 2>/dev/null || echo 0)" -lt "$bt" ]; then return 1; fi
+  kill -0 "$(cat "$f" 2>/dev/null)" 2>/dev/null
+}
 
 startup_ensure() {
   mkdir -p "$(dirname "$STARTUP_JSON")"
@@ -610,7 +619,15 @@ cmd_startup_list() {
     [ -n "$devout" ] || echo "no startup commands (add one: podway startup add --do \"…\")"
     return 0
   fi
-  jq -r '.commands[] | "\(if .enabled==false then "off" else "on " end)  \(.slug)\(if .port then " :\(.port)" else "" end)\t\(.command)"' "$STARTUP_JSON"
+  # PROCESS state, not registry state: "on" for a process that never launched hid a dead tunnel on
+  # makore.app prod (2026-09-25).
+  local en slug port cmd state
+  while IFS=$'\x1f' read -r en slug port cmd; do  # \x1f, not tab: read collapses empty tab fields
+    if [ "$en" = "off" ]; then state="off        "
+    elif _startup_running "$slug"; then state="running    "
+    else state="NOT RUNNING"; fi
+    printf '%s  %s%s\t%s\n' "$state" "$slug" "$port" "$cmd"
+  done < <(jq -r '.commands[] | [(if .enabled==false then "off" else "on" end), .slug, (if .port then " :\(.port)" else "" end), .command] | join("\u001f")' "$STARTUP_JSON")
   echo "  reload one on the latest code with: podway startup restart <slug>  (do NOT hand-kill it — the watchdog races you)"
 }
 
