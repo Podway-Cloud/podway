@@ -44,6 +44,7 @@ function sample(id: string, ownerId: string, over: Partial<PodRecord> = {}): Pod
     relentlessWake: false,
     // Non-payment safety-net marker (migration 0062).
     nonpaymentSuspendedAt: "2026-01-02T03:04:05.000Z",
+    claudeLoginExpiresAt: "2026-02-03T04:05:06.000Z",
     updatingSince: "2026-01-02T03:04:05.000Z",
     updateQueuedSince: "2026-01-02T02:00:00.000Z",
     maintenanceKind: "resize" as const,

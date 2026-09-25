@@ -442,6 +442,20 @@
       "when": 1788400800000,
       "tag": "0062_billing_delinquencies",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1788487200000,
+      "tag": "0063_login_expiry_reminders",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1788573600000,
+      "tag": "0064_pod_bug_reports",
+      "breakpoints": true
     }
   ]
 }

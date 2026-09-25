@@ -1,5 +1,7 @@
 import http from "node:http";
-import { existsSync, copyFileSync, chmodSync, appendFileSync, statSync, readFileSync, writeFileSync, rmSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, copyFileSync, chmodSync, chownSync, appendFileSync, statSync, readFileSync, writeFileSync, rmSync, mkdirSync, readdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { dirname as pathDirname } from "node:path";
 import { execFile, execFileSync } from "node:child_process";
 import { OomWatcher } from "./oom-watcher.js";
 import { parseOomKillCount } from "./oom-cgroup.js";
@@ -44,6 +46,7 @@ import { recoverContextOverflow, type RecoveryState } from "./context-recovery.j
 import type { RcState } from "@podway/shared/protocol";
 import { classifyRcState, isOrphanedRcYield, shouldAttemptRcRestore } from "./rc-state.js";
 import { parseLoginPane, nextLoginAttempt, type LoginAttempt } from "./login-capture.js";
+import { buildReport, ReportLimiter, REPORTS_OUTBOX, secretValuesFrom, type ReportInput } from "./bug-report.js";
 import { credentialsPathForAgent, sanitizeSessionName, podNameFromSpec, loginCommandFor, RESERVED_ANTHROPIC_KEY, RESERVED_CLAUDE_OAUTH_TOKEN } from "./boot.js";
 import { shouldRepair, pruneHistory, isCapped, recoveryDue, type RepairAttempt } from "./repair-policy.js";
 import {
@@ -444,6 +447,10 @@ export class AgentServer {
    * be killed and the CLI restarted, or the pane sits forever on "Login successful.
    * Press Enter to continue…" — the exact state the primary path was built to avoid. */
   private readonly loginRespawned = new Set<string>();
+  /** pod-bug-reports: one budget for manual + automatic reports; auto ones also once per key per 6h. */
+  private readonly reportLimiter = new ReportLimiter(5, 3_600_000);
+  private readonly autoReported = new Map<string, number>();
+  private codexRcFailStreak = 0;
   private readonly log: Logger;
   /** tmux queries must run as the uid that owns the session's tmux server. */
   private readonly tmuxUid?: number;
@@ -1088,6 +1095,25 @@ export class AgentServer {
       //
       // Honest failure is the point: every refusal below names a reason the CALLER can act on, so
       // control-plane falls back to the kill-and-respawn path rather than reporting a false ok.
+      // `podway bug` (pod-bug-reports): file a platform bug with a scrubbed diagnostic bundle into the
+      // reports outbox the control plane drains. Rate-limited with the automatic reports.
+      if (req.method === "POST" && req.url === "/bug-report") {
+        const reply = (code: number, body: Record<string, unknown>) => {
+          res.writeHead(code, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(body));
+        };
+        void (async () => {
+          try {
+            const b = JSON.parse((await readBounded(req)) || "{}") as { summary?: string; area?: string; detail?: string };
+            if (!b.summary?.trim()) return reply(400, { ok: false, reason: "summary required" });
+            const r = await this.fileReport({ summary: b.summary, area: b.area ?? "other", detail: b.detail, source: "agent" });
+            reply(r.ok ? 200 : 429, r);
+          } catch (e) {
+            reply(500, { ok: false, reason: String(e) });
+          }
+        })();
+        return;
+      }
       if (req.method === "POST" && req.url === "/agent/relogin") {
         void (async () => {
           const reply = (code: number, body: Record<string, unknown>) => {
@@ -1757,6 +1783,7 @@ export class AgentServer {
             this.cappedTargets.add(target);
             this.log.error("watchdog_gave_up", { target, reason: "process_dead" });
             this.appendStartupLog(p, `[podway] ${p.slug} kept failing — backing off; podway retries it automatically. Force it now with 'podway startup restart ${p.slug}'.`);
+            void this.autoReport(`startup:${p.slug}`, "startup", `startup entry '${p.slug}' keeps failing`, "");
           }
           continue;
         }
@@ -3500,8 +3527,14 @@ export class AgentServer {
         ["remote-control", "start"],
         { env, uid: this.tmuxUid, gid: this.tmuxGid },
         (err, stdout) => {
-          if (err) this.log.warn("codex_rc_start_failed", { err: String(err) });
-          else this.log.info("codex_rc_started", { out: String(stdout).trim().slice(0, 200) });
+          if (err) {
+            this.log.warn("codex_rc_start_failed", { err: String(err) });
+            if (++this.codexRcFailStreak === 10)
+              void this.autoReport("rc-start", "rc", "Codex remote control keeps failing to start", String(err));
+          } else {
+            this.codexRcFailStreak = 0;
+            this.log.info("codex_rc_started", { out: String(stdout).trim().slice(0, 200) });
+          }
         },
       );
     });
@@ -3655,6 +3688,56 @@ export class AgentServer {
   /** Current idle in ms (for the control plane / tests). */
   idleMs(): number {
     return this.session.idleMs();
+  }
+
+  /** Collect + scrub + append one report to the outbox (pod-bug-reports). Best-effort collectors. */
+  private async fileReport(input: ReportInput): Promise<{ ok: boolean; reason?: string }> {
+    if (!this.reportLimiter.allow()) return { ok: false, reason: "rate-limited (5 per hour)" };
+    // `asDev`: the owner-facing CLI (doctor, startup) runs as the pod user, as an agent would. The system
+    // journal is root-only (a real pod: dev got "No entries"), so logs run as the pod-agent itself.
+    const run = (cmd: string, asDev = true) =>
+      new Promise<string>((resolve) =>
+        execFile(
+          "bash",
+          ["-lc", cmd],
+          { ...(asDev ? { uid: this.tmuxUid, gid: this.tmuxGid } : {}), timeout: 20_000, env: { ...process.env, HOME: "/home/dev" } },
+          (_e, out, errOut) => resolve(`${String(out)}${String(errOut)}`.slice(-40_000)),
+        ),
+      );
+    const [doctor, startup, logs, system] = await Promise.all([
+      run("podway doctor --json 2>&1"),
+      run("podway startup list 2>&1"),
+      run("journalctl -u podway-agent -n 200 --no-pager 2>&1", false),
+      run("df -h /home/dev 2>&1; free -m 2>&1; uptime 2>&1; cat /etc/podway/image-version 2>/dev/null"),
+    ]);
+    let secrets: string[] = [];
+    try {
+      secrets = secretValuesFrom(readFileSync(process.env.PODWAY_SECRETS_ENV ?? "/etc/podway/secrets.env", "utf8"));
+    } catch {
+      /* no secrets file */
+    }
+    const report = buildReport(
+      input,
+      { pod: this.displayName ?? "", health: JSON.stringify(this.agentStates()), doctor, startup, logs, system },
+      secrets,
+      new Date().toISOString(),
+    );
+    const outbox = process.env.PODWAY_REPORTS_OUTBOX ?? REPORTS_OUTBOX;
+    mkdirSync(pathDirname(outbox), { recursive: true });
+    appendFileSync(outbox, `${JSON.stringify({ id: randomUUID(), ...report })}\n`);
+    if (this.tmuxUid != null && this.tmuxGid != null) {
+      try { chownSync(outbox, this.tmuxUid, this.tmuxGid); } catch { /* best-effort */ }
+    }
+    this.log.info("bug_report_filed", { area: report.area, source: report.source });
+    return { ok: true };
+  }
+
+  /** A failure the pod-agent detected itself: report once per key per 6h (plus the shared budget). */
+  private async autoReport(key: string, area: string, summary: string, detail: string): Promise<void> {
+    const last = this.autoReported.get(key) ?? 0;
+    if (Date.now() - last < 6 * 3_600_000) return;
+    this.autoReported.set(key, Date.now());
+    await this.fileReport({ summary, area, detail, source: `auto:${key}` }).catch(() => undefined);
   }
 
   async close(): Promise<void> {

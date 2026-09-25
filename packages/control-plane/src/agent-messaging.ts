@@ -62,7 +62,20 @@ async function exec(provider: SandboxProvider, id: string, script: string): Prom
  * Leaving it until an ack turns that loss into a harmless re-emit.
  */
 export async function drainOutbox(provider: SandboxProvider, podId: string): Promise<OutboxLine[]> {
-  const f = MSG_OUTBOX;
+  const lines: OutboxLine[] = [];
+  for (const o of await drainJsonl(provider, podId, MSG_OUTBOX)) {
+    // One malformed line must not discard the whole drain — skip it, keep the rest.
+    if (typeof o.id === "string" && typeof o.to === "string" && typeof o.body === "string") {
+      lines.push({ id: o.id, to: o.to, body: o.body, at: typeof o.at === "string" ? o.at : undefined });
+    }
+  }
+  return lines;
+}
+
+/** The snapshot half of {@link drainOutbox} for ANY pod-side jsonl outbox (msg, bug reports): the same
+ * atomic move-aside + re-emit-until-confirmed contract, returning the parsed objects. */
+export async function drainJsonl(provider: SandboxProvider, podId: string, file: string): Promise<Record<string, unknown>[]> {
+  const f = file;
   const d = `${f}.draining`;
   // If a prior drain isn't yet confirmed, `$d` still holds its batch: fold any new sends in and
   // re-emit. Otherwise atomically move the current outbox aside, then emit — but NEVER remove here.
@@ -73,21 +86,18 @@ export async function drainOutbox(provider: SandboxProvider, podId: string): Pro
     `if [ -f "$d" ]; then cat "$d"; fi`;
   const out = await exec(provider, podId, script);
   if (!out.trim()) return [];
-  const lines: OutboxLine[] = [];
+  const objs: Record<string, unknown>[] = [];
   for (const raw of out.split("\n")) {
     const s = raw.trim();
     if (!s) continue;
     try {
-      const o = JSON.parse(s) as Record<string, unknown>;
-      // One malformed line must not discard the whole drain — skip it, keep the rest.
-      if (typeof o.id === "string" && typeof o.to === "string" && typeof o.body === "string") {
-        lines.push({ id: o.id, to: o.to, body: o.body, at: typeof o.at === "string" ? o.at : undefined });
-      }
+      const o = JSON.parse(s) as unknown;
+      if (o && typeof o === "object") objs.push(o as Record<string, unknown>);
     } catch {
       /* skip a partial/garbled line */
     }
   }
-  return lines;
+  return objs;
 }
 
 /**
@@ -97,8 +107,8 @@ export async function drainOutbox(provider: SandboxProvider, podId: string): Pro
  * called (a crash before the ack), the batch survives and the next `drainOutbox` re-emits it,
  * and the message-id PK makes the re-insert a no-op. Idempotent (`rm -f`).
  */
-export async function confirmDrain(provider: SandboxProvider, podId: string): Promise<void> {
-  await exec(provider, podId, `rm -f '${MSG_OUTBOX}.draining' 2>/dev/null`);
+export async function confirmDrain(provider: SandboxProvider, podId: string, file: string = MSG_OUTBOX): Promise<void> {
+  await exec(provider, podId, `rm -f '${file}.draining' 2>/dev/null`);
 }
 
 /** tmux window INDEXES for the session — indexes, not names, for the same reason

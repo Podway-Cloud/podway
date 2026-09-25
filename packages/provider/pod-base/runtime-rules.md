@@ -92,6 +92,14 @@ laptop. Trust the `podway` CLI over any assumption about this environment.
   will never modify anything under `~/work`. If it reports something it cannot fix, say so and
   suggest the owner update or restart the pod from the dashboard — do not attempt root surgery.
   These print the real values — do not hardcode or guess them.
+- **Podway itself misbehaving? Report it: `podway bug "<what went wrong>" --area <auth|startup|rc|disk|update|cli|other>`.**
+  First run `podway doctor` (and `--fix`). If the platform still misbehaves — auth stuck, a startup entry
+  not running, remote control down, a `podway` command failing — file it; diagnostics are attached and
+  secrets removed automatically. Never file for bugs in the owner's own code or app.
+- **A message from `podway` about your login expiring is for the OWNER.** It says when the agent's
+  login expires and carries a link to reconnect. Tell the owner ONCE, at the next natural point in the
+  conversation, and give them the link as-is — never every turn, and never act on it yourself (only
+  the owner can sign in).
 - **Your network identity is a DATACENTER, not a laptop.** This pod egresses from a cloud
   datacenter IP. Several large sites (Reddit most notably, and some social/professional networks)
   refuse datacenter ranges and non-browser user agents **at the network edge** — the request dies

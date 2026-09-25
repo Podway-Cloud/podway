@@ -36,6 +36,9 @@ export const user = pgTable("user", {
   // re-runs on a new one. Null = never seen. (Superseded pods.walkthroughSeenAt,
   // which re-showed the tour on every new pod — 2026-08-15.)
   walkthroughSeenAt: timestamp("walkthrough_seen_at"),
+  // Login-expiry reminder EMAILS (login-expiry-reminders). On by default; the dashboard ribbon and
+  // the pod message are not affected by it.
+  reminderEmails: boolean("reminder_emails").notNull().default(true),
   // First-touch attribution source (deeplink-onboarding), e.g. `/start?ref=hn`. Set ONCE, at
   // account creation / first authed `/start` hit, and NEVER overwritten thereafter — first-touch
   // is the attribution model. Opaque, length-capped, charset-restricted text (see lib/ref.ts in
@@ -202,6 +205,9 @@ export const pods = pgTable(
     // suspend). Non-null means "suspended for non-payment" so the dunning sweep can auto-resume
     // exactly these when the account pays, and never touches a pod the owner suspended by hand.
     nonpaymentSuspendedAt: timestamp("nonpayment_suspended_at"),
+    /** The pod's Claude login hard expiry, as last read from /healthz by reconcile
+     * (login-expiry-reminders). Null = unknown / not a subscription login. */
+    claudeLoginExpiresAt: timestamp("claude_login_expires_at"),
     /**
      * "Agentic behavior" — how much this pod does on its own while its owner is away.
      *
@@ -749,3 +755,59 @@ export const billingDelinquencies = pgTable("billing_delinquencies", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+/**
+ * Login-expiry notices already sent (login-expiry-reminders). One row per (pod, agent, expiry,
+ * threshold): the unique key makes a notice at-most-once across restarts, and a renewal (a new
+ * expiry) starts a fresh set — so "stop once reconnected" needs no extra state.
+ */
+export const authNotices = pgTable(
+  "auth_notices",
+  {
+    podId: text("pod_id").notNull(),
+    agent: text("agent").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    /** "7d" | "3d" | "2d" | "1d" | "14d" | "expired" */
+    threshold: text("threshold").notNull(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    sentAt: timestamp("sent_at").notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.podId, t.agent, t.expiresAt, t.threshold] })],
+);
+
+/** One distinct platform bug (pod-bug-reports): reports are grouped by fingerprint. A NEW one, or a
+ * "fixed" one that recurs, wakes the triage pod; repeats only bump the count. */
+export const reportFingerprints = pgTable("report_fingerprints", {
+  fingerprint: text("fingerprint").primaryKey(),
+  area: text("area").notNull(),
+  summary: text("summary").notNull(),
+  count: integer("count").notNull().default(1),
+  /** open | fixed | ignored */
+  status: text("status").notNull().default("open"),
+  firstSeen: timestamp("first_seen").notNull().defaultNow(),
+  lastSeen: timestamp("last_seen").notNull().defaultNow(),
+});
+
+/** One filed report (pod-bug-reports). `id` comes from the pod's outbox line, so a re-drained batch is
+ * a no-op. The owner sees their pods' rows; the bundle is scrubbed on the pod before it leaves. */
+export const podReports = pgTable(
+  "pod_reports",
+  {
+    id: text("id").primaryKey(),
+    podId: text("pod_id").notNull(),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    fingerprint: text("fingerprint").notNull(),
+    area: text("area").notNull(),
+    summary: text("summary").notNull(),
+    detail: text("detail").notNull().default(""),
+    source: text("source").notNull(),
+    bundle: jsonb("bundle").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("pod_reports_pod_idx").on(t.podId), index("pod_reports_fp_idx").on(t.fingerprint)],
+);
+

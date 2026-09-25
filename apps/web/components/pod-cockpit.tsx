@@ -1,5 +1,6 @@
 "use client";
 
+import { PodReportsList } from "@/components/pod-reports-list";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PodLiveSignals } from "@podway/control-plane";
@@ -1893,7 +1894,12 @@ export default function PodCockpit(props: PodCockpitProps) {
               <TabsTrigger value="metrics" className="flex-none px-0">Metrics</TabsTrigger>
               <TabsTrigger value="activity" className="flex-none px-0">Activity</TabsTrigger>
               <TabsTrigger value="details" className="flex-none px-0">Details</TabsTrigger>
+              <TabsTrigger value="reports" className="flex-none px-0">Reports</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="reports">
+              <PodReportsList slug={slug} />
+            </TabsContent>
 
             <TabsContent value="metrics">
           <Card className="gap-1 border-0 bg-transparent py-0 shadow-none">

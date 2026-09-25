@@ -1,3 +1,5 @@
+import { renderEmail, type EmailContent } from "./email-layout.js";
+
 /**
  * Best-effort Telegram alerts. No-ops when unconfigured, and never throw — a signup or
  * a pod incident must not fail because a notification did.
@@ -126,42 +128,33 @@ async function gmailToken(saJson: string, impersonate: string, f: typeof fetch):
 }
 
 /**
- * Notify the OPERATOR (velsa) that a new access request arrived, with two ONE-CLICK links —
- * Approve and Later — so they can action it from their inbox without opening the admin panel. The
- * links carry an AES-encrypted, unforgeable action token (see admin/quick); this function just mails
- * whatever URLs the caller minted. Best-effort + no-op when Gmail isn't configured — a signup must
- * never fail because a notification did.
+ * Send one email on the shared layout (openspec: email-templates): multipart/alternative, a plain-text
+ * part and an HTML part rendered from the SAME content. Gmail API via a Workspace service account with
+ * domain-wide delegation. Best-effort by contract: missing config is a silent no-op and a failed send is
+ * RECORDED and swallowed — it must never break the signup, approval, billing or reminder that sent it.
  */
-export async function sendNewRequestEmail(
-  to: string,
-  requester: { name?: string | null; email: string },
-  links: { approveUrl: string; laterUrl: string },
-  deps: EmailDeps = {},
-): Promise<void> {
+export async function sendEmail(to: string, subject: string, content: EmailContent, deps: EmailDeps = {}): Promise<void> {
   const saJson = deps.saJson ?? process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   const impersonate = deps.impersonate ?? process.env.PODWAY_GMAIL_IMPERSONATE;
   const from = deps.from ?? process.env.PODWAY_FROM_EMAIL;
-  if (!saJson || !impersonate || !from || !to) return;
-  const who = (requester.name ?? "").trim() || requester.email;
+  if (!saJson || !impersonate || !from || !to) return; // not configured yet → no-op, never throw
   const f = deps.fetchImpl ?? fetch;
   try {
     const token = await (deps.tokenFn ?? gmailToken)(saJson, impersonate, f);
-    const subject = `New Podway access request: ${who}`;
-    const body =
-      `${who} requested access to Podway.\n\n` +
-      `Name:  ${requester.name || "(none)"}\n` +
-      `Email: ${requester.email}\n\n` +
-      `Approve now:\n${links.approveUrl}\n\n` +
-      `Set aside for later:\n${links.laterUrl}\n\n` +
-      `(Or review everyone at https://podway.io/admin.)\n`;
+    const { text, html } = renderEmail(content);
+    const boundary = `pw-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const part = (type: string, body: string) =>
+      `--${boundary}\r\nContent-Type: ${type}; charset="UTF-8"\r\nContent-Transfer-Encoding: base64\r\n\r\n` +
+      `${Buffer.from(body, "utf8").toString("base64").replace(/.{76}/g, "$&\r\n")}\r\n`;
     const message =
       `From: ${encodeFrom(from)}\r\n` +
       `To: ${to}\r\n` +
       `Subject: ${encodeHeaderWord(subject)}\r\n` +
       `MIME-Version: 1.0\r\n` +
-      `Content-Type: text/plain; charset="UTF-8"\r\n` +
-      `Content-Transfer-Encoding: base64\r\n\r\n` +
-      Buffer.from(body, "utf8").toString("base64");
+      `Content-Type: multipart/alternative; boundary="${boundary}"\r\n\r\n` +
+      part("text/plain", text) +
+      part("text/html", html) +
+      `--${boundary}--\r\n`;
     const res = await f("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -169,72 +162,67 @@ export async function sendNewRequestEmail(
     });
     await assertAccepted("gmail", res, { to });
   } catch (e) {
-    // Swallowed on purpose — a failed notification must never break the signup — but the
-    // failure is now RECORDED, which is the whole difference.
     reportSendFailure("gmail", { error: (e as Error)?.message ?? String(e) });
   }
 }
 
 /**
- * Tell an APPROVED user they're in. This is the email the /pending page promises
- * ("we'll email you when your spot opens up") — without it, that promise is a lie to every
- * waitlisted user. Sends via the Google Workspace GMAIL API using a service account with
- * domain-wide delegation (impersonating a real mailbox, sending From the `hi@` alias). Best-effort
- * and env-gated (GOOGLE_SERVICE_ACCOUNT_JSON / PODWAY_GMAIL_IMPERSONATE / PODWAY_FROM_EMAIL):
- * approving a user must never fail because the email did, and it no-ops cleanly until the three
- * are set. See docs/runbooks/gmail-api-setup.md.
+ * Notify the OPERATOR that a new access request arrived, with ONE-CLICK Approve (the button) and
+ * Later links carrying an AES-encrypted, unforgeable action token (see admin/quick); this function just
+ * mails the URLs the caller minted.
  */
-export async function sendApprovalEmail(
-  u: { name?: string | null; email: string },
+export async function sendNewRequestEmail(
+  to: string,
+  requester: { name?: string | null; email: string },
+  links: { approveUrl: string; laterUrl: string },
   deps: EmailDeps = {},
 ): Promise<void> {
-  const saJson = deps.saJson ?? process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  const impersonate = deps.impersonate ?? process.env.PODWAY_GMAIL_IMPERSONATE;
-  const from = deps.from ?? process.env.PODWAY_FROM_EMAIL;
-  if (!saJson || !impersonate || !from) return; // not configured yet → no-op, never throw
-  const name = (u.name ?? "").trim() || "there";
-  const f = deps.fetchImpl ?? fetch;
-  try {
-    const token = await (deps.tokenFn ?? gmailToken)(saJson, impersonate, f);
-    // Copy of record: docs/strategy/alpha-invite-copy.md §1. Keep them in sync.
-    const subject = "You're in — your Podway alpha spot is live";
-    const body =
-      `Hi ${name},\n\n` +
-      `You're in. Podway gives your coding agent a real computer in the cloud — isolated, ` +
-      `yours, and still working after you close the laptop.\n\n` +
-      `Sign in and launch your first environment (about a minute to a working project):\n` +
-      `https://podway.io/signin\n\n` +
-      `You're one of a small first group, so I'll actually read what you send back. Reply to ` +
-      `this email with anything — a bug, a rough edge, an idea, or just what you built.\n\n` +
-      // Personalize this signature to your name before inviting (see the copy doc).
-      `— The Podway team`;
-    // RFC822 with UTF-8: base64 the body (the em dash) and MIME-encode the non-ASCII headers.
-    const message =
-      `From: ${encodeFrom(from)}\r\n` +
-      `To: ${u.email}\r\n` +
-      `Subject: ${encodeHeaderWord(subject)}\r\n` +
-      `MIME-Version: 1.0\r\n` +
-      `Content-Type: text/plain; charset="UTF-8"\r\n` +
-      `Content-Transfer-Encoding: base64\r\n\r\n` +
-      Buffer.from(body, "utf8").toString("base64");
-    const res = await f("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ raw: b64url(message) }),
-    });
-    await assertAccepted("gmail", res, { to: u.email });
-  } catch (e) {
-    // Swallowed on purpose — a failed notification must never break the approval — but the
-    // failure is now RECORDED, which is the whole difference.
-    reportSendFailure("gmail", { error: (e as Error)?.message ?? String(e) });
-  }
+  const who = (requester.name ?? "").trim() || requester.email;
+  await sendEmail(
+    to,
+    `New Podway access request: ${who}`,
+    {
+      name: null,
+      heading: "New access request",
+      paragraphs: [
+        `${who} asked for access to Podway.`,
+        `Name: ${requester.name || "(none)"} · Email: ${requester.email}`,
+        { label: "Set aside for later", url: links.laterUrl },
+        { label: "Review everyone", url: "https://podway.io/admin" },
+      ],
+      button: { label: "Approve", url: links.approveUrl },
+      footer: "You're getting this because you approve Podway access requests.",
+    },
+    deps,
+  );
 }
 
 /**
- * The non-payment safety net's daily reminder. During the grace period it warns the user their pods
- * will be suspended and asks them to add a card / credit; on the suspension notice (`suspended`) it
- * tells them the pods are now suspended and how to bring them back. Same best-effort, env-gated Gmail
- * path as the others — never throws, no-ops until Gmail is configured.
+ * Tell an APPROVED user they're in — the email the /pending page promises. Copy of record:
+ * docs/strategy/alpha-invite-copy.md §1 (keep in sync).
+ */
+export async function sendApprovalEmail(u: { name?: string | null; email: string }, deps: EmailDeps = {}): Promise<void> {
+  await sendEmail(
+    u.email,
+    "You're in — your Podway spot is live",
+    {
+      name: u.name,
+      heading: "You're in",
+      paragraphs: [
+        "Podway gives your coding agent a real computer in the cloud — isolated, yours, and still working after you close the laptop.",
+        "Launch your first environment. It takes about a minute to reach a working project.",
+        "You're one of a small first group, so I'll actually read what you send back. Reply to this email with anything — a bug, a rough edge, an idea, or just what you built.",
+      ],
+      button: { label: "Launch your first pod", url: "https://podway.io/signin" },
+      footer: "You're getting this because you asked for access to Podway.",
+    },
+    deps,
+  );
+}
+
+/**
+ * The non-payment safety net's daily reminder: during the grace period, add a card or credit before the
+ * pods are suspended; on `suspended`, how to bring them back.
  */
 export async function sendDunningEmail(
   u: { name?: string | null; email: string },
@@ -242,44 +230,32 @@ export async function sendDunningEmail(
   links: { billingUrl: string },
   deps: EmailDeps = {},
 ): Promise<void> {
-  const saJson = deps.saJson ?? process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  const impersonate = deps.impersonate ?? process.env.PODWAY_GMAIL_IMPERSONATE;
-  const from = deps.from ?? process.env.PODWAY_FROM_EMAIL;
-  if (!saJson || !impersonate || !from || !u.email) return;
-  const name = (u.name ?? "").trim() || "there";
   const amount = `$${(info.amountDueCents / 100).toFixed(2)}`;
-  const f = deps.fetchImpl ?? fetch;
-  try {
-    const token = await (deps.tokenFn ?? gmailToken)(saJson, impersonate, f);
-    const subject = info.suspended
-      ? "Your Podway pods have been suspended"
-      : `Action needed: your Podway pods will be suspended in ${info.daysLeft} day${info.daysLeft === 1 ? "" : "s"}`;
-    const body = info.suspended
-      ? `Hi ${name},\n\n` +
-        `We could not collect payment for your Podway pods (${amount}/month) and your credit did ` +
-        `not cover it, so your pods have been suspended. Your data is safe — add a card or credit ` +
-        `and your pods come right back.\n\n` +
-        `Fix billing and resume:\n${links.billingUrl}\n\n— The Podway team`
-      : `Hi ${name},\n\n` +
-        `We could not charge for your Podway pods (${amount}/month) and your credit does not cover ` +
-        `it. Please add a card or credit within ${info.daysLeft} day${info.daysLeft === 1 ? "" : "s"} ` +
-        `or your pods will be suspended. Your data stays safe either way.\n\n` +
-        `Update billing:\n${links.billingUrl}\n\n— The Podway team`;
-    const message =
-      `From: ${encodeFrom(from)}\r\n` +
-      `To: ${u.email}\r\n` +
-      `Subject: ${encodeHeaderWord(subject)}\r\n` +
-      `MIME-Version: 1.0\r\n` +
-      `Content-Type: text/plain; charset="UTF-8"\r\n` +
-      `Content-Transfer-Encoding: base64\r\n\r\n` +
-      Buffer.from(body, "utf8").toString("base64");
-    const res = await f("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ raw: b64url(message) }),
-    });
-    await assertAccepted("gmail", res, { to: u.email });
-  } catch (e) {
-    reportSendFailure("gmail", { error: (e as Error)?.message ?? String(e) });
-  }
+  const days = `${info.daysLeft} day${info.daysLeft === 1 ? "" : "s"}`;
+  await sendEmail(
+    u.email,
+    info.suspended ? "Your Podway pods are suspended" : `Action needed: your Podway pods will be suspended in ${days}`,
+    info.suspended
+      ? {
+          name: u.name,
+          heading: "Your pods are suspended",
+          paragraphs: [
+            `We could not collect payment for your pods (${amount}/month), and your credit did not cover it, so your pods are suspended.`,
+            "Your data is safe. Add a card or credit and your pods come right back.",
+          ],
+          button: { label: "Fix billing and resume", url: links.billingUrl },
+          footer: "You're getting this because you own pods on Podway.",
+        }
+      : {
+          name: u.name,
+          heading: `Your pods will be suspended in ${days}`,
+          paragraphs: [
+            `We could not charge for your pods (${amount}/month), and your credit does not cover it.`,
+            `Add a card or credit within ${days} to keep them running. Your data stays safe either way.`,
+          ],
+          button: { label: "Update billing", url: links.billingUrl },
+          footer: "You're getting this because you own pods on Podway.",
+        },
+    deps,
+  );
 }

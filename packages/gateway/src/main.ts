@@ -1,8 +1,8 @@
 import path from "node:path";
 import type { IncomingMessage } from "node:http";
-import { createAuth, getSessionUserId, notifyOps, sendDunningEmail, type AuthEnv } from "@podway/auth";
+import { createAuth, getSessionUserId, notifyOps, sendDunningEmail, sendEmail, type AuthEnv } from "@podway/auth";
 import { verifyBridgeToken, PREVIEW_SESSION_COOKIE, BRIDGE_TOKEN_PARAM } from "@podway/auth/bridge-token";
-import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService, FlyCertIssuer, BillingService, DunningService, stripeConfigured } from "@podway/control-plane";
+import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService, FlyCertIssuer, BillingService, DunningService, LoginReminderService, drizzleReminderDeps, PodReports, SYSTEM_SENDER, stripeConfigured } from "@podway/control-plane";
 import { RelayRegistry } from "./relay-registry.js";
 import {
   IncusProvider,
@@ -12,7 +12,7 @@ import {
   loadIncusConfig,
   type SandboxProvider,
 } from "@podway/provider";
-import { createAppDb, user, eq } from "@podway/db";
+import { createAppDb, user, eq, pods } from "@podway/db";
 import { credKeyFromEnv } from "@podway/shared/crypto";
 import { GatewayServer } from "./server.js";
 
@@ -55,7 +55,32 @@ async function main(): Promise<void> {
   const agentMessages = new AgentMessages(db);
   const relays = new RelayRegistry();
   const relayService = new RelayService(db);
+  // Login-expiry reminders (login-expiry-reminders): pod message at 7/3/2/1 days + expiry, email from
+  // 3 days, at most once per (pod, agent, expiry, threshold) via the auth_notices primary key.
+  const reminderAppUrl = (process.env.BETTER_AUTH_URL || "https://podway.io").replace(/\/+$/, "");
+  const loginReminders = new LoginReminderService({
+    ...drizzleReminderDeps(db),
+    sendPodMessage: async (podId, ownerId, body) => {
+      await agentMessages.route({ id: crypto.randomUUID(), ownerId, fromPod: SYSTEM_SENDER, toPod: podId, body });
+    },
+    sendEmail: (to, subject, content) => sendEmail(to, subject, content),
+    appUrl: reminderAppUrl,
+  });
+  // Platform bug reports (pod-bug-reports): stored + grouped; a NEW / reopened bug wakes the triage pod
+  // (the same pod crash alerts wake). Unset → reports are still stored, nobody is woken.
+  const triagePod = process.env.PODWAY_BUG_REPORT_POD ?? process.env.PODWAY_CRASH_ALERT_POD;
+  if (!triagePod) console.warn("podway-gateway: no PODWAY_BUG_REPORT_POD / PODWAY_CRASH_ALERT_POD — bug reports are stored but no triage pod is woken");
+  const podReports = new PodReports(db, {
+    wakeTriage: async (body) => {
+      if (!triagePod) return;
+      const owner = (await db.select({ o: pods.ownerId }).from(pods).where(eq(pods.id, triagePod)))[0]?.o;
+      if (owner) await agentMessages.route({ id: crypto.randomUUID(), ownerId: owner, fromPod: SYSTEM_SENDER, toPod: triagePod, body });
+    },
+  });
   const control = new PodService(provider, new DrizzlePodStore(db), {
+    podReports,
+    onClaudeSignedOut: (p) =>
+      loginReminders.notifySignedOut({ id: p.id, name: p.name, ownerId: p.ownerId, agentAuth: p.agentAuth, claudeLoginExpiresAt: p.claudeLoginExpiresAt }),
     environmentsRoot: process.env.PODWAY_ENVIRONMENTS_ROOT ?? path.resolve("environments"),
     providers,
     defaultProviderName,
@@ -262,6 +287,14 @@ async function main(): Promise<void> {
       void dunning.sweep().catch((e) => console.error("dunning_sweep_failed", e));
     }, dunningMs).unref();
     console.log(`podway-gateway dunning sweep every ${dunningMs}ms`);
+  }
+
+  const reminderMs = Number(process.env.PODWAY_LOGIN_REMINDER_SWEEP_MS ?? 60 * 60_000);
+  if (reminderMs > 0) {
+    setInterval(() => {
+      void loginReminders.sweep().catch((e) => console.error("login_reminder_sweep_failed", e));
+    }, reminderMs).unref();
+    console.log(`podway-gateway login-reminder sweep every ${reminderMs}ms`);
   }
 
   for (const sig of ["SIGTERM", "SIGINT"] as const) {

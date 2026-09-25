@@ -27,7 +27,8 @@ import {
   MSG_RATE_WINDOW_MS,
   type PodRef,
 } from "./agent-messages.js";
-import { drainOutbox, confirmDrain, deliverMessages, pushFleetRoster, type OutboxLine } from "./agent-messaging.js";
+import { drainOutbox, drainJsonl, confirmDrain, deliverMessages, pushFleetRoster, type OutboxLine } from "./agent-messaging.js";
+import { REPORTS_OUTBOX, type PodReports } from "./pod-reports.js";
 import { classifyEvent } from "./incidents.js";
 import {
   pickClaudeSettings,
@@ -173,10 +174,15 @@ export interface PodServiceConfig {
   /** Owner-scoped message routing between a user's own pods (agent-messaging). Optional:
    * without it `podway msg` sends simply sit undrained — degraded, never broken. */
   agentMessages?: AgentMessages;
+  /** Platform bug reports (pod-bug-reports): drained from each pod's reports outbox on reconcile. */
+  podReports?: PodReports;
   /** Called when a CRITICAL unplanned incident is recorded — for admin alerting (the
    * gateway wires this to Telegram). Deduped per pod+type inside the service, so an OOM
    * loop is one alert, not fifty. Absent → no alerts. */
   onIncident?: (info: { podId: string; ownerId: string; title: string }) => void;
+  /** Claude read signed-out (expired/rejected) BEFORE its expiry date — send the "expired" login
+   * notice now (login-expiry-reminders). Idempotent on the receiving side. */
+  onClaudeSignedOut?: (pod: PodRecord) => Promise<void>;
 }
 
 /** A declared secret plus whether the owner has set a value (never the value). */
@@ -1739,6 +1745,17 @@ export class PodService {
    * pod, or one that does not exist) is dropped: never routed, never leaked. Best-effort
    * throughout — an unreachable pod keeps its outbox for a later poll.
    */
+  /** Drain the pod's bug-report outbox into PodReports; confirm (delete the batch) only after ingest
+   * succeeded — the same at-least-once contract as messages, with the report id as the idempotency key. */
+  private async collectReports(rec: PodRecord, prov: SandboxProvider): Promise<void> {
+    const reports = this.config.podReports;
+    if (!reports) return;
+    const lines = await drainJsonl(prov, rec.id, REPORTS_OUTBOX);
+    if (lines.length === 0) return;
+    await reports.ingest(rec.id, rec.ownerId, lines);
+    await confirmDrain(prov, rec.id, REPORTS_OUTBOX);
+  }
+
   private async exchangeMessages(rec: PodRecord, prov: SandboxProvider): Promise<void> {
     if (!this.agentMessages) return;
     // Keep the pod's fleet roster fresh so `podway msg pods` and the CLI's local
@@ -4237,7 +4254,20 @@ export class PodService {
       // the pod-agent PUSHING it over the control link to the gateway. A self-host (no gateway) has
       // no push, so PULL it from /healthz here. Idempotent, so in cloud this is harmless
       // belt-and-suspenders (recordAuthed/recordAuthUrl no-op once set).
-      const agent = (await prov.podHealth(id).catch(() => null))?.agents?.[0];
+      const health = await prov.podHealth(id).catch(() => null);
+      const agent = health?.agents?.[0];
+      // Persist the Claude login's hard expiry for the reminder sweep (login-expiry-reminders): the
+      // sweep reads the DB hourly instead of probing every pod. Written only when it changed.
+      const claude = health?.agents?.find((a) => a.id === "claude-code");
+      const exp = claude?.expiresAt ? new Date(claude.expiresAt).toISOString() : null;
+      if (claude && exp !== (record.claudeLoginExpiresAt ?? null)) {
+        await this.store.update(id, { claudeLoginExpiresAt: exp }).catch(() => undefined);
+        record = { ...record, claudeLoginExpiresAt: exp };
+      }
+      const st = claude?.authState;
+      if (st?.state === "needs-login" && (st.reason === "expired" || st.reason === "rejected") && exp && Date.parse(exp) > Date.now()) {
+        await this.config.onClaudeSignedOut?.(record).catch(() => undefined);
+      }
       // RECONNECT: the row thinks the pod is authed (authedAt/sessionUrl set from a PRIOR login), but
       // the live agent is unauthed again with a fresh sign-in URL (or reports expired/needs-reauth) —
       // its login was wiped/expired. Reset the stale authed markers + dead session URL and capture the
@@ -4278,6 +4308,7 @@ export class PodService {
       await this.bestEffort("ingest_repairs", record.id, () => this.ingestRepairs(record, prov));
       await this.exchangeFetchMemory(record, prov).catch(() => undefined);
       await this.exchangeMessages(record, prov).catch(() => undefined);
+      await this.collectReports(record, prov).catch(() => undefined);
       // Auto-sync the config layer if the env drifted from what this pod last received — the
       // reconcile hook that replaces the manual "Sync config" button (best-effort; see the method).
       await this.bestEffort("reconcile_config_drift", record.id, () => this.reconcileConfigDrift(record, prov));

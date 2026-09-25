@@ -811,6 +811,32 @@ msg_resolve() {
   ' "$MSG_FLEET" 2>/dev/null
 }
 
+# ---- podway bug: report a PLATFORM bug (pod-bug-reports) ----
+# The pod-agent collects a scrubbed diagnostic bundle (health, doctor, startup, logs, disk) and queues
+# the report in an outbox the control plane drains — no network needed from the pod. For Podway
+# itself misbehaving (auth, startup entries, remote control, the CLI) — never for the owner's own code.
+cmd_bug() {
+  local area="other" detail="" summary=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --area) area="${2:-other}"; shift 2 ;;
+      --area=*) area="${1#--area=}"; shift ;;
+      --detail) if [ "${2:-}" = "-" ]; then detail=$(cat); else detail="${2:-}"; fi; shift 2 ;;
+      *) summary="${summary:+$summary }$1"; shift ;;
+    esac
+  done
+  [ -n "$summary" ] || die 'usage: podway bug "<what went wrong>" [--area auth|startup|rc|disk|update|cli|other] [--detail -]'
+  local body out
+  body=$(jq -nc --arg s "$summary" --arg a "$area" --arg d "$detail" '{summary:$s, area:$a, detail:$d}')
+  out=$(curl -sS -m 60 -X POST -H 'content-type: application/json' --data "$body" \
+    "http://127.0.0.1:${PODWAY_AGENT_PORT:-8080}/bug-report" 2>&1) || die "could not reach the pod-agent: $out"
+  if [ "$(printf '%s' "$out" | jq -r '.ok // false' 2>/dev/null)" = "true" ]; then
+    echo "bug report queued — Podway picks it up on its next poll (secrets were removed from the attached diagnostics)."
+  else
+    die "not filed: $(printf '%s' "$out" | jq -r '.reason // .' 2>/dev/null)"
+  fi
+}
+
 cmd_msg_pods() {
   if [ ! -f "$MSG_FLEET" ]; then
     echo "(no fleet roster yet — the control plane pushes it on its next poll)"
@@ -1087,6 +1113,7 @@ case "${1:-info}" in
   agent) shift || true; cmd_agent "$@" ;;
   __prune-codex-releases) shift || true; _codex_prune_releases "${1:-$CODEX_SA_DIR}" ;;  # internal: used by doctor --fix + tests
   msg) shift || true; cmd_msg "$@" ;;
+  bug) shift || true; cmd_bug "$@" ;;
   link) shift || true; cmd_link "${1:-}" ;;
   visibility) shift || true; cmd_visibility "${1:-}" ;;
   -h | --help | help)
@@ -1101,6 +1128,7 @@ case "${1:-info}" in
     echo "              | agent versions | agent update [claude | codex [version] | --all]  (update the agent CLIs as dev; codex npm+standalone stay in lockstep)"
     echo "              | msg send <pod> <text> | msg inbox [--all] | msg reply <id> <text> | msg done <id|--all> | msg pods"
     echo "              | link <file>  (a GitHub URL the user can open — pod paths are dead links)"
+    echo "              | bug \"<what went wrong>\" [--area auth|startup|rc|disk|update|cli|other] [--detail -]  (report a PODWAY bug, with diagnostics)"
     echo "              | visibility  (is this pod's preview public or owner-only? — the owner sets it in the dashboard)]" ;;
   *) die "unknown command '$1' (try: podway info | podway preview | podway doctor | podway fetch | podway schedule | podway startup | podway msg)" ;;
 esac

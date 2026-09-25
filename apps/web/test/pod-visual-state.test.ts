@@ -125,3 +125,10 @@ describe("deriveState reads the classified authState (agent-auth-state) — dash
     expect(r.activity?.text).toBe("Claude needs sign-in");
   });
 });
+
+describe("expiring-login ribbon (login-expiry-reminders)", () => {
+  const run = (hoursLeft: number) =>
+    deriveState("running", false, live({ agentStatus: "idle", agentWaitingFor: null, agents: [{ id: "claude-code", authed: true, expiresAt: Date.now() + hoursLeft * 3_600_000, authState: { state: "signed-in" } }] }), true).ribbon;
+  it("days out: 'reconnect soon'", () => expect(run(72)).toMatch(/expires in ~3d — reconnect soon/));
+  it("under a day: hours and 'reconnect now'", () => expect(run(5)).toMatch(/expires in 5h — reconnect now/));
+});

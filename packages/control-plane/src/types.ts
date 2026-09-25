@@ -146,6 +146,8 @@ export interface PodRecord {
   /** ISO time this pod was auto-suspended by the non-payment safety net (null otherwise). Set so the
    * dunning sweep resumes exactly the pods it suspended and never touches a manual/owner suspend. */
   nonpaymentSuspendedAt: string | null;
+  /** The Claude login's hard expiry (ISO), as reconcile last read it from /healthz (login-expiry-reminders). */
+  claudeLoginExpiresAt?: string | null;
   updatingSince: string | null;
   /**
    * ISO time this pod was QUEUED for a batch image update but has not started yet. Bulk updates

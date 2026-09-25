@@ -135,9 +135,14 @@ export function deriveState(
     const expiring = live.agents?.find(
       (a) => agentSignedIn(a) && a.expiresAt != null && a.expiresAt > Date.now() && a.expiresAt - Date.now() < EXPIRING_MS,
     );
-    const expiringRibbon = expiring
-      ? `${expiring.id === "codex" ? "Codex" : "Claude"}'s login expires in ~${Math.max(1, Math.round((expiring.expiresAt! - Date.now()) / (24 * 60 * 60 * 1000)))}d — reconnect soon in the Control tab`
-      : null;
+    // Under a day it is urgent: say the hours and "now" (login-expiry-reminders' last-day step).
+    const leftMs = expiring ? expiring.expiresAt! - Date.now() : 0;
+    const who2 = expiring?.id === "codex" ? "Codex" : "Claude";
+    const expiringRibbon = !expiring
+      ? null
+      : leftMs < 24 * 60 * 60 * 1000
+        ? `${who2}'s login expires in ${Math.max(1, Math.round(leftMs / 3_600_000))}h — reconnect now in the Control tab`
+        : `${who2}'s login expires in ~${Math.max(1, Math.round(leftMs / (24 * 60 * 60 * 1000)))}d — reconnect soon in the Control tab`;
     // A pod BLOCKED waiting on the owner for a secret. It is not a health fault — the pod is fine,
     // it just cannot continue — but it is the one state where the pod is stuck and only the owner can
     // unstick it, and until now it was invisible from the dashboard (owner, 2026-09-06). Ranked BELOW

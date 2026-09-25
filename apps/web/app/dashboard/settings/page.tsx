@@ -3,6 +3,8 @@ import RelayConnectCard from "@/components/relay-connect-card";
 import { GithubAccountCard } from "@/components/github-account-card";
 import ThemeSwitcher from "@/components/theme-switcher";
 import { myRelayLive } from "@/lib/relay-actions";
+import { getReminderEmails } from "@/lib/notification-actions";
+import { NotificationsCard } from "@/components/notifications-card";
 import { editionOss } from "@/lib/session";
 import { Palette } from "lucide-react";
 
@@ -18,6 +20,7 @@ export default async function SettingsPage() {
   // thing in OSS; don't show it (nor mint a relay command that can't work).
   const oss = editionOss();
   const relay = oss ? null : await myRelayLive();
+  const reminderEmails = await getReminderEmails();
   return (
     <DashboardPage title="Settings">
       <div className="space-y-4">
@@ -25,6 +28,8 @@ export default async function SettingsPage() {
         {/* GitHub is an owner-level connection (one per person, reused by every pod). Cloud-only:
             self-host connects GitHub in-pod per pod. */}
         {!oss && <GithubAccountCard />}
+
+        <NotificationsCard initial={reminderEmails} />
 
         <section className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="flex items-start gap-2.5 px-5 py-4">
