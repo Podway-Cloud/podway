@@ -28,6 +28,7 @@ import {
   newWindow,
   spawnAgentWindow,
   newestClaudeTranscript,
+  repairEmptyJsonFile,
 } from "./signals.js";
 import { runGreeter, driveLoginMenu, startResumeWatch, type GreeterOptions } from "./greeter.js";
 import {
@@ -111,6 +112,8 @@ function readCgroupOomCounts(root = "/sys/fs/cgroup"): Record<string, number> {
 /** The Codex STANDALONE build's binary — the daemon (`remote-control start`) hard-fails
  * without it (the npm codex can't daemonize). init.sh seeds it here from the image. */
 const CODEX_STANDALONE = "/home/dev/.codex/packages/standalone/current/codex";
+/** The Codex RC daemon refuses to start on an empty one (GTM disk-full, 2026-09-25). */
+const CODEX_DAEMON_SETTINGS = "/home/dev/.codex/app-server-daemon/settings.json";
 /** Owner turned Codex remote control OFF (cockpit toggle). Lives on the home
  * volume so the choice survives restarts/updates — ensureCodexDaemon honors it
  * on every boot/wake instead of silently re-enabling. */
@@ -3469,6 +3472,12 @@ export class AgentServer {
     if (!existsSync(CODEX_STANDALONE)) {
       this.log.warn("codex_rc_no_standalone", { path: CODEX_STANDALONE });
       return;
+    }
+    try {
+      if (repairEmptyJsonFile(CODEX_DAEMON_SETTINGS, '{\n  "remoteControlEnabled": true\n}\n', this.tmuxUid, this.tmuxGid))
+        this.log.warn("codex_daemon_settings_repaired", { path: CODEX_DAEMON_SETTINGS });
+    } catch (e) {
+      this.log.warn("codex_daemon_settings_repair_failed", { err: String(e) });
     }
     execFile("pgrep", ["-f", "app-server --remote-control"], (running) => {
       if (!running) return; // exit 0 → a daemon process already exists; leave it (+ its codes)

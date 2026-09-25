@@ -81,10 +81,10 @@ describe("check-0audit.sh — keeps 0audit.md a living register", () => {
     expect(r.err).toContain("Recently shipped");
   });
 
-  it("allows a done-marker word inside the '## Recently shipped' breadcrumb (only active sections are gated)", () => {
-    // "shipped" naming in the breadcrumb is exactly where a done item is ALLOWED to be named.
+  it("refuses a '## Recently shipped' section — the register is open issues only (6eec2e58)", () => {
+    // This test used to ALLOW that breadcrumb; the registers refactor banned it (git log is the history).
     const body = "# audit\n\n- one live item (x.ts)\n\n## Recently shipped\n- billing console (#4)\n";
-    expect(check(write("ok-crumb.md", body)).code).toBe(0);
+    expect(check(write("bad-crumb.md", body)).code).toBe(1);
   });
 });
 

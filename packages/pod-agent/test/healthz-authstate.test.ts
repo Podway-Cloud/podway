@@ -22,6 +22,7 @@ async function authState(extra: Record<string, unknown>, expiresAt: number | nul
     host: "127.0.0.1",
     port: 0,
     tickMs: 300,
+    exitForRestart: () => {},
     credential: { agent: "claude-code", path: creds },
     ...extra,
   } as never);

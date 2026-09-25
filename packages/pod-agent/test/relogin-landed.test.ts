@@ -45,6 +45,7 @@ describe("a relogin that LANDS clears the stale pane failure", () => {
       host: "127.0.0.1",
       port: 0,
       tickMs: 300,
+      exitForRestart: () => {},
       credential: { agent: "claude-code", path: creds },
       authedRespawn: { credsPath: creds, command: `bash --norc -c 'echo RESPAWNED-OK; sleep 600'` },
     } as never);
@@ -81,6 +82,7 @@ describe("a relogin that LANDS clears the stale pane failure", () => {
       host: "127.0.0.1",
       port: 0,
       tickMs: 300,
+      exitForRestart: () => {},
       credential: { agent: "claude-code", path: creds },
       authedRespawn: { credsPath: creds, command: `bash --norc -c 'echo RESPAWNED-BAD; sleep 600'` },
     } as never);

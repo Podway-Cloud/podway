@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, statSync } from "node:fs";
+import { chownSync, closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 
 const URL_RE = /https?:\/\/[^\s"'<>)]+/g;
@@ -622,4 +622,21 @@ export function setupProgressFromDisk(homeDir = "/home/dev"): string | null {
   }
 
   return null;
+}
+
+/**
+ * A config file that a disk-full event left EMPTY breaks its program forever (GTM, 2026-09-25: the
+ * Codex RC daemon's settings.json). Rewrite ONLY an empty file with `fallback`, keeping the empty one
+ * as `<file>.empty-bak`. Missing or non-empty files are never touched. Returns whether it repaired.
+ */
+export function repairEmptyJsonFile(p: string, fallback: string, uid?: number, gid?: number): boolean {
+  try {
+    if (statSync(p).size !== 0) return false;
+  } catch {
+    return false;
+  }
+  renameSync(p, `${p}.empty-bak`);
+  writeFileSync(p, fallback);
+  if (uid != null && gid != null) chownSync(p, uid, gid);
+  return true;
 }

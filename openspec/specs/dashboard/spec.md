@@ -538,6 +538,13 @@ reaches ready.
 - **WHEN** the pod reaches ready
 - **THEN** the cockpit SHALL show the controls tabs
 
+#### Scenario: An old pod that lost its login is not onboarding again
+
+- **WHEN** a running pod created more than an hour ago has no recorded login (a reconnect clears the
+  pod's login markers so the sign-in link can surface)
+- **THEN** the cockpit SHALL show the controls tabs, with the agent card offering the sign-in — never
+  the full-page guided setup, which would hide Settings → Update (t3tt, 2026-09-25)
+
 ### Requirement: An image update never blocks the dashboard and reports its progress
 
 Applying a pod image update SHALL start the work and return immediately, rather than holding the

@@ -19,6 +19,7 @@ async function start(extra: Partial<ConstructorParameters<typeof AgentServer>[0]
     host: "127.0.0.1",
     port: 0,
     tickMs: 500,
+    exitForRestart: () => {},
     ...extra,
   });
   servers.push(server);
@@ -55,6 +56,7 @@ describe("/agent/relogin — honest refusal", () => {
       host: "127.0.0.1",
       port: 0,
       tickMs: 500,
+      exitForRestart: () => {},
       declaredAgents: ["codex"],
     } as never);
     servers.push(server);

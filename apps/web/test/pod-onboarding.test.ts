@@ -21,6 +21,18 @@ describe("deriveSetupStep", () => {
     expect(deriveSetupStep({ status: "running", authedAt: null, sessionUrl: null }, now)).toBe("login");
   });
 
+  it("t3tt: an OLD running pod that lost its login opens the COCKPIT, not the setup wizard", () => {
+    // A reconnect clears authedAt/sessionUrl (so the sign-in link can surface); that used to demote a
+    // months-old pod into the full-page setup wizard, which hides Settings → Update (2026-09-25).
+    const createdAt = new Date(now - 2 * 60 * 60 * 1000).toISOString();
+    expect(deriveSetupStep({ status: "running", authedAt: null, sessionUrl: null, createdAt }, now)).toBe("ready");
+  });
+
+  it("a NEW pod (created < 1h ago) still goes through sign-in setup", () => {
+    const createdAt = new Date(now - 10 * 60 * 1000).toISOString();
+    expect(deriveSetupStep({ status: "running", authedAt: null, sessionUrl: null, createdAt }, now)).toBe("login");
+  });
+
   it("just logged in → agent (waiting for remote control)", () => {
     const authedAt = new Date(now - 10_000).toISOString();
     expect(deriveSetupStep({ status: "running", authedAt, sessionUrl: null }, now)).toBe("agent");

@@ -1,3 +1,4 @@
+import { constants as fsConstants } from "node:fs";
 import { describe, it, expect } from "vitest";
 import { execFileSync } from "node:child_process";
 import { promises as fs, readFileSync } from "node:fs";
@@ -778,6 +779,27 @@ describe("pod-base runtime-literacy layer", () => {
         expect(await exists(path.join(dst, "current", "codex"))).toBe(true);
         const cur = await fs.readlink(path.join(dst, "current"));
         expect(cur.startsWith("/"), "current must be RELATIVE so it survives the move").toBe(false);
+      } finally {
+        await fs.rm(dir, { recursive: true, force: true });
+      }
+    });
+
+    it("REPAIRS a damaged release already on the volume (GTM, 2026-09-25) — no nested copy", async () => {
+      // GTM: releases/<ver>/bin/ was gone and codex-package.json empty, so current/codex dangled and
+      // Codex remote control refused ("image too old") even after an Update. The seed saw the broken
+      // link but `cp -a SRC DST` onto an EXISTING dir copied INTO it (DST/standalone), and the pin
+      // only checked that the release DIRECTORY existed — so nothing ever repaired it.
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "podway-sa-"));
+      try {
+        const rel = "0.145.0-x86_64-unknown-linux-musl";
+        const dst = path.join(dir, "dst", "standalone");
+        await fs.mkdir(path.join(dst, "releases", rel, "codex-resources"), { recursive: true });
+        await fs.writeFile(path.join(dst, "releases", rel, "codex-package.json"), "");
+        await fs.symlink("bin/codex", path.join(dst, "releases", rel, "codex")); // dangling: no bin/
+        await fs.symlink(`releases/${rel}`, path.join(dst, "current"));
+        await runSeed(dir, "codex");
+        await fs.access(path.join(dst, "current", "codex"), fsConstants.X_OK); // throws if still broken
+        expect(await exists(path.join(dst, "standalone")), "no nested DST/standalone copy").toBe(false);
       } finally {
         await fs.rm(dir, { recursive: true, force: true });
       }

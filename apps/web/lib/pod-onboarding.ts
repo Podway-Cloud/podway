@@ -36,7 +36,14 @@ export interface OnboardingFields {
   sessionUrl: string | null;
   /** Active agent (agents[0]) — Codex has no RC, so its ready signal differs. */
   agent?: string | null;
+  /** When the pod was created. An old pod is past first-time setup even when a reconnect cleared its
+   * authedAt/sessionUrl. */
+  createdAt?: string | null;
 }
+
+/** A pod older than this is never in first-time setup. ponytail: age as a proxy for "finished setup
+ * once" — add a durable setupCompletedAt column if a slow first setup ever trips it. */
+export const SETUP_WINDOW_MS = 60 * 60 * 1000;
 
 /** How long after login we linger on "agent" before calling the pod ready, given
  * the agent: Claude waits for its RC session URL (RC_WAIT_MS), Codex only needs
@@ -53,6 +60,13 @@ export function deriveSetupStep(p: OnboardingFields, now = Date.now()): SetupSte
   if (p.authedAt) {
     return now - Date.parse(p.authedAt) < readyWaitMsForAgent(p.agent) ? "agent" : "ready";
   }
-  if (p.status === "running") return "login";
+  if (p.status === "running") {
+    // A reconnect clears authedAt/sessionUrl so the sign-in link can surface. For an OLD pod that must
+    // not mean "first-time setup": the full-page wizard hides the cockpit, incl. Settings → Update (t3tt,
+    // 2026-09-25). It opens the cockpit instead; its agent card offers the sign-in wizard.
+    const created = p.createdAt ? Date.parse(p.createdAt) : NaN;
+    if (!Number.isNaN(created) && now - created > SETUP_WINDOW_MS) return "ready";
+    return "login";
+  }
   return "creating";
 }

@@ -61,10 +61,12 @@ describe("e2e specs contain no silent no-op tests", () => {
     for (const { title, body } of testBlocks(src)) {
       it(`${file} → "${title}" asserts something`, () => {
         if (ALLOWLIST.has(title)) return;
+        // The documented waiver (testing-standards.md, check-test-quality.mjs): `// no-expect-ok: <why>`
+        // in the body. This check used to know only the ALLOWLIST, so a correctly waived test failed here.
         expect(
-          /\bexpect\(/.test(body),
+          /\bexpect\(/.test(body) || /\/\/ no-expect-ok: \S/.test(body),
           `e2e test "${title}" in ${file} contains no expect() — it verifies nothing. Add an ` +
-            `assertion, or (if it is a screenshot-capture) add it to ALLOWLIST with a reason.`,
+            `assertion, or (if it is a screenshot-capture) waive it with \`// no-expect-ok: <why>\`.`,
         ).toBe(true);
       });
     }

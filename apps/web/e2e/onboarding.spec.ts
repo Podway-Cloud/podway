@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login, launchPod } from "./helpers";
+import { login, launchPod, agePod } from "./helpers";
 
 /**
  * The onboarding hero — the guided setup a pod shows BEFORE it's ready. Normally
@@ -65,6 +65,20 @@ test.describe("onboarding hero", () => {
     await page.getByPlaceholder(/Paste the code/i).fill("e2e-auth-code-123");
     await page.getByRole("button", { name: /^Submit code$/i }).click();
     await expect(page.getByRole("button", { name: /Sent ✓/ })).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("an OLD pod with no login opens the cockpit (Settings reachable), not the setup wizard", async ({ page }) => {
+    // t3tt, 2026-09-25: a reconnect cleared the pod's login markers and the full-page setup wizard
+    // came back, hiding Settings → Update — the one fix for its old image.
+    test.setTimeout(90_000);
+    await login(page, "approved");
+    const slug = await launchPod(page, "nextjs-starter", { name: "NO-SESSION old" });
+    await expect(page.getByText(/Cancel setup/i)).toBeVisible({ timeout: 30_000 }); // new pod: setup wizard
+    await agePod(slug, 2);
+    await page.reload();
+    await expect(page.getByRole("tab", { name: /settings/i })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/Cancel setup/i)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Sign in to Claude/i })).toBeVisible();
   });
 
   test("the Codex sign-in step shows the device code and OpenAI link", async ({ page }) => {

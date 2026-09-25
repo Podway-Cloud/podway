@@ -260,8 +260,12 @@ CODEX_SA_DST="${CODEX_SA_DST:-/home/dev/.codex/packages/standalone}"
 CODEX_SA_OWNER="${CODEX_SA_OWNER:-dev:dev}"
 if [ "$CODEX_SA_AGENT" = "codex" ] && [ -d "$CODEX_SA_SRC" ] && [ ! -x "$CODEX_SA_DST/current/codex" ]; then
   echo "podway: seeding codex standalone build (RC daemon)"
-  mkdir -p "$(dirname "$CODEX_SA_DST")"
-  if cp -a "$CODEX_SA_SRC" "$CODEX_SA_DST"; then
+  # Copy the CONTENTS (`SRC/.` into DST): `cp -a SRC DST` onto an EXISTING DST copies INTO it as
+  # DST/standalone and repairs nothing — how a damaged release on GTM survived an Update (2026-09-25).
+  # Merging over a damaged release restores its missing files. Drop the junk a past run left behind.
+  rm -rf "$CODEX_SA_DST/standalone"
+  mkdir -p "$CODEX_SA_DST"
+  if cp -a "$CODEX_SA_SRC/." "$CODEX_SA_DST/"; then
     REL=$(ls -1 "$CODEX_SA_DST/releases/" 2>/dev/null | head -1)
     [ -n "$REL" ] && ln -sfn "releases/$REL" "$CODEX_SA_DST/current"   # abs → relative
     chown -R "$CODEX_SA_OWNER" "$(dirname "$CODEX_SA_DST")" 2>/dev/null || true
@@ -290,7 +294,10 @@ CODEX_SA_PIN_FILE="${CODEX_SA_PIN_FILE:-/home/dev/.config/podway/codex-pin}"
 CODEX_SA_PIN="${CODEX_SA_PIN:-$(cat "$CODEX_SA_PIN_FILE" 2>/dev/null | head -1)}"
 [ -n "$CODEX_SA_PIN" ] || CODEX_SA_PIN="$(ls -1 "$CODEX_SA_SRC/releases" 2>/dev/null | head -1)"
 if [ -n "$CODEX_SA_PIN" ] && [ -d "$CODEX_SA_DST/releases" ]; then
-  if [ ! -d "$CODEX_SA_DST/releases/$CODEX_SA_PIN" ] && [ -d "$CODEX_SA_SRC/releases/$CODEX_SA_PIN" ]; then
+  # Present means RUNNABLE, not "the directory exists": a release that lost its bin/ (GTM) passed the
+  # old -d check forever. Replace a broken pinned release with the image's copy.
+  if [ ! -x "$CODEX_SA_DST/releases/$CODEX_SA_PIN/codex" ] && [ -d "$CODEX_SA_SRC/releases/$CODEX_SA_PIN" ]; then
+    rm -rf "$CODEX_SA_DST/releases/$CODEX_SA_PIN"
     cp -a "$CODEX_SA_SRC/releases/$CODEX_SA_PIN" "$CODEX_SA_DST/releases/$CODEX_SA_PIN" 2>/dev/null || true
   fi
   if [ -d "$CODEX_SA_DST/releases/$CODEX_SA_PIN" ] &&

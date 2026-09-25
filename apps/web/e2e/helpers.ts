@@ -31,6 +31,22 @@ export async function resetWalkthroughSeen(email: string): Promise<void> {
   }
 }
 
+/** Backdate a pod's creation time (e.g. to test that an OLD pod never re-enters first-time setup). */
+export async function agePod(slug: string, hours: number): Promise<void> {
+  const { Client } = await import("pg");
+  const { readFileSync } = await import("node:fs");
+  const path = await import("node:path");
+  const state = JSON.parse(readFileSync(path.join(process.cwd(), ".e2e-state.json"), "utf8")) as { dbUrl?: string };
+  if (!state.dbUrl) throw new Error("e2e state has no dbUrl — is global-setup current?");
+  const c = new Client({ connectionString: state.dbUrl });
+  await c.connect();
+  try {
+    await c.query(`UPDATE pods SET created_at = now() - make_interval(hours => $2) WHERE id = $1`, [slug, hours]);
+  } finally {
+    await c.end();
+  }
+}
+
 /**
  * Seed a DURABLE account-level GitHub connection for a user (global-github-connection): the cockpit
  * add-repo wizard and Settings card read this. The token is encrypted with the e2e's fixed
