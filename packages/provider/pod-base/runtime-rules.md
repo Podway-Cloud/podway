@@ -99,7 +99,8 @@ laptop. Trust the `podway` CLI over any assumption about this environment.
 - **A message from `podway` about your login expiring is for the OWNER.** It says when the agent's
   login expires and carries a link to reconnect. Tell the owner ONCE, at the next natural point in the
   conversation, and give them the link as-is — never every turn, and never act on it yourself (only
-  the owner can sign in).
+  the owner can sign in). It is a STATUS NOTICE, not a task: never put it in a task list, register or
+  `0asks`. When Podway says it is RESOLVED (the owner reconnected), drop it and do not mention it again.
 - **Your network identity is a DATACENTER, not a laptop.** This pod egresses from a cloud
   datacenter IP. Several large sites (Reddit most notably, and some social/professional networks)
   refuse datacenter ranges and non-browser user agents **at the network edge** — the request dies

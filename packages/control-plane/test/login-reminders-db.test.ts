@@ -37,11 +37,19 @@ describe("login reminders on the real schema", () => {
       expect(messages).toEqual(["pod-a", "pod-a"]);
       expect(emails).toEqual(["d@x.com"]);
 
+      // A notice stored with the EXACT expiry (before hour keys) is still found for the RESOLVED message.
+      const { authNotices } = await import("@podway/db");
+      const legacyExp = new Date(now + 3 * DAY + 123);
+      await db.insert(authNotices).values({ podId: "pod-a", ownerId: "o1", agent: "claude-code", expiresAt: legacyExp, threshold: "3d" });
+      const before = messages.length;
+      await svc.notifyRenewed({ id: "pod-a", name: "makore", ownerId: "o1", agentAuth: "subscription", claudeLoginExpiresAt: null }, legacyExp.toISOString(), new Date(now + 40 * DAY).toISOString());
+      expect(messages.length).toBe(before + 1);
+
       // Owner turned reminder emails off: pod messages continue, emails stop.
       const { eq } = await import("@podway/db");
       await db.update(user).set({ reminderEmails: false }).where(eq(user.id, "o1"));
       await svc.sweep(now + 29.9 * DAY); // 2.6 days left → the 3-day step: message yes, email suppressed
-      expect(messages.length).toBe(3);
+      expect(messages.length).toBe(4);
       expect(emails).toEqual(["d@x.com"]);
     } finally {
       await close();

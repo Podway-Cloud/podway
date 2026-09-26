@@ -79,6 +79,8 @@ async function main(): Promise<void> {
   });
   const control = new PodService(provider, new DrizzlePodStore(db), {
     podReports,
+    onClaudeRenewed: (p, oldExp, newExp) =>
+      loginReminders.notifyRenewed({ id: p.id, name: p.name, ownerId: p.ownerId, agentAuth: p.agentAuth, claudeLoginExpiresAt: newExp }, oldExp, newExp),
     onClaudeSignedOut: (p) =>
       loginReminders.notifySignedOut({ id: p.id, name: p.name, ownerId: p.ownerId, agentAuth: p.agentAuth, claudeLoginExpiresAt: p.claudeLoginExpiresAt }),
     environmentsRoot: process.env.PODWAY_ENVIRONMENTS_ROOT ?? path.resolve("environments"),

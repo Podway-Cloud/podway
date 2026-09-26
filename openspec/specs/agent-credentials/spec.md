@@ -728,6 +728,15 @@ owner per threshold and SHALL respect the owner's reminder-email setting.
 - **WHEN** a login reads `needs-login` with reason `rejected` or `expired` before its date
 - **THEN** the "expired" notice SHALL be sent at once
 
+#### Scenario: The owner reconnects after a reminder
+- **WHEN** a login's expiry moves forward by more than an hour after a reminder was sent for it
+- **THEN** the pod SHALL receive ONE system message that the reminder is RESOLVED and must be dropped
+  from any task list — agents had kept nagging an owner who had already reconnected (2026-09-26)
+
+#### Scenario: Expiry jitter is not a new login
+- **WHEN** the credential's expiry changes by less than an hour
+- **THEN** it SHALL be treated as the same login: no new notice and no stored change
+
 #### Scenario: Reminder emails turned off
 - **WHEN** the owner turned reminder emails off
 - **THEN** no reminder email SHALL be sent, and the dashboard and pod message SHALL continue

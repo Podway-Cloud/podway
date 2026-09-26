@@ -41,6 +41,11 @@ function harness(pods: ReminderPod[], opts: { reminderEmails?: boolean } = {}) {
       sent.add(k);
       return true;
     },
+    hasNotice: async (podId, agent, expiresAt) =>
+      [...sent].some((k) => {
+        const [p, a, e] = k.split("|");
+        return p === podId && a === agent && Math.abs(Date.parse(e!) - Date.parse(expiresAt)) <= 3_600_000;
+      }),
     sendPodMessage: async (podId, _ownerId, body) => void podMessages.push({ podId, body }),
     owner: async () => ({ name: "Dana", email: "d@x.com", reminderEmails: opts.reminderEmails ?? true }),
     sendEmail: async (_to, subject, content) =>
@@ -122,5 +127,36 @@ describe("LoginReminderService.sweep", () => {
     expect(h.podMessages).toHaveLength(1);
     expect(h.podMessages[0]!.body).toMatch(/signed out|expired/i);
     expect(h.emails).toHaveLength(1);
+  });
+});
+
+describe("reminder follow-through (owner report 2026-09-26: pods kept nagging after a reconnect)", () => {
+  it("a renewed login after a reminder sends ONE 'resolved' message; no reminder → nothing", async () => {
+    const h = harness([pod("a", 5)]);
+    await h.svc.sweep(NOW); // 7d reminder sent for the old expiry
+    const oldExp = new Date(NOW + 5 * DAY).toISOString();
+    const newExp = new Date(NOW + 30 * DAY).toISOString();
+    await h.svc.notifyRenewed(pod("a", 30), oldExp, newExp);
+    await h.svc.notifyRenewed(pod("a", 30), oldExp, newExp); // repeat → no second message
+    expect(h.podMessages).toHaveLength(2);
+    expect(h.podMessages[1]!.body).toMatch(/renewed/i);
+    expect(h.podMessages[1]!.body).toMatch(/resolved/i);
+    await h.svc.notifyRenewed(pod("b", 30), oldExp, newExp); // b never got a reminder
+    expect(h.podMessages).toHaveLength(2);
+  });
+
+  it("the reminder says it is a status notice, not a task", async () => {
+    const h = harness([pod("a", 2.9)]);
+    await h.svc.sweep(NOW);
+    expect(h.podMessages[0]!.body).toMatch(/not a task/i);
+  });
+
+  it("sub-hour expiry jitter is the SAME login: no duplicate notice (Mentalism academy got the 1d twice)", async () => {
+    const pods = [pod("a", 0.5)];
+    const h = harness(pods);
+    await h.svc.sweep(NOW);
+    pods[0] = { ...pods[0]!, claudeLoginExpiresAt: new Date(NOW + 0.5 * DAY + 551).toISOString() };
+    await h.svc.sweep(NOW + 3_600_000);
+    expect(h.podMessages).toHaveLength(1);
   });
 });

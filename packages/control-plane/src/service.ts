@@ -183,6 +183,8 @@ export interface PodServiceConfig {
   /** Claude read signed-out (expired/rejected) BEFORE its expiry date — send the "expired" login
    * notice now (login-expiry-reminders). Idempotent on the receiving side. */
   onClaudeSignedOut?: (pod: PodRecord) => Promise<void>;
+  /** Claude's login expiry moved forward (a reconnect landed) — tell the pod an earlier reminder is resolved. */
+  onClaudeRenewed?: (pod: PodRecord, oldExpiresAt: string, newExpiresAt: string) => Promise<void>;
 }
 
 /** A declared secret plus whether the owner has set a value (never the value). */
@@ -4260,9 +4262,15 @@ export class PodService {
       // sweep reads the DB hourly instead of probing every pod. Written only when it changed.
       const claude = health?.agents?.find((a) => a.id === "claude-code");
       const exp = claude?.expiresAt ? new Date(claude.expiresAt).toISOString() : null;
-      if (claude && exp !== (record.claudeLoginExpiresAt ?? null)) {
+      // Sub-hour moves are the CLI rewriting the same login (sub-second jitter) — not a new login.
+      const prevExp = record.claudeLoginExpiresAt ?? null;
+      const moved = exp === null || prevExp === null ? exp !== prevExp : Math.abs(Date.parse(exp) - Date.parse(prevExp)) > 3_600_000;
+      if (claude && moved) {
         await this.store.update(id, { claudeLoginExpiresAt: exp }).catch(() => undefined);
         record = { ...record, claudeLoginExpiresAt: exp };
+        // Renewed (moved forward): retract any reminder the pod got for the old login.
+        if (prevExp && exp && Date.parse(exp) > Date.parse(prevExp))
+          await this.config.onClaudeRenewed?.(record, prevExp, exp).catch(() => undefined);
       }
       const st = claude?.authState;
       if (st?.state === "needs-login" && (st.reason === "expired" || st.reason === "rejected") && exp && Date.parse(exp) > Date.now()) {

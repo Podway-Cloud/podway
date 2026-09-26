@@ -9,7 +9,7 @@
  * changes the expiry, so an old schedule can never fire for the new login.
  */
 
-import { authNotices, eq, isNotNull, pods, user, type Database } from "@podway/db";
+import { and, authNotices, eq, gte, isNotNull, lte, pods, user, type Database } from "@podway/db";
 
 const DAY = 86_400_000;
 
@@ -36,6 +36,13 @@ export const SETUP_TOKEN_SCHEDULE: Threshold[] = [
   { id: "expired", beforeMs: 0, email: true, phrase: "has expired" },
 ];
 const SIGNED_OUT: Threshold = { id: "expired", beforeMs: 0, email: true, phrase: "was signed out" };
+
+/** The notice key's expiry, to the hour: the CLI rewrites the credential with sub-second jitter
+ * (22:42:10.873 → 22:42:11.424 sent Mentalism academy the 1-day notice twice, 2026-09-25). */
+export function expiryKey(iso: string): string {
+  const t = Date.parse(iso);
+  return new Date(Math.floor(t / 3_600_000) * 3_600_000).toISOString();
+}
 
 export function dueThreshold(schedule: Threshold[], expiresAtMs: number, now: number): Threshold | null {
   let due: Threshold | null = null;
@@ -64,6 +71,9 @@ export interface LoginReminderDeps {
   listPods: () => Promise<ReminderPod[]>;
   /** Insert-if-absent on (pod, agent, expiresAt, threshold). false = already sent. */
   claimNotice: (n: { podId: string; ownerId: string; agent: string; expiresAt: string; threshold: string }) => Promise<boolean>;
+  /** Was any notice sent for this pod+agent with an expiry within an hour of `expiresAt`? (Within an hour,
+   * not equal: notices sent before the hour-key existed carry the exact expiry.) */
+  hasNotice: (podId: string, agent: string, expiresAt: string) => Promise<boolean>;
   sendPodMessage: (podId: string, ownerId: string, body: string) => Promise<void>;
   owner: (ownerId: string) => Promise<{ name: string | null; email: string | null; reminderEmails: boolean } | null>;
   sendEmail: (to: string, subject: string, content: ReminderEmail) => Promise<void>;
@@ -96,6 +106,24 @@ export class LoginReminderService {
     for (const [ownerId, items] of byOwner) await this.email(ownerId, items).catch(() => undefined);
   }
 
+  /** The login was renewed (expiry moved forward). If a reminder went out for the OLD login, tell the pod
+   * ONCE that it is resolved — an agent that noted it as an owner task otherwise keeps asking (owner report
+   * 2026-09-26). No reminder → nothing to retract. */
+  async notifyRenewed(pod: ReminderPod, oldExpiresAt: string, newExpiresAt: string): Promise<void> {
+    const oldKey = expiryKey(oldExpiresAt);
+    if (!(await this.deps.hasNotice(pod.id, "claude-code", oldExpiresAt))) return;
+    const fresh = await this.deps.claimNotice({ podId: pod.id, ownerId: pod.ownerId, agent: "claude-code", expiresAt: oldKey, threshold: "renewed" });
+    if (!fresh) return;
+    await this.deps
+      .sendPodMessage(
+        pod.id,
+        pod.ownerId,
+        `Podway: RESOLVED — Claude's login on this pod was renewed (now valid until ${new Date(newExpiresAt).toUTCString().slice(0, 16)}). ` +
+          "The earlier reconnect reminder no longer applies: remove it from any task list, register or 0asks file, and do not mention it again.",
+      )
+      .catch(() => undefined);
+  }
+
   /** A live sign-out BEFORE the expiry date (revoked/rejected): the "expired" notice, now, once. */
   async notifySignedOut(pod: ReminderPod, _now = Date.now()): Promise<void> {
     if (!pod.claudeLoginExpiresAt || pod.agentAuth === "api-key") return;
@@ -104,7 +132,7 @@ export class LoginReminderService {
   }
 
   private async notify(pod: ReminderPod, expiresAt: string, t: Threshold): Promise<Due | null> {
-    const fresh = await this.deps.claimNotice({ podId: pod.id, ownerId: pod.ownerId, agent: "claude-code", expiresAt, threshold: t.id });
+    const fresh = await this.deps.claimNotice({ podId: pod.id, ownerId: pod.ownerId, agent: "claude-code", expiresAt: expiryKey(expiresAt), threshold: t.id });
     if (!fresh) return null;
     const when = t.id === "expired" ? "" : ` (on ${new Date(expiresAt).toUTCString().slice(0, 16)})`;
     await this.deps
@@ -116,7 +144,9 @@ export class LoginReminderService {
             ? "Claude stays stopped until the owner signs in again. "
             : "When it expires, Claude stops until the owner signs in again. ") +
           `Tell the owner ONCE, at a natural point in the conversation, and give them this link to reconnect ` +
-          `(about a minute; the conversation is kept): ${this.link(pod.id)}`,
+          `(about a minute; the conversation is kept): ${this.link(pod.id)}. ` +
+          "This is a status notice, NOT a task: do not add it to any task list, register or 0asks file. " +
+          "If Podway later says it is RESOLVED, drop it.",
       )
       .catch(() => undefined);
     return t.email ? { pod, t } : null;
@@ -152,7 +182,7 @@ export class LoginReminderService {
 
 /** The database half of the deps: pods with a known expiry, the at-most-once claim (the auth_notices
  * primary key + ON CONFLICT DO NOTHING), and the owner's reminder-email setting. */
-export function drizzleReminderDeps(db: Database): Pick<LoginReminderDeps, "listPods" | "claimNotice" | "owner"> {
+export function drizzleReminderDeps(db: Database): Pick<LoginReminderDeps, "listPods" | "claimNotice" | "hasNotice" | "owner"> {
   return {
     listPods: async () =>
       (
@@ -170,6 +200,21 @@ export function drizzleReminderDeps(db: Database): Pick<LoginReminderDeps, "list
           .values({ podId: n.podId, ownerId: n.ownerId, agent: n.agent, expiresAt: new Date(n.expiresAt), threshold: n.threshold })
           .onConflictDoNothing()
           .returning({ podId: authNotices.podId })
+      ).length > 0,
+    hasNotice: async (podId, agent, expiresAt) =>
+      (
+        await db
+          .select({ t: authNotices.threshold })
+          .from(authNotices)
+          .where(
+            and(
+              eq(authNotices.podId, podId),
+              eq(authNotices.agent, agent),
+              gte(authNotices.expiresAt, new Date(Date.parse(expiresAt) - 3_600_000)),
+              lte(authNotices.expiresAt, new Date(Date.parse(expiresAt) + 3_600_000)),
+            ),
+          )
+          .limit(1)
       ).length > 0,
     owner: async (ownerId) => {
       const u = (await db.select().from(user).where(eq(user.id, ownerId)))[0];
