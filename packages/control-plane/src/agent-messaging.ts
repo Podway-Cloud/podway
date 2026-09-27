@@ -255,9 +255,15 @@ export async function deliverMessages(
     const b64text = Buffer.from(formatDeliveryTurn(messages, names), "utf8").toString("base64");
     const script =
       `INBOX='${MSG_INBOX}'; mkdir -p /home/dev/.podway; touch "$INBOX"\n` +
+      // Two deliveries to one pod can overlap (deliver-on-route + reconcile). With a shared
+      // "$INBOX.tmp", one could mv the other's just-truncated tmp into place and the other then
+      // tail'd that EMPTY inbox: the whole inbox went to 0 bytes (makore.app prod, 2026-09-27;
+      // reproduced 27/300 runs). So: one lock around the read-modify-write, and a per-run tmp.
+      `exec 9>>"$INBOX.lock"; flock -w 20 9 2>/dev/null\n` +
       `NEW=0\n` +
       `${inboxAppends}\n` +
-      `tail -n ${INBOX_MAX} "$INBOX" > "$INBOX.tmp" 2>/dev/null && mv "$INBOX.tmp" "$INBOX" || true\n` +
+      `tail -n ${INBOX_MAX} "$INBOX" > "$INBOX.tmp.$$" 2>/dev/null && mv "$INBOX.tmp.$$" "$INBOX" || rm -f "$INBOX.tmp.$$"\n` +
+      `exec 9>&-\n` +
       // COST GUARD. The append above is id-guarded, but the notification typing below was NOT — so a
       // false-negative from the submit check left the message pending and the NEXT poll re-typed the
       // same notification, waking the agent again. Every wake is a BILLED turn, and the loop was

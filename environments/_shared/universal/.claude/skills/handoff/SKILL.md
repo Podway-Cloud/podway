@@ -16,10 +16,11 @@ Write one note. Then stop.
 
 ```bash
 mkdir -p ~/.podway/handoff
-W=$(tmux display-message -p '#I' 2>/dev/null || echo 0)
+W=$(tmux display-message -p -t "$TMUX_PANE" '#I' 2>/dev/null || echo 0)
 ```
 
-Use the index, not the name. tmux auto-renames a window to whatever command is running in it, so
+If the request names the file, use that. `-t "$TMUX_PANE"` matters: without it tmux reports the
+ACTIVE window, so every agent wrote `0.md`. Use the index, not the name. tmux auto-renames a window to whatever command is running in it, so
 `#W` gives you `bash` or `node` depending on the moment — not a stable identity. The platform
 addresses windows by index for exactly this reason.
 

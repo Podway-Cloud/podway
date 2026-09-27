@@ -43,8 +43,11 @@ describe("requestHandoff", () => {
     });
     const written = await requestHandoff({ provider, podId: "p1", log, sleep: noSleep });
     expect(written).toEqual(["0"]);
-    expect(calls.some((c) => c.includes("send-keys") && c.includes("/handoff"))).toBe(true);
-    expect(calls.some((c) => c.includes(HANDOFF_DIR))).toBe(true);
+    const sent = calls.find((c) => c.includes("send-keys"))!;
+    // Plain text, not a slash command (Codex rejects unknown ones), naming this window's file
+    // (the skill's own lookup can return the ACTIVE window, so two agents shared 0.md).
+    expect(sent).not.toMatch(/send-keys -t main:0 "\//);
+    expect(sent).toContain(`${HANDOFF_DIR}/0.md`);
   });
 
   it("does NOT type into a pane showing a blocking gate (the 2026-07-24 failure mode)", async () => {

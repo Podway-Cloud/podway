@@ -7,14 +7,16 @@ import type { SandboxProvider } from "@podway/provider";
 export const HANDOFF_DIR = "/home/dev/.podway/handoff";
 
 /** Typed into the live agent pane. Phrased as a request to the agent, not a shell
- * command: it is delivered by `tmux send-keys` into whatever the agent is showing. */
+ * command: it is delivered by `tmux send-keys` into whatever the agent is showing. Plain text, NOT a
+ * `/handoff` slash command: Codex rejects an unknown slash command and never writes a note
+ * (observed on test:2, 2026-09-27). requestHandoff appends the exact note file for the window. */
 const HANDOFF_REQUEST =
-  "/handoff — this pod is about to restart (update, resize, or suspend). Write your handoff note now, then stop.";
+  "Use your handoff skill — this pod is about to restart (update, resize, or suspend). Write your handoff note now, then stop.";
 
 /** Same `/handoff` mechanism, different trigger: control of this pod is being handed to T3 Code, which
  * will start its OWN fresh session. The note is how that session picks up where you left off. */
 export const T3_HANDOFF_REQUEST =
-  "/handoff — control of this pod is being handed to T3 Code, which will start a FRESH session. Write your handoff note now (what you were doing, current state, next steps) so it can continue where you left off, then stop.";
+  "Use your handoff skill — control of this pod is being handed to T3 Code, which will start a FRESH session. Write your handoff note now (what you were doing, current state, next steps) so it can continue where you left off, then stop.";
 
 /** Default budget for the whole best-effort attempt. 60s (owner decision,
  * 2026-07-28: "update can take its time") — the timeout only ever costs anything
@@ -113,10 +115,13 @@ export async function requestHandoff(opts: RequestHandoffOptions): Promise<strin
       before.set(w, await exec(provider, podId, `stat -c %Y '${HANDOFF_DIR}/${w}.md' 2>/dev/null`));
       // send-keys in two steps: the request, then Enter — matching how the greeter
       // submits, so a UI that swallows a trailing newline still gets the turn.
+      // Name the file: the skill's own window lookup (`tmux display-message -p '#I'`) can return
+      // the ACTIVE window, not the agent's, so two agents overwrote one 0.md.
+      const text = `${request} Write it to ${HANDOFF_DIR}/${w}.md (your window is ${w}).`;
       await exec(
         provider,
         podId,
-        `tmux send-keys -t main:${w} ${JSON.stringify(request)} 2>/dev/null && ` +
+        `tmux send-keys -t main:${w} ${JSON.stringify(text)} 2>/dev/null && ` +
           `sleep 0.3 && tmux send-keys -t main:${w} Enter 2>/dev/null`,
       );
       asked.push(w);

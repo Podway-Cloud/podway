@@ -233,3 +233,33 @@ describe("agent-messaging delivery on reconcile", () => {
     expect(injects()).toBe(1);
   });
 });
+
+describe("deliverMessages — concurrent deliveries never empty the inbox", () => {
+  // Deliver-on-route and reconcile can overlap for one pod. A shared "$INBOX.tmp" let one run mv
+  // the other's just-truncated tmp into place and the other then tail'd that EMPTY inbox: the whole
+  // inbox went to 0 bytes (makore.app prod, 2026-09-27). Capture the REAL generated script, then
+  // start 6 copies at once from bash against a temp inbox. Messages are pre-seeded, so every copy
+  // takes the ALLPRESENT exit (no tmux) — the rewrite before it is what raced.
+  it("keeps every line across 60 rounds of 6 simultaneous deliveries", async () => {
+    const { mkdtempSync, writeFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { execFileSync } = await import("node:child_process");
+    let script = "";
+    const { provider } = providerWith((s) => {
+      if (s.includes("INBOX=")) script = s;
+      return okHandler(s);
+    });
+    await deliverMessages(provider, "p", inbound);
+    expect(script).toContain("INBOX=");
+    const dir = mkdtempSync(path.join(tmpdir(), "inbox-race-"));
+    writeFileSync(path.join(dir, "run.sh"), script.replaceAll("/home/dev/.podway", dir));
+    const seed = Array.from({ length: 200 }, (_, i) => JSON.stringify({ id: `s${i}` })).join("\n") + '\n{"id":"m1"}\n';
+    writeFileSync(path.join(dir, "seed"), seed);
+    const out = execFileSync("bash", ["-c",
+      `bad=0; for r in $(seq 1 60); do cp seed msg-inbox.jsonl; ` +
+      `for i in 1 2 3 4 5 6; do bash run.sh >/dev/null 2>&1 & done; wait; ` +
+      `[ "$(wc -l < msg-inbox.jsonl)" = 201 ] || bad=$((bad+1)); done; echo $bad`,
+    ], { cwd: dir, encoding: "utf8" });
+    expect(out.trim()).toBe("0");
+  }, 60_000);
+});

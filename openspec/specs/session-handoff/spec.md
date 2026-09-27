@@ -162,7 +162,9 @@ depending on a value compiled into the pod image.
 
 The capability SHALL work for every supported agent CLI without agent-specific control-plane code,
 reusing the existing per-agent configuration translation. Adding a supported agent SHALL NOT require
-changes to the interrupt path.
+changes to the interrupt path. The request SHALL therefore be plain text, never an agent slash command
+(Codex rejects an unknown `/handoff` and writes nothing), and SHALL name the window's exact note file
+(`~/.podway/handoff/<window>.md`) so two agents in one pod never write the same file.
 
 #### Scenario: Non-Claude agent
 
@@ -170,6 +172,12 @@ changes to the interrupt path.
 - **WHEN** an interrupting action is confirmed
 - **THEN** the handoff SHALL be requested and consumed through the same path, with no
   Claude-specific branch in the lifecycle code
+
+#### Scenario: Two agents in one pod
+
+- **GIVEN** a pod with a Codex agent in window 0 and a Claude agent in window 1
+- **WHEN** a handoff is requested
+- **THEN** window 0 SHALL be asked to write `0.md` and window 1 `1.md`, and each note SHALL survive
 
 ### Requirement: A once-per-owner walkthrough explains how to connect
 

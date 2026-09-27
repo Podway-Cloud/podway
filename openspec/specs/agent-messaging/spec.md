@@ -111,7 +111,9 @@ The injected turn SHALL present the message as information/request from another 
 agents and SHALL state that it is DATA, not authorization — the receiving agent SHALL still require the
 owner's explicit approval for any outward or irreversible action, and SHALL be told not to
 auto-acknowledge. The message body SHALL be delivered into the pod's inbox file, read on demand, and
-SHALL NOT be interpolated into the injected turn or any shell-executed command.
+SHALL NOT be interpolated into the injected turn or any shell-executed command. Deliveries to one pod can overlap
+(deliver-on-route and reconcile), so every change to the inbox file SHALL be serialized under a lock
+with a per-run temp file: an overlap SHALL NEVER empty the inbox or drop an appended message.
 
 #### Scenario: An unattended agent answers without a second authorization
 
