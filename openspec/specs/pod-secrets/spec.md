@@ -167,3 +167,26 @@ Write-only semantics SHALL be preserved — nothing is read back.
 - **WHEN** the owner pastes a value that contains no `KEY=` assignment
 - **THEN** it SHALL populate that one input as a normal paste
 
+### Requirement: Boot-time scripts never run with silently empty secrets
+
+Every secrets push SHALL also write the key NAMES (never values) to `~/.podway/secrets-keys` on the
+persistent home volume. When that list is non-empty but `/etc/podway/secrets.env` is missing or empty —
+as after an update recreates the VM, until the control plane re-sends the file — `podway secrets env`
+SHALL wait for it (default 120 seconds) and, if it never arrives, SHALL fail: a message on stderr, a
+non-zero exit, AND output that stops a script doing `source <(podway secrets env)` (which cannot see the
+exit code). With no key list, a missing file SHALL stay a silent, successful "no secrets".
+
+#### Scenario: Startup entries at boot after an update
+- **WHEN** an update recreates the VM and a startup entry runs `source <(podway secrets env)` before the
+  control plane re-sends the secrets
+- **THEN** it SHALL wait and then receive the secrets — not an empty environment (makore.app prod ran two
+  services for hours without their keys, 2026-09-25)
+
+#### Scenario: Secrets never arrive
+- **WHEN** the key list names secrets and the file does not appear within the wait
+- **THEN** the sourcing script SHALL stop with an error naming the missing keys
+
+#### Scenario: A pod with no secrets
+- **WHEN** there is no key list and no secrets file
+- **THEN** `podway secrets env` SHALL print nothing and succeed, as before
+

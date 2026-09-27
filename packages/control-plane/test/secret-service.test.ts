@@ -81,6 +81,20 @@ describe("PodService app secrets", () => {
     ]);
   });
 
+  it("every push also records the key NAMES (never values) on the home volume — the boot-race marker", async () => {
+    // makore.app prod 2026-09-25: after an update-recreate, /etc/podway/secrets.env is gone until the
+    // push; the names on the persistent volume let `podway secrets env` WAIT instead of returning empty.
+    const s = svc();
+    const rec = await s.launchPod("u1", "bot-env");
+    await s.provisionPending();
+    provider.execCalls = [];
+    await s.setSecret("u1", rec.id, "TELEGRAM_BOT_TOKEN", "123:ABC");
+    const marker = provider.execCalls.map((c) => c.join(" ")).find((c) => c.includes("/home/dev/.podway/secrets-keys"));
+    expect(marker).toBeDefined();
+    expect(marker).toContain("TELEGRAM_BOT_TOKEN");
+    expect(marker).not.toContain("123:ABC");
+  });
+
   it("setting a secret encrypts it and (running pod) pushes it live", async () => {
     const s = svc();
     const rec = await s.launchPod("u1", "bot-env");

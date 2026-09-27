@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { promises as fs, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -396,5 +396,65 @@ describe("podway msg (agent-to-agent, same owner)", () => {
       JSON.stringify({ id: "real1", from: "afisha-crawler-6bc4", body: "hi", at: "2026-08-06T10:00:00Z" }) + "\n",
     );
     expect(() => runMsg(["msg", "reply", "nope", "x"])).toThrow(/no message with id/);
+  });
+});
+
+/**
+ * makore.app prod (2026-09-25): after an update the VM is recreated and /etc/podway/secrets.env is gone
+ * until the control plane re-sends it — but boot starts the startup entries first. Their
+ * `source <(podway secrets env)` got NOTHING with exit 0, and two services ran for hours without keys.
+ * The key NAMES live on the home volume (survives the recreate), so the CLI knows secrets are expected.
+ */
+describe("podway secrets env — never silently empty when secrets are expected", () => {
+  const keysFile = () => path.join(dir, "secrets-keys");
+  const runEnv = (extra: Record<string, string>) =>
+    execFileSync("bash", [cli, "secrets", "env"], { env: { ...env, PODWAY_SECRETS_KEYS: keysFile(), ...extra }, encoding: "utf8" });
+
+  it("no secrets expected + no file → empty, exit 0 (unchanged)", () => {
+    expect(runEnv({})).toBe("");
+  });
+
+  it("secrets expected but the file never arrives → fails LOUDLY (non-zero), naming the keys", async () => {
+    await fs.writeFile(keysFile(), "OPENROUTER_API_KEY\nAXIOM_ADMIN_API_TOKEN\n");
+    let err = "";
+    let code = 0;
+    try {
+      runEnv({ PODWAY_SECRETS_WAIT: "1" });
+    } catch (e) {
+      const x = e as { status: number; stderr: string };
+      code = x.status;
+      err = String(x.stderr);
+    }
+    expect(code).not.toBe(0);
+    expect(err).toMatch(/OPENROUTER_API_KEY/);
+  });
+
+  it("a script that does `source <(podway secrets env)` STOPS instead of running without keys", async () => {
+    await fs.writeFile(keysFile(), "OPENROUTER_API_KEY\n");
+    let code = 0;
+    let out = "";
+    try {
+      out = execFileSync("bash", ["-c", `source <(bash "${cli}" secrets env); echo RAN-WITHOUT-KEYS`], {
+        env: { ...env, PODWAY_SECRETS_KEYS: keysFile(), PODWAY_SECRETS_WAIT: "1" },
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (e) {
+      code = (e as { status: number }).status;
+      out = String((e as { stdout: string }).stdout);
+    }
+    expect(code).toBe(1);
+    expect(out).not.toContain("RAN-WITHOUT-KEYS");
+  });
+
+  it("secrets expected and the file lands while waiting → prints them", async () => {
+    await fs.writeFile(keysFile(), "OPENROUTER_API_KEY\n");
+    setTimeout(() => void fs.writeFile(env.PODWAY_SECRETS_ENV as string, "OPENROUTER_API_KEY=sk-test\n"), 1200);
+    const out = await new Promise<string>((resolve, reject) => {
+      execFile("bash", [cli, "secrets", "env"], { env: { ...env, PODWAY_SECRETS_KEYS: keysFile(), PODWAY_SECRETS_WAIT: "10" } }, (e, so) =>
+        e ? reject(e) : resolve(String(so)),
+      );
+    });
+    expect(out).toContain("export OPENROUTER_API_KEY=sk-test");
   });
 });

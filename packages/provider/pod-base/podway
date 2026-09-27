@@ -348,7 +348,26 @@ cmd_secrets_get() {
 # Emit `export K='v'` lines so the RUNNING agent can load everything a push just wrote:
 #   source <(podway secrets env)
 # The already-running shell doesn't see /etc/podway/secrets.env until it does this.
+# Key NAMES (never values) the control plane last delivered — on the persistent home volume, so after a
+# recreate (update) the pod knows secrets are EXPECTED even while /etc/podway/secrets.env is still gone.
+SECRETS_KEYS=${PODWAY_SECRETS_KEYS:-$HOME/.podway/secrets-keys}
+
 cmd_secrets_env() {
+  # Expected but not delivered yet (the boot race, makore.app prod 2026-09-25): WAIT for it, then fail
+  # LOUDLY. Never hand `source <(podway secrets env)` an empty environment with exit 0 — a script cannot
+  # tell "no secrets" from "not here yet", and ran for hours without its keys.
+  if [ ! -s "$SECRETS_ENV" ] && [ -s "$SECRETS_KEYS" ]; then
+    local waited=0 max="${PODWAY_SECRETS_WAIT:-120}"
+    while [ ! -s "$SECRETS_ENV" ] && [ "$waited" -lt "$max" ]; do sleep 1; waited=$((waited + 1)); done
+    if [ ! -s "$SECRETS_ENV" ]; then
+      local msg="podway: secrets not delivered yet after ${max}s (expected: $(tr '\n' ' ' < "$SECRETS_KEYS" | tr -cd 'A-Z0-9_ ')) — failing so your script does not run without them. Retry shortly; if it persists, run: podway bug 'secrets missing after boot' --area startup"
+      echo "$msg" >&2
+      # `source <(podway secrets env)` never sees this exit code, so ALSO emit code that stops the
+      # sourcing script — the silent empty environment is exactly the failure being prevented.
+      printf 'echo %q >&2\nexit 1\n' "$msg"
+      return 1
+    fi
+  fi
   [ -r "$SECRETS_ENV" ] || { echo "# no secrets file at $SECRETS_ENV" >&2; return 0; }
   while IFS= read -r line; do
     case "$line" in \#*|"") continue ;; esac

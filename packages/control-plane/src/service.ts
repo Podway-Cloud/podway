@@ -4202,7 +4202,21 @@ export class PodService {
     if (!this.config.secretVault) return;
     const secrets = await this.config.secretVault.retrieveAll(podId);
     try {
-      await (await this.providerOf(podId)).injectSecrets(podId, secrets);
+      const prov = await this.providerOf(podId);
+      await prov.injectSecrets(podId, secrets);
+      // The key NAMES (never values) on the PERSISTENT home volume: after an update-recreate wipes
+      // /etc/podway/secrets.env, `podway secrets env` sees secrets are expected and WAITS for this push
+      // instead of handing boot-time scripts an empty environment (makore.app prod, 2026-09-25).
+      const names = Object.keys(secrets).filter((k) => /^[A-Z][A-Z0-9_]*$/.test(k));
+      await prov
+        .exec(podId, [
+          "bash",
+          "-c",
+          names.length
+            ? `mkdir -p /home/dev/.podway && printf '%s\\n' ${names.join(" ")} > /home/dev/.podway/secrets-keys && chown dev:dev /home/dev/.podway/secrets-keys 2>/dev/null; true`
+            : "rm -f /home/dev/.podway/secrets-keys",
+        ])
+        .catch(() => undefined);
     } catch (e) {
       // Log AND RETHROW. A second swallow beneath the reporting layer defeats it entirely: every
       // caller believed the push had succeeded — including the self-heal, whose whole job is to
