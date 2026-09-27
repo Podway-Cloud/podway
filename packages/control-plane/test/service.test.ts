@@ -121,30 +121,30 @@ describe("resizePod (compute tiers)", () => {
   it("launches at the chosen tier and hands the resolved resources to the provider", async () => {
     const rec = await svc.launchPod("u", ENV, { size: "l" });
     expect(rec.size).toBe("l");
-    expect(rec.diskGb).toBe(100);
+    expect(rec.diskGb).toBe(48);
     await svc.provisionPending();
     expect(provider.created.find((c) => c.id === rec.id)?.resources).toEqual({
       cpus: 4,
       memoryGb: 8,
-      diskGb: 100,
+      diskGb: 48,
     });
   });
 
   it("defaults to Medium when no size is given", async () => {
     const rec = await svc.launchPod("u", ENV);
     expect(rec.size).toBe("m");
-    expect(rec.diskGb).toBe(50);
+    expect(rec.diskGb).toBe(24);
   });
 
   it("resizes CPU/RAM down but keeps disk at the high-water mark", async () => {
-    const rec = await svc.launchPod("u", ENV, { size: "l" }); // 4/8/100
+    const rec = await svc.launchPod("u", ENV, { size: "l" }); // 4/8/48
     await svc.provisionPending();
 
-    const back = await svc.resizePod("u", rec.id, "s"); // down to 2/2/25
+    const back = await svc.resizePod("u", rec.id, "s"); // down to 2/2/12
     expect(back.size).toBe("s");
-    expect(back.diskGb).toBe(100); // disk cannot shrink
-    // provider was asked for Small CPU/RAM but the 100GB disk high-water mark
-    expect(provider.resized.at(-1)).toEqual({ id: rec.id, cpus: 2, memoryGb: 2, diskGb: 100 });
+    expect(back.diskGb).toBe(48); // disk cannot shrink
+    // provider was asked for Small CPU/RAM but the 48GB disk high-water mark
+    expect(provider.resized.at(-1)).toEqual({ id: rec.id, cpus: 2, memoryGb: 2, diskGb: 48 });
   });
 
   it("refuses to resize a pod that isn't running or sleeping", async () => {

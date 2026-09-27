@@ -283,6 +283,18 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
   if (jobs.length === 0) return { fired: false, reason: "no-jobs" };
 
   const state = readJson<SchedulerState>(opts.statePath, { jobs: {} });
+  // A daily slot that passed BEFORE the job existed is not "missed": without this, a job added at
+  // 19:41 with --at 00:50 fired at once (2026-09-27). Seed a never-seen job's already-passed slots
+  // for today as ran. Catch-up after a restart is unaffected — that job already has state.
+  let seeded = false;
+  for (const job of jobs) {
+    const times = job.schedule?.times;
+    if (state.jobs[job.id] || !Array.isArray(times) || times.length === 0) continue;
+    const { date, hhmm } = localParts(now(), job.schedule.timezone);
+    state.jobs[job.id] = { ranDates: { [date]: times.filter(isTime).filter((t) => t < hhmm) } };
+    seeded = true;
+  }
+  if (seeded) writeJson(opts.statePath, state, opts.uid, opts.gid);
   const due = dueJobs(jobs, state, now());
 
   // Only inject when the agent can take a turn. busy/shell = working; a dialog eats

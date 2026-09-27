@@ -203,6 +203,8 @@ tier's advertised `diskGb` fully usable to the owner rather than consumed by swa
 SHALL remain grow-only: because the home volume is a block device Incus cannot shrink, a resize that
 LOWERS RAM (and therefore the swap reserve) SHALL NOT reduce the volume below its current size.
 (Cloud/Incus only; a self-host Docker pod leaves swap to the host and is unaffected.)
+A size's `diskGb` is 6 GB per GB of RAM (Mini 6 · Small 12 · Medium 24 · Large 48 · XL 96 GB). Disk is
+grow-only, so an existing pod keeps its current volume; the new sizes apply to new pods and resizes.
 
 #### Scenario: New pod's volume includes the swap reserve
 

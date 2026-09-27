@@ -151,6 +151,17 @@ describe("runSchedulerTick", () => {
     ]);
   });
 
+  it("a new daily job does NOT fire a slot that passed before it existed (2026-09-27)", async () => {
+    const p = tmp();
+    writeJobs(p, [{ ...brief, schedule: { times: ["00:50"], timezone: "UTC" } }]);
+    const { o, injected } = opts(p, new Date("2026-09-27T19:41:30Z")); // added at 19:41, slot 00:50
+    expect(await runSchedulerTick(o)).toEqual({ fired: false, reason: "none-due" });
+    expect(injected).toHaveLength(0);
+    // …but it fires at the slot the next day.
+    const next = opts(p, new Date("2026-09-28T00:50:10Z"));
+    expect((await runSchedulerTick(next.o)).fired).toBe(true);
+  });
+
   it("carries the job's instructions into the injected turn (env-neutral)", async () => {
     const p = tmp();
     writeJobs(p, [{ ...brief, instructions: "pull GSC week-over-week and message me" }]);

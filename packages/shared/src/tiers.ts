@@ -5,8 +5,9 @@
  * where diskGb may exceed the size's own disk. Each size also carries its flat monthly price (cloud;
  * self-host ignores it). See docs/strategy/pricing-model.md.
  *
- * The ladder is RAM-anchored with disk in the box's natural ratio (~13 GB/GB) — so RAM and disk fill
- * up together (size-based-pod-pricing). Sizes: mini 1 · s 2 · m 4 · l 8 · xl 16 GB.
+ * The ladder is RAM-anchored with disk at 6 GB per GB of RAM (owner decision 2026-09-25, matching the
+ * server rule pods = usable_NVMe / 24). Measured 2026-09-27: a fresh pod's home uses ~1 GB, the busiest
+ * pod 27 GB. Sizes: mini 1 · s 2 · m 4 · l 8 · xl 16 GB.
  */
 
 export type PodSize = "mini" | "s" | "m" | "l" | "xl";
@@ -24,11 +25,11 @@ export interface PodTier extends PodResources {
 }
 
 export const POD_TIERS: Record<PodSize, PodTier> = {
-  mini: { label: "Mini", cpus: 1, memoryGb: 1, diskGb: 12, monthlyUsd: 4 },
-  s: { label: "Small", cpus: 2, memoryGb: 2, diskGb: 25, monthlyUsd: 7 },
-  m: { label: "Medium", cpus: 2, memoryGb: 4, diskGb: 50, monthlyUsd: 12 },
-  l: { label: "Large", cpus: 4, memoryGb: 8, diskGb: 100, monthlyUsd: 22 },
-  xl: { label: "XL", cpus: 6, memoryGb: 16, diskGb: 180, monthlyUsd: 42 },
+  mini: { label: "Mini", cpus: 1, memoryGb: 1, diskGb: 6, monthlyUsd: 4 },
+  s: { label: "Small", cpus: 2, memoryGb: 2, diskGb: 12, monthlyUsd: 7 },
+  m: { label: "Medium", cpus: 2, memoryGb: 4, diskGb: 24, monthlyUsd: 12 },
+  l: { label: "Large", cpus: 4, memoryGb: 8, diskGb: 48, monthlyUsd: 22 },
+  xl: { label: "XL", cpus: 6, memoryGb: 16, diskGb: 96, monthlyUsd: 42 },
 };
 
 export const POD_SIZES: PodSize[] = ["mini", "s", "m", "l", "xl"];

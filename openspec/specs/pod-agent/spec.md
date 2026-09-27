@@ -587,6 +587,8 @@ For a `times` job, a time SHALL be treated as due when it is at or before the cu
 and has not already been recorded as run for the current local date, so each listed time fires at
 most once per day and a time that passed while the pod was suspended still fires on the next tick
 after wake (catch-up). At most one time per job SHALL fire per tick (the earliest still-due time).
+A slot that passed BEFORE the scheduler first saw the job is not missed and SHALL NOT fire: a daily
+job added at 19:41 for 00:50 first fires at 00:50 the next day.
 For an `everyMinutes` job, the job SHALL be due when it has never run or when at least
 `everyMinutes` minutes have elapsed since its last run. After firing, the scheduler SHALL record
 the run (the fired time for that date, or the run timestamp for an interval) in its bookkeeping

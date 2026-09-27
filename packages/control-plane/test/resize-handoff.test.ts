@@ -52,17 +52,17 @@ describe("resize: handoff + new-params note", () => {
 
   it("disk is grow-only: a resize-DOWN keeps the larger disk in the note", async () => {
     const s = svc();
-    const pod = await s.launchPod("u1", "plain", { size: "l" }); // diskGb 100
+    const pod = await s.launchPod("u1", "plain", { size: "l" }); // diskGb 48
     await s.provisionPending();
     await store.update(pod.id, { status: "running" });
 
-    await s.resizePod("u1", pod.id, "s"); // CPU/RAM shrink, disk stays 100
+    await s.resizePod("u1", pod.id, "s"); // CPU/RAM shrink, disk stays 48
 
     const note = noteWrite() ?? "";
     expect(note).toContain("2 vCPU");
     expect(note).toContain("2 GB RAM");
-    expect(note).toContain("100 GB disk"); // NOT small's default 25
-    expect(provider.resized.at(-1)).toMatchObject({ cpus: 2, memoryGb: 2, diskGb: 100 });
+    expect(note).toContain("48 GB disk"); // NOT small's default 12
+    expect(provider.resized.at(-1)).toMatchObject({ cpus: 2, memoryGb: 2, diskGb: 48 });
   });
 
   it("a SUSPENDED pod's resize skips handoff + note (no live agent, no reachable machine)", async () => {
