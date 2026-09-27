@@ -379,35 +379,22 @@ describe("IncusProvider", () => {
     expect(info.status).toBe("running");
   });
 
-  describe("guest memory is private so KSM can merge it (ksm-private-guest-memory)", () => {
-    const PRIVATE = /\[object "mem0"\]\s*\n\s*share = "off"/;
-    it("createPod sets share=off for mem0", async () => {
-      const f = fakeIncus();
-      await mkProvider(f).createPod(input("pod-a"));
-      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toMatch(PRIVATE);
-    });
-    it("updateImage keeps it on the recreated instance (existing pods migrate on Update)", async () => {
+  describe("NO private-memory override (reverted 2026-09-27: share=off on a memfd doubled pod memory)", () => {
+    it("resize REMOVES the override from a pod that still carries it", async () => {
       const f = fakeIncus();
       const p = mkProvider(f);
       await p.createPod(input("pod-a"));
-      delete f.instances.get("pod-a")!.config["raw.qemu.conf"]; // an OLD pod, created before this change
-      await p.updateImage("pod-a", "pod-base-v2");
-      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toMatch(PRIVATE);
-    });
-    it("resize sets it too", async () => {
-      const f = fakeIncus();
-      const p = mkProvider(f);
-      await p.createPod(input("pod-a"));
-      delete f.instances.get("pod-a")!.config["raw.qemu.conf"];
+      f.instances.get("pod-a")!.config["raw.qemu.conf"] = '[object "mem0"]\nshare = "off"\n';
       await p.resize("pod-a", { cpus: 2, memoryGb: 4, diskGb: 20 });
-      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toMatch(PRIVATE);
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"] ?? "").toBe("");
     });
-    it("NOT for a legacy filesystem home — its virtiofs/9p share needs shared guest memory", async () => {
+    it("create, resize and updateImage never set raw.qemu.conf", async () => {
       const f = fakeIncus();
       const p = mkProvider(f);
       await p.createPod(input("pod-a"));
-      f.filesystemVolumes.add("pod-a-home");
-      delete f.instances.get("pod-a")!.config["raw.qemu.conf"];
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBeUndefined();
+      await p.resize("pod-a", { cpus: 2, memoryGb: 4, diskGb: 20 });
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBeUndefined();
       await p.updateImage("pod-a", "pod-base-v2");
       expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBeUndefined();
     });

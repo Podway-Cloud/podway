@@ -312,12 +312,13 @@ export class IncusProvider implements SandboxProvider {
    * block custom volume. LEGACY pods created before the 9p→block switch have a
    * `filesystem` volume, which REQUIRES a path (the 9p share mountpoint); detect
    * that so recreating an old pod (updateImage) still works. */
-  /** Private guest RAM so the host's KSM can merge identical pages across pods (ksm-private-guest-memory).
-   * Incus's default `mem0` is a SHARED memfd, which KSM never scans: it merged ~130MB across 17 VMs;
-   * private memory measured ~35% of pod RAM (2026-09-25). Only for a BLOCK home — a legacy filesystem
-   * home is a virtiofs/9p share, and that needs shared guest memory. */
-  private guestMemoryConfig(home: Record<string, string>): Record<string, string> {
-    return home.path ? {} : { "raw.qemu.conf": '[object "mem0"]\nshare = "off"\n' };
+  /** REVERTED (2026-09-27): raw.qemu.conf `mem0 share=off` doubled pod memory. Incus backs guest RAM
+   * with a memfd; mapping it PRIVATE copies every touched page into anonymous memory while the memfd keeps
+   * its own copy (a 16 GiB VM held ~15.5 GiB anon + ~13.4 GiB memfd). KSM saved ~2.7 GiB of it; the box
+   * lost ~40-60 GiB and ran out of memory. Kept as a no-op so every call site stays one line; a real KSM
+   * change needs an ANONYMOUS backend (memory-backend-ram), measured by whole-box free memory. */
+  private guestMemoryConfig(_home: Record<string, string>): Record<string, string> {
+    return {};
   }
 
   private async homeDevice(id: string): Promise<Record<string, string>> {
@@ -570,6 +571,8 @@ export class IncusProvider implements SandboxProvider {
         "limits.cpu": String(resources.cpus),
         "limits.memory": `${resources.memoryGb}GiB`,
         ...this.guestMemoryConfig(await this.homeDevice(id)),
+        // Drop the reverted private-memory override if this pod still carries it (it doubles memory).
+        ...(inst.config["raw.qemu.conf"] ? { "raw.qemu.conf": "" } : {}),
       },
     });
     // Grow-only. The swap reserve tracks RAM, so a RAM-DOWN resize computes a smaller target — but

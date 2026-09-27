@@ -366,23 +366,15 @@ resources behind.
 - **THEN** neither the instance nor the home volume for that pod SHALL remain, and `getPod(id)`
   SHALL report the pod as gone
 
-### Requirement: Incus pod guest memory is mergeable by KSM
+### Requirement: Incus pod guest memory keeps Incus's default backing
 
-The Incus provider SHALL create every pod VM with private guest memory — `raw.qemu.conf` overriding
-`[object "mem0"]` with `share = "off"` — on launch, on resize, and on the image-update recreate, so the
-host's KSM can merge identical pages across pods. Incus's default shared memfd is invisible to KSM (it
-merged ~130MB across 17 VMs; private memory measured ~35% of pod RAM on scratch pods, 2026-09-25).
-The provider SHALL NOT restart a running pod only to apply it; an existing pod takes it on its next
-recreate (Update).
+The Incus provider SHALL NOT override a pod VM's guest-memory backing (`raw.qemu.conf` on `mem0`) on
+launch, resize or image update, and a resize SHALL remove such an override from a pod that still has
+one. The 2026-09-25 attempt (`share = "off"` on Incus's memfd backend, to let KSM merge guest RAM)
+DOUBLED pod memory — a private mapping of a memfd copies every touched page into anonymous memory while
+the memfd keeps its own copy — and the box ran out of memory on 2026-09-27. Any future KSM work SHALL use
+an anonymous backend and SHALL be judged by whole-box free memory, not by merged pages.
 
-#### Scenario: A new pod is created
-- **WHEN** the Incus provider launches a pod
-- **THEN** the instance config SHALL carry `raw.qemu.conf` setting `share = "off"` for `mem0`
-
-#### Scenario: An existing pod is updated
-- **WHEN** a pod is recreated by an image update or a resize
-- **THEN** the recreated instance SHALL carry the same override, preserving its sizing
-
-#### Scenario: Self-host is unaffected
-- **WHEN** a pod runs on the self-host `LocalProvider` (Docker)
-- **THEN** nothing changes — there is no guest VM memory to merge
+#### Scenario: A new or updated pod
+- **WHEN** the provider creates, resizes or recreates a pod VM
+- **THEN** the instance config SHALL carry no `raw.qemu.conf` memory override
