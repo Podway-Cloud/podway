@@ -4161,7 +4161,19 @@ export class PodService {
       .exec(rec.id, ["test", "-s", "/etc/podway/secrets.env"])
       .catch(() => null);
     if (!probe) return; // couldn't ask — say nothing rather than guess
-    if (probe.exitCode === 0) return; // present and non-empty
+    if (probe.exitCode === 0) {
+      // Present — but a pod whose file survived every boot since the key list shipped (#350) never got
+      // a push, so it has no `secrets-keys`, and its NEXT update-recreate would hand boot scripts an
+      // empty env without `podway secrets env` knowing to wait (podway dev, 2026-09-28). Backfill once.
+      const keysProbe = await prov
+        .exec(rec.id, ["test", "-s", "/home/dev/.podway/secrets-keys"])
+        .catch(() => null);
+      if (keysProbe && keysProbe.exitCode !== 0) {
+        this.log.info("secrets_keys_backfilled", { podId: rec.id, keys: keys.length });
+        await this.pushSecrets(rec.id);
+      }
+      return;
+    }
 
     this.log.error("secrets_file_missing_restoring", { podId: rec.id, keys: keys.length });
     await this.pushSecrets(rec.id);

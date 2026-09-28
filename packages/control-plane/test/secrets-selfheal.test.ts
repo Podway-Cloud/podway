@@ -91,6 +91,16 @@ describe("the in-pod secrets file self-heals, whatever the pod's status did", ()
     expect(provider.injectedSecrets).toBeUndefined();
   });
 
+  it("backfills the key list when the file is there but secrets-keys is not (2026-09-28)", async () => {
+    const { s, id } = await podWithSecrets();
+    provider.exec = (async (_id: string, cmd: string[]) => {
+      if (cmd[0] === "test" && cmd.includes("/home/dev/.podway/secrets-keys")) return { exitCode: 1, stdout: "", stderr: "" };
+      return { exitCode: 0, stdout: "", stderr: "" };
+    }) as typeof provider.exec;
+    await s.reconcile(id);
+    expect(provider.injectedSecrets).toMatchObject({ APIFY_API_TOKEN: "tok-1" });
+  });
+
   it("records it on the timeline — a pod that was running without secrets was failing silently", async () => {
     const { s, id } = await podWithSecrets();
     fileMissing(true);

@@ -174,7 +174,10 @@ persistent home volume. When that list is non-empty but `/etc/podway/secrets.env
 as after an update recreates the VM, until the control plane re-sends the file — `podway secrets env`
 SHALL wait for it (default 120 seconds) and, if it never arrives, SHALL fail: a message on stderr, a
 non-zero exit, AND output that stops a script doing `source <(podway secrets env)` (which cannot see the
-exit code). With no key list, a missing file SHALL stay a silent, successful "no secrets".
+exit code). With no key list, a missing file SHALL stay a silent, successful "no secrets". The periodic
+secrets self-heal SHALL also backfill the key list: a pod that has secrets and a present `secrets.env`
+but no `secrets-keys` SHALL get one push, so a pod whose file survived every boot is covered before its
+next update.
 
 #### Scenario: Startup entries at boot after an update
 - **WHEN** an update recreates the VM and a startup entry runs `source <(podway secrets env)` before the
