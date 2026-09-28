@@ -178,6 +178,12 @@ Each account has a **RAM budget** (GB) — the ceiling on total running-pod RAM.
 size's reserved memory (Mini 1 · Small 2 · Medium 4 · Large 8 · XL 16 GB) against it, so the budget
 is spent the same whether it is many small pods or one large one.
 
+The BOX has a budget too. When `PODWAY_BOX_RAM_GB` is set (cloud), a launch, resume, or resize that
+would push the RAM promised across ALL active pods (provisioning, running, waking) past it SHALL be
+refused with `capacity_limit` — for every account, admins included. A resize down always fits. Unset
+(self-host) means no box gate. Guests fill their RAM with cache over hours, so a box promised more than
+it has ends in swap and the OOM killer (2026-09-28: 124 GB promised on a 128 GB box).
+
 A pod spends budget UNLESS it is **suspended** — a suspended pod has released its compute, so its RAM
 is free for another pod (and resuming it needs it back). error/gone pods hold none.
 

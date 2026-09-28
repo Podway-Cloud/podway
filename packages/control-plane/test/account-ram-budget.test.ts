@@ -104,3 +104,56 @@ describe("account RAM budget", () => {
     await expect(s.launchPod("admin", "plain", { size: "xl", ramCap: Infinity })).resolves.toBeTruthy();
   });
 });
+
+/**
+ * Box capacity (2026-09-28): account budgets alone let the box be promised 124 GB of its 128, and
+ * guests fill their RAM over hours, so the box ran into swap and the OOM killer. `boxRamGb` caps the
+ * RAM promised across ALL accounts — admins included, because the hardware is the same for everyone.
+ */
+describe("box RAM capacity", () => {
+  let provider: MockProvider;
+  let store: InMemoryPodStore;
+  let root: string;
+  const svc = (boxRamGb?: number) => new PodService(provider, store, { environmentsRoot: root, boxRamGb });
+  const admin = { ramCap: Infinity };
+
+  beforeEach(async () => {
+    provider = new MockProvider();
+    store = new InMemoryPodStore();
+    root = await envRoot("plain");
+  });
+
+  it("refuses a launch that would over-promise the box, even for an admin, across accounts", async () => {
+    const s = svc(20);
+    await s.launchPod("u1", "plain", { size: "xl", ...admin }); // 16
+    await s.launchPod("u2", "plain", { size: "m" }); // 4 → box at 20
+    await expect(s.launchPod("u3", "plain", { size: "mini", ...admin })).rejects.toMatchObject({
+      code: "capacity_limit",
+    });
+  });
+
+  it("a suspended pod frees box room", async () => {
+    const s = svc(20);
+    const big = await s.launchPod("u1", "plain", { size: "xl", ...admin }); // 16
+    await s.launchPod("u2", "plain", { size: "m" }); // box at 20
+    await store.update(big.id, { status: "suspended" });
+    const third = await s.launchPod("u3", "plain", { size: "l", ...admin }); // box: 4 + 8 = 12
+    expect(third.size).toBe("l");
+  });
+
+  it("a resize DOWN on a full box is allowed (it frees room)", async () => {
+    const s = svc(20);
+    const big = await s.launchPod("u1", "plain", { size: "xl", ...admin }); // 16
+    await s.launchPod("u2", "plain", { size: "m" }); // box at 20
+    await s.provisionPending();
+    await store.update(big.id, { status: "running" });
+    await expect(s.resizePod("u1", big.id, "l", admin)).resolves.toMatchObject({ size: "l" }); // 20 - 16 + 8
+  });
+
+  it("no boxRamGb (self-host) ⇒ no box gate", async () => {
+    const s = svc(undefined);
+    await s.launchPod("u1", "plain", { size: "xl", ...admin });
+    await s.launchPod("u2", "plain", { size: "xl", ...admin });
+    expect((await store.list()).length).toBe(2);
+  });
+});

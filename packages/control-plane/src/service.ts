@@ -160,6 +160,10 @@ export interface PodServiceConfig {
   /** Optional per-pod app-secret vault (BotFather token, API keys). When present,
    * set secrets are injected into the pod as env vars on wake and on set/clear. */
   secretVault?: SecretVault;
+  /** Total pod RAM (GB) the box may be PROMISED (PODWAY_BOX_RAM_GB). Unset ⇒ no box gate (self-host).
+   * Account budgets alone let the box be promised 124 GB of 128 (2026-09-28): guests fill their RAM
+   * with page cache over hours, so an over-promised box ends in the OOM killer. */
+  boxRamGb?: number;
   logger?: Logger;
   /** Additional named providers ('incus', …) beside the constructor's default.
    * A pod's record.provider picks which one hosts it (infra-strategy.md M1). */
@@ -1235,6 +1239,20 @@ export class PodService {
     cap: number,
     excludeGb = 0,
   ): Promise<void> {
+    // The box limit applies to everyone, admins included — the hardware does not know who you are.
+    const boxCap = this.config.boxRamGb;
+    if (boxCap !== undefined && Number.isFinite(boxCap)) {
+      // ponytail: one box, so every active pod counts; per-box sums when there is a second box.
+      const active = await this.store.listByStatus(["running", "waking", "provisioning"]);
+      const boxTotal = active.reduce((n, p) => n + ramGbForSize(p.size), 0) - excludeGb + addGb;
+      if (boxTotal > boxCap) {
+        this.log.warn("box_capacity_refused", { ownerId, addGb, boxTotal, boxCap });
+        throw new ControlError(
+          "Podway is at capacity right now. Try a smaller size, or try again later.",
+          "capacity_limit",
+        );
+      }
+    }
     if (!Number.isFinite(cap)) return;
     const { usedGb } = await this.accountRamUsage(ownerId, cap);
     const total = usedGb - excludeGb + addGb;

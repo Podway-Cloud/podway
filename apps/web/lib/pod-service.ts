@@ -230,6 +230,7 @@ export function getPodService(): PodService {
   const svc = new PodService(providers[defaultProviderName] ?? base, store, {
     environmentsRoot: getEnvironmentsRoot(),
     secretVault: secretVault(db),
+    boxRamGb: Number(process.env.PODWAY_BOX_RAM_GB) || undefined,
     providers,
     defaultProviderName,
     // Shared fetch memory: pods report what they learned on the reconcile poll and
