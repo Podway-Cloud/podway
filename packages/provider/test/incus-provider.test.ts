@@ -379,24 +379,27 @@ describe("IncusProvider", () => {
     expect(info.status).toBe("running");
   });
 
-  describe("NO private-memory override (reverted 2026-09-27: share=off on a memfd doubled pod memory)", () => {
-    it("resize REMOVES the override from a pod that still carries it", async () => {
+  describe("guest memory: free-page reporting on the balloon, never a mem0 override", () => {
+    const BALLOON = '[device "qemu_balloon"]\nfree-page-reporting = "on"\n';
+    it("create, resize and updateImage all turn on free-page reporting", async () => {
+      const f = fakeIncus();
+      const p = mkProvider(f);
+      await p.createPod(input("pod-a"));
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBe(BALLOON);
+      await p.resize("pod-a", { cpus: 2, memoryGb: 4, diskGb: 20 });
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBe(BALLOON);
+      await p.updateImage("pod-a", "pod-base-v2");
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBe(BALLOON);
+    });
+    it("resize REPLACES a leftover KSM mem0 override (it doubled pod memory, 2026-09-27)", async () => {
       const f = fakeIncus();
       const p = mkProvider(f);
       await p.createPod(input("pod-a"));
       f.instances.get("pod-a")!.config["raw.qemu.conf"] = '[object "mem0"]\nshare = "off"\n';
       await p.resize("pod-a", { cpus: 2, memoryGb: 4, diskGb: 20 });
-      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"] ?? "").toBe("");
-    });
-    it("create, resize and updateImage never set raw.qemu.conf", async () => {
-      const f = fakeIncus();
-      const p = mkProvider(f);
-      await p.createPod(input("pod-a"));
-      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBeUndefined();
-      await p.resize("pod-a", { cpus: 2, memoryGb: 4, diskGb: 20 });
-      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBeUndefined();
-      await p.updateImage("pod-a", "pod-base-v2");
-      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBeUndefined();
+      const conf = f.instances.get("pod-a")!.config["raw.qemu.conf"];
+      expect(conf).toBe(BALLOON);
+      expect(conf).not.toContain("mem0");
     });
   });
 

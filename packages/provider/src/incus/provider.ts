@@ -312,13 +312,14 @@ export class IncusProvider implements SandboxProvider {
    * block custom volume. LEGACY pods created before the 9p→block switch have a
    * `filesystem` volume, which REQUIRES a path (the 9p share mountpoint); detect
    * that so recreating an old pod (updateImage) still works. */
-  /** REVERTED (2026-09-27): raw.qemu.conf `mem0 share=off` doubled pod memory. Incus backs guest RAM
-   * with a memfd; mapping it PRIVATE copies every touched page into anonymous memory while the memfd keeps
-   * its own copy (a 16 GiB VM held ~15.5 GiB anon + ~13.4 GiB memfd). KSM saved ~2.7 GiB of it; the box
-   * lost ~40-60 GiB and ran out of memory. Kept as a no-op so every call site stays one line; a real KSM
-   * change needs an ANONYMOUS backend (memory-backend-ram), measured by whole-box free memory. */
+  /** Free-page reporting on the VM's existing balloon device (guest-memory-return): memory the guest
+   * frees goes back to the box, which is what lets the box overcommit. Pilot 2026-09-28: whole-box Shmem
+   * fell by exactly what the guest freed. It touches ONLY the balloon — never `mem0`: the reverted KSM
+   * override (`mem0 share=off`) doubled pod memory (2026-09-27). Setting this value also REPLACES any
+   * such leftover override. raw.qemu.conf only takes effect on a stopped VM, so pods get it on the next
+   * create / resize / update. */
   private guestMemoryConfig(_home: Record<string, string>): Record<string, string> {
-    return {};
+    return { "raw.qemu.conf": '[device "qemu_balloon"]\nfree-page-reporting = "on"\n' };
   }
 
   private async homeDevice(id: string): Promise<Record<string, string>> {
@@ -570,9 +571,7 @@ export class IncusProvider implements SandboxProvider {
       config: {
         "limits.cpu": String(resources.cpus),
         "limits.memory": `${resources.memoryGb}GiB`,
-        ...this.guestMemoryConfig(await this.homeDevice(id)),
-        // Drop the reverted private-memory override if this pod still carries it (it doubles memory).
-        ...(inst.config["raw.qemu.conf"] ? { "raw.qemu.conf": "" } : {}),
+        ...this.guestMemoryConfig(await this.homeDevice(id)), // also replaces a leftover mem0 override
       },
     });
     // Grow-only. The swap reserve tracks RAM, so a RAM-DOWN resize computes a smaller target — but

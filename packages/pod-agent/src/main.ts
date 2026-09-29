@@ -4,6 +4,7 @@ import path from "node:path";
 import { createLogger } from "@podway/shared/log";
 import { AgentServer } from "./server.js";
 import { startScheduler } from "./scheduler.js";
+import { startCacheTrim } from "./cache-trim.js";
 import {
   bootCommandForAgent,
   credentialsPathForAgent,
@@ -175,6 +176,7 @@ async function main(): Promise<void> {
   } catch {
     /* best-effort: a fresh pod has nothing to migrate */
   }
+  if (isRoot) startCacheTrim(log); // guest-memory-return: idle pods hand cache back to the box
   startScheduler({
     sessionName: "main",
     jobsPath: path.join(opsDir, "ops-jobs.json"),
