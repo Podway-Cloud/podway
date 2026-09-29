@@ -601,3 +601,14 @@ stayed broken (2026-09-07).
 - **WHEN** the file is present, or the pod has no secrets at all
 - **THEN** nothing SHALL be pushed, and a pod with no secrets SHALL NOT be probed
 
+### Requirement: A frozen pod becomes a visible, alerted event
+
+When a pod's VM is running but its agent has not answered for 10 minutes, the control plane SHALL record
+a `pod_unresponsive` event on the pod's timeline and SHALL send an ops alert, once per episode; when the
+agent answers again it SHALL record `pod_responsive_again` and alert the recovery. Rationale: on
+2026-09-29 three frozen guests showed "resuming…" for hours with no error and no alert.
+
+#### Scenario: A frozen guest
+- **GIVEN** a pod whose VM runs and whose agent never answers
+- **WHEN** 10 minutes pass
+- **THEN** exactly one `pod_unresponsive` event and one ops alert SHALL be produced

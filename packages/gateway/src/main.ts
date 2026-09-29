@@ -79,6 +79,13 @@ async function main(): Promise<void> {
   });
   const control = new PodService(provider, new DrizzlePodStore(db), {
     podReports,
+    // Frozen guest (VM running, agent silent 10 min) — the 2026-09-29 "resuming…" forever. Ops alert.
+    onPodUnresponsive: (p, i) =>
+      notifyOps(
+        i.recovered
+          ? `✅ Pod "${p.name ?? p.id}" (${p.id}) answers again.`
+          : `🧊 Pod "${p.name ?? p.id}" (${p.id}) is FROZEN: VM running, agent silent for ${i.minutes} min. Runbook: docs/runbooks/pod-recovery.md (force restart).`,
+      ),
     onClaudeRenewed: (p, oldExp, newExp) =>
       loginReminders.notifyRenewed({ id: p.id, name: p.name, ownerId: p.ownerId, agentAuth: p.agentAuth, claudeLoginExpiresAt: newExp }, oldExp, newExp),
     onClaudeSignedOut: (p) =>

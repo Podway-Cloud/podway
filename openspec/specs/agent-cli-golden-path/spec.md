@@ -72,3 +72,21 @@ the owner-scoped pod message is the automated channel; the PR/issue is gated.
   the pins, SHALL NOT attempt any automated code fix, and SHALL NOT publish an outbound issue without
   the owner's confirmation
 
+### Requirement: `pod-base` moves only after a real boot from the exact image passes
+
+The build SHALL publish a new image under its dated alias only. The `pod-base` alias — what every launch
+and update boots — SHALL move to it only after, in order: the image's ZFS clone source
+(`images/<fp>.block@readonly`) exists; a scratch VM created from that EXACT fingerprint boots and its
+pod-agent answers `/healthz` within 5 minutes; the sign-in golden path passes; and the scratch VM is
+deleted. The whole sequence SHALL run on the box inside the detached build job, so a local session dying
+cannot leave an unchecked image on `pod-base`. A failing image SHALL NOT be promoted or recorded, and
+`SKIP_GOLDEN_PATH` SHALL skip only the sign-in probe, never the boot. Rationale: on 2026-09-29 the alias
+moved before any check, the image's clone snapshot never existed, and an Update deleted podway dev on it.
+
+#### Scenario: An image with no clone source
+- **GIVEN** a published image whose `.block@readonly` snapshot is missing
+- **THEN** promotion SHALL fail at the first step and `pod-base` SHALL stay on the previous image
+
+#### Scenario: A good image
+- **GIVEN** an image that boots, answers `/healthz`, and passes sign-in
+- **THEN** `pod-base` SHALL point to it and no check VM SHALL remain

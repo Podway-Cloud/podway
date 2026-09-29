@@ -42,6 +42,9 @@ export type PodEventType =
   // event, not just a log line: a pod that has been running without its secrets has been failing
   // silently, and the owner deserves that on the timeline (2026-09-07). meta: { keys }.
   | "secrets_restored"
+  // A running VM whose agent never answered for 10 min (a frozen guest), and its recovery.
+  | "pod_unresponsive"
+  | "pod_responsive_again"
   | "admin_action"
   // The owner revealed a stored secret value in the cockpit. meta: { key }. Audited
   // because it is the one path that returns a plaintext secret to a browser.

@@ -46,6 +46,8 @@ function fakeIncus() {
   // Models a half-dead instance: the graceful stop fails, and by the time the FORCED stop lands the
   // instance is already down, so incus answers "already stopped" instead of stopping it.
   let alreadyStoppedOnForce = false;
+  let failCreate: string | null = null;
+  let failSnapshot = false; // e.g. the 2026-09-29 "zfs clone … failed" from a broken image
   const instances = new Map<string, IncusInstance>();
   const volumes = new Set<string>();
   const filesystemVolumes = new Set<string>(); // LEGACY 9p/virtiofs homes (pre block-volume pods)
@@ -62,6 +64,14 @@ function fakeIncus() {
     }) {
       calls.push(`create:${spec.name}:${spec.imageAlias}`);
       if (instances.has(spec.name)) throw new Error("already exists");
+      if (failCreate) throw new Error(failCreate);
+      // Real Incus (verified on the box 2026-09-29): an un-shared block volume attaches to ONE instance.
+      for (const d of Object.values(spec.devices)) {
+        const held = [...instances.values()].some((i) =>
+          Object.values(i.devices ?? {}).some((x) => x.source && x.source === d.source),
+        );
+        if (d.source && held) throw new Error("Cannot add un-shared custom storage block volume to more than one instance");
+      }
       instances.set(spec.name, {
         name: spec.name,
         status: "Stopped",
@@ -109,6 +119,17 @@ function fakeIncus() {
       calls.push(`delete-instance:${name}`);
       instances.delete(name);
     },
+    async renameInstance(name: string, newName: string) {
+      calls.push(`rename:${name}:${newName}`);
+      const i = instances.get(name);
+      if (!i || instances.has(newName)) throw new Error("rename failed");
+      instances.delete(name);
+      instances.set(newName, { ...i, name: newName });
+    },
+    async setDevices(name: string, devices: Record<string, Record<string, string>>) {
+      calls.push(`set-devices:${name}:${Object.keys(devices).sort().join(",")}`);
+      instances.get(name)!.devices = devices;
+    },
     async patchInstance(name: string, patch: { config?: Record<string, string> }) {
       const i = instances.get(name)!;
       Object.assign(i.config, patch.config ?? {});
@@ -141,6 +162,10 @@ function fakeIncus() {
     },
     async snapshotVolume(_pool: string, volume: string, snap: string) {
       calls.push(`snap:${volume}:${snap}`);
+      if (failSnapshot) throw new Error("snapshot failed");
+    },
+    async patchVolumeConfig(_pool: string, volume: string, config: Record<string, string>) {
+      calls.push(`vol-config:${volume}:${config["snapshots.schedule"]}`);
     },
     async resizeVolume(_pool: string, volume: string, sizeGb: number) {
       calls.push(`resize-volume:${volume}:${sizeGb}`);
@@ -156,6 +181,12 @@ function fakeIncus() {
     volumeSizes,
     calls,
     pushed,
+    failSnapshot: (v: boolean) => {
+      failSnapshot = v;
+    },
+    failCreate: (msg: string | null) => {
+      failCreate = msg;
+    },
     alreadyStoppedOnForce: (v: boolean) => {
       alreadyStoppedOnForce = v;
     },
@@ -259,13 +290,66 @@ describe("IncusProvider", () => {
 
     const info = await p.updateImage("pod-a", "pod-base-v2");
 
-    expect(f.calls).toContain("delete-instance:pod-a");
-    expect(f.calls).toContain("create:pod-a:pod-base-v2");
+    // Old VM parked (never deleted first), new one created, parked copy removed only after success.
+    const order = ["rename:pod-a:pod-a-prev", "create:pod-a:pod-base-v2", "delete-instance:pod-a-prev"];
+    expect(order.map((c) => f.calls.indexOf(c)).every((i, k, a) => i >= 0 && (k === 0 || i > a[k - 1]!))).toBe(true);
+    expect(f.calls).not.toContain("delete-instance:pod-a");
+    expect(f.instances.has("pod-a-prev")).toBe(false);
     expect(f.calls.filter((c) => c.startsWith("delete-volume:"))).toEqual([]); // volume untouched
     expect(f.volumes.has("pod-a-home")).toBe(true);
     expect(info.status).toBe("running"); // was running → restarted
     // keepAwake + owner survive the recreation
     expect(f.instances.get("pod-a")!.config["user.podway.owner"]).toBe("u1");
+  });
+
+  describe("an update can NEVER leave a pod gone (outage 2026-09-29)", () => {
+    it("create fails on a broken image → the old VM comes back, running, with its home volume", async () => {
+      const f = fakeIncus();
+      const p = mkProvider(f);
+      await p.createPod(input("pod-a"));
+      const before = f.instances.get("pod-a")!;
+      f.failCreate("zfs clone … dataset does not exist");
+      await expect(p.updateImage("pod-a", "pod-base-v2")).rejects.toThrow(/restored on its previous image/);
+      const after = f.instances.get("pod-a")!;
+      expect(after).toBeDefined();
+      expect(after.status).toBe("Running");
+      expect(after.devices.home?.source).toBe("pod-a-home");
+      expect(after.config["user.podway.owner"]).toBe(before.config["user.podway.owner"]);
+      expect(f.instances.has("pod-a-prev")).toBe(false);
+      expect(f.volumes.has("pod-a-home")).toBe(true);
+    });
+
+    it("snapshots the home volume BEFORE stopping, and a failed snapshot changes nothing", async () => {
+      const f = fakeIncus();
+      const p = mkProvider(f);
+      await p.createPod(input("pod-a"));
+      await p.updateImage("pod-a", "pod-base-v2");
+      const snap = f.calls.findIndex((c) => c.startsWith("snap:pod-a-home:pre-update-"));
+      const stop = f.calls.findIndex((c) => c.startsWith("state:pod-a:stop"));
+      expect(snap).toBeGreaterThanOrEqual(0);
+      expect(snap).toBeLessThan(stop);
+      expect(f.calls).toContain("vol-config:pod-a-home:@daily");
+
+      f.failSnapshot(true);
+      const before = f.calls.length;
+      await expect(p.updateImage("pod-a", "pod-base-v3")).rejects.toThrow(/nothing was changed/);
+      expect(f.calls.slice(before).some((c) => c.startsWith("state:") || c.startsWith("rename:"))).toBe(false);
+      expect(f.instances.get("pod-a")!.status).toBe("Running");
+    });
+
+    it("a crash that left ONLY <id>-prev is healed by the next update, not answered 'not found'", async () => {
+      const f = fakeIncus();
+      const p = mkProvider(f);
+      await p.createPod(input("pod-a"));
+      // Simulate the crash window: parked + home detached, new VM never created.
+      const i = f.instances.get("pod-a")!;
+      f.instances.delete("pod-a");
+      const { home: _h, ...rest } = i.devices;
+      f.instances.set("pod-a-prev", { ...i, name: "pod-a-prev", status: "Stopped", devices: rest });
+      await p.updateImage("pod-a", "pod-base-v2");
+      expect(f.instances.get("pod-a")?.devices.home?.source).toBe("pod-a-home");
+      expect(f.instances.has("pod-a-prev")).toBe(false);
+    });
   });
 
   it("updateImage delivers the CURRENT .claude layer and clears the seed marker", async () => {

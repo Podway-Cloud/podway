@@ -152,6 +152,9 @@ function configLayerHash(
   return createHash("sha256").update(canonical).digest("hex");
 }
 
+/** A running VM whose agent has not answered this long is treated as frozen (watchUnresponsive). */
+export const UNRESPONSIVE_MS = 10 * 60_000;
+
 export interface PodServiceConfig {
   /** Directory holding first-party environments (each a subdir with podway.yaml). */
   environmentsRoot: string;
@@ -160,6 +163,9 @@ export interface PodServiceConfig {
   /** Optional per-pod app-secret vault (BotFather token, API keys). When present,
    * set secrets are injected into the pod as env vars on wake and on set/clear. */
   secretVault?: SecretVault;
+  /** Called once when a pod's VM runs but its agent has not answered for UNRESPONSIVE_MS (a frozen
+   * guest), and again with `recovered` when it answers. The gateway sends an ops alert. */
+  onPodUnresponsive?: (pod: PodRecord, info: { minutes: number; recovered: boolean }) => Promise<void>;
   /** Total pod RAM (GB) the box may be PROMISED (PODWAY_BOX_RAM_GB). Unset ⇒ no box gate (self-host).
    * Account budgets alone let the box be promised 124 GB of 128 (2026-09-28): guests fill their RAM
    * with page cache over hours, so an over-promised box ends in the OOM killer. */
@@ -4268,6 +4274,7 @@ export class PodService {
     const prov = this.providerFor(record.provider);
     const info = await prov.getPod(id);
     const status = await this.liveStatus(id, info.status, prov);
+    await this.watchUnresponsive(record, info.status, status).catch(() => undefined);
     // Backfill the authoritative machine identity for LEGACY rows created before
     // these columns existed (both null on pods predating them). machineId powers
     // duplicate-prevention on re-provision; imageDigest powers update-detection —
@@ -4397,6 +4404,33 @@ export class PodService {
 
   /** Fly "started" only means the machine is on; hold "waking" until the
    * pod-agent actually accepts a connection, so "running" means connectable. */
+  /**
+   * A VM that runs while its agent never answers is a FROZEN guest, not a pod "resuming". On 2026-09-29
+   * three pods sat on "resuming…" for hours with no error and no alert. After UNRESPONSIVE_MS this
+   * records `pod_unresponsive` on the pod's timeline and alerts ops, once per episode; recovery is
+   * recorded too. In-memory per process: a gateway restart re-arms it (worst case a late alert).
+   */
+  private readonly unresponsiveSince = new Map<string, number>();
+  private readonly unresponsiveAlerted = new Set<string>();
+  private async watchUnresponsive(rec: PodRecord, vm: PodStatus, live: PodStatus, now = Date.now()): Promise<void> {
+    if (vm === "running" && live === "waking") {
+      const since = this.unresponsiveSince.get(rec.id) ?? now;
+      this.unresponsiveSince.set(rec.id, since);
+      const minutes = Math.round((now - since) / 60_000);
+      if (now - since < UNRESPONSIVE_MS || this.unresponsiveAlerted.has(rec.id)) return;
+      this.unresponsiveAlerted.add(rec.id);
+      this.log.error("pod_unresponsive", { podId: rec.id, minutes });
+      await this.emit(rec, "pod_unresponsive", { minutes }).catch(() => undefined);
+      await this.config.onPodUnresponsive?.(rec, { minutes, recovered: false }).catch(() => undefined);
+      return;
+    }
+    this.unresponsiveSince.delete(rec.id);
+    if (this.unresponsiveAlerted.delete(rec.id) && live === "running") {
+      await this.emit(rec, "pod_responsive_again", {}).catch(() => undefined);
+      await this.config.onPodUnresponsive?.(rec, { minutes: 0, recovered: true }).catch(() => undefined);
+    }
+  }
+
   private async liveStatus(
     id: string,
     flyStatus: PodStatus,

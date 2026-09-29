@@ -28,3 +28,4 @@ test-results/
 # never commit a vault key or a local Postgres data dir
 vault.key
 **/PG_VERSION
+.last-built-fp

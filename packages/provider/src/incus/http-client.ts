@@ -68,6 +68,13 @@ export class IncusApiError extends Error {
   }
 }
 
+/** Home-volume snapshot policy: daily, kept 7 days. */
+export const HOME_SNAPSHOTS = {
+  "snapshots.schedule": "@daily",
+  "snapshots.expiry": "7d",
+  "snapshots.pattern": "auto-%d",
+} as const;
+
 export class IncusApi {
   private readonly project: string;
   private readonly host: string;
@@ -242,6 +249,21 @@ export class IncusApi {
     await this.req("PATCH", `/1.0/instances/${name}`, patch);
   }
 
+  /** Rename a STOPPED instance (the update's rollback copy, `<id>-prev`). */
+  async renameInstance(name: string, newName: string): Promise<void> {
+    await this.doAsync("POST", `/1.0/instances/${name}`, { name: newName });
+  }
+
+  /** Replace an instance's device map. PATCH merges devices per key and cannot REMOVE one, so this is
+   * a GET + PUT of the instance's writable fields (what `incus config device remove` does). */
+  async setDevices(name: string, devices: Record<string, Record<string, string>>): Promise<void> {
+    const cur = (await this.req<Record<string, unknown>>("GET", `/1.0/instances/${name}`)).metadata;
+    const { architecture, config, ephemeral, profiles, stateful, description } = cur;
+    await this.doAsync("PUT", `/1.0/instances/${name}`, {
+      architecture, config, ephemeral, profiles, stateful, description, devices,
+    });
+  }
+
   // --- files (init injection: pod-spec, kickoff, .claude layer, secrets.env) ---
 
   async pushFile(
@@ -306,7 +328,8 @@ export class IncusApi {
   async createVolume(pool: string, name: string, sizeGb: number): Promise<void> {
     await this.doAsync("POST", `/1.0/storage-pools/${pool}/volumes/custom`, {
       name,
-      config: { size: `${sizeGb}GiB` },
+      // Daily snapshots kept 7 days (2026-09-29: podway dev's home had ZERO snapshots when its VM was lost).
+      config: { size: `${sizeGb}GiB`, ...HOME_SNAPSHOTS },
       // BLOCK, not filesystem: a filesystem volume is shared into the VM over 9p,
       // whose broken POSIX semantics caused a whole class of bugs (guest chown not
       // reflected → "root-owned ~/work", EACCES on valid mkdir → Turbopack .next
@@ -368,10 +391,15 @@ export class IncusApi {
     ).metadata;
   }
 
-  async snapshotVolume(pool: string, volume: string, snapshotName: string): Promise<void> {
+  async snapshotVolume(pool: string, volume: string, snapshotName: string, expiresAt?: Date): Promise<void> {
     await this.doAsync("POST", `/1.0/storage-pools/${pool}/volumes/custom/${volume}/snapshots`, {
       name: snapshotName,
+      ...(expiresAt ? { expires_at: expiresAt.toISOString() } : {}),
     });
+  }
+
+  async patchVolumeConfig(pool: string, volume: string, config: Record<string, string>): Promise<void> {
+    await this.req("PATCH", `/1.0/storage-pools/${pool}/volumes/custom/${volume}`, { config });
   }
 
   // --- images (pod-base manifest prune) ---

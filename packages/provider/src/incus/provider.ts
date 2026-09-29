@@ -16,7 +16,7 @@ import type { SandboxProvider, CodexPairing, DoctorReport, DoctorMode, PodHealth
 import { narrowSnapshot } from "../provider.js";
 import type { FetchReport } from "../provider.js";;
 import { buildInitFiles, toEnvFile } from "../pod-init.js";
-import { IncusApi, type IncusInstance } from "./http-client.js";
+import { HOME_SNAPSHOTS, IncusApi, type IncusInstance } from "./http-client.js";
 
 const log = createLogger("provider-incus");
 
@@ -566,6 +566,7 @@ export class IncusProvider implements SandboxProvider {
     if (!inst) throw new ProviderError(`pod ${id} not found`, "not_found");
     const wasRunning = inst.status === "Running";
 
+    await this.protectHome(id, "resize");
     if (wasRunning) await this.stopForMaintenance(id, "resize");
     await this.incus.patchInstance(id, {
       config: {
@@ -628,6 +629,36 @@ export class IncusProvider implements SandboxProvider {
    * reattach → start. Same outcome as Fly's flow: ~/work + the Claude login
    * survive; the live conversation ends; `claude --continue` resumes.
    */
+  /** Before a risky op on a pod (update, resize): make sure its home volume has the daily snapshot policy,
+   * then take a snapshot kept 7 days. A failed snapshot ABORTS the op — "snapshot, then act". */
+  private async protectHome(id: string, why: string): Promise<void> {
+    const vol = this.homeVolume(id);
+    await this.incus.patchVolumeConfig(this.config.pool, vol, { ...HOME_SNAPSHOTS });
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13);
+    try {
+      await this.incus.snapshotVolume(this.config.pool, vol, `pre-${why}-${stamp}`, new Date(Date.now() + 7 * 86_400_000));
+    } catch (e) {
+      throw new ProviderError(`could not snapshot ${vol} before ${why}; nothing was changed: ${(e as Error).message}`, "transient");
+    }
+    log.info("pod_home_snapshotted", { podId: id, why });
+  }
+
+  /** Undo a parked update: give `<id>-prev` its devices (home) back, rename it to `id`, and start it if
+   * it was running. Used on a failed swap and to heal a crash that left only `<id>-prev`. */
+  private async restorePrev(
+    id: string,
+    prev: string,
+    start: boolean,
+    devices?: Record<string, Record<string, string>>,
+  ): Promise<void> {
+    const cur = await this.incus.getInstance(prev);
+    const want = devices ?? { ...(cur?.devices ?? {}), home: await this.homeDevice(id) };
+    await this.incus.setDevices(prev, want);
+    await this.incus.renameInstance(prev, id);
+    if (start) await this.incus.setState(id, "start");
+    log.warn("pod_update_restored_prev", { podId: id });
+  }
+
   async updateImage(
     id: string,
     image: string,
@@ -641,6 +672,13 @@ export class IncusProvider implements SandboxProvider {
     },
   ): Promise<PodInfo> {
     const stage = (s: string) => { try { onStage?.(s); } catch { /* progress is best-effort */ } };
+    const prev = `${id}-prev`;
+    // A crash mid-swap can leave ONLY `<id>-prev`. Put it back instead of answering "not found" — the
+    // 2026-09-29 outage: podway dev was gone 3.5 h and every retry said "not found".
+    if (!(await this.incus.getInstance(id)) && (await this.incus.getInstance(prev))) {
+      log.warn("pod_update_restoring_prev", { podId: id });
+      await this.restorePrev(id, prev, false);
+    }
     const inst = await this.incus.getInstance(id);
     if (!inst) throw new ProviderError(`pod ${id} not found`, "not_found");
     const wasRunning = inst.status === "Running";
@@ -674,31 +712,51 @@ export class IncusProvider implements SandboxProvider {
           .catch(() => null)
       : null;
 
+    await this.protectHome(id, "update");
     stage("stopping");
     if (wasRunning) await this.stopForMaintenance(id, "update");
-    await this.incus.deleteInstance(id);
+    // Never delete before the new VM runs. Park the old one as `<id>-prev` (home detached — Incus will not
+    // attach a block volume to two VMs), build + start the new one, and on ANY failure put the old one
+    // back exactly as it was. 2026-09-29: delete-then-create on a broken image left podway dev GONE.
+    if (await this.incus.getInstance(prev)) await this.incus.deleteInstance(prev); // stale; `id` is live
+    await this.incus.renameInstance(id, prev);
+    const { home: _oldHome, ...devicesWithoutHome } = inst.devices ?? {};
+    await this.incus.setDevices(prev, devicesWithoutHome);
     stage("recreating");
     const home = await this.homeDevice(id);
-    await this.incus.createInstance({
-      name: id,
-      imageAlias: sourceAlias,
-      config: {
-        "limits.cpu": cpu,
-        "limits.memory": memory,
-        "user.podway.owner": owner,
-        "user.podway.keep_awake": keepAwake ? "true" : "false",
-        ...this.guestMemoryConfig(home),
-      },
-      devices: {
+    try {
+      await this.incus.createInstance({
+        name: id,
+        imageAlias: sourceAlias,
+        config: {
+          "limits.cpu": cpu,
+          "limits.memory": memory,
+          "user.podway.owner": owner,
+          "user.podway.keep_awake": keepAwake ? "true" : "false",
+          ...this.guestMemoryConfig(home),
+        },
         // Same home volume, re-attached. homeDevice() picks block (no path) vs a
         // legacy filesystem volume (path) so recreating an OLD pod still works.
-        home,
-      },
-    });
+        devices: { home },
+      });
+      if (wasRunning) {
+        stage("starting");
+        await this.incus.setState(id, "start");
+      }
+    } catch (e) {
+      log.error("pod_update_failed_rolling_back", { podId: id, err: e });
+      await this.incus.deleteInstance(id).catch(() => undefined); // the half-made VM, if any
+      await this.restorePrev(id, prev, wasRunning, inst.devices);
+      throw new ProviderError(
+        `Update failed; the pod was restored on its previous image. ${(e as Error).message}`,
+        "transient",
+      );
+    }
+    await this.incus
+      .deleteInstance(prev)
+      .catch((e) => log.warn("pod_update_prev_cleanup_failed", { podId: id, err: e }));
     // Suspended pods stay stopped — "applies on next start", same as Fly.
     if (wasRunning) {
-      stage("starting");
-      await this.incus.setState(id, "start");
       // Re-push the pod-spec and RELOAD the agent so init.sh re-runs with the
       // env config present (mirrors createPod). Without this, the update strips
       // node_modules + permissions. First boot ran init.sh without the spec; the

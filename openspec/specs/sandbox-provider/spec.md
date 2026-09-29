@@ -277,6 +277,29 @@ cold-restart (the live conversation ends; the agent resumes via `claude --contin
 pod SHALL be left stopped so the update applies on its next start (never waking a suspended pod
 just to update it).
 
+An update SHALL NEVER delete the pod's VM before its replacement exists and has started. The provider
+SHALL park the old VM as `<id>-prev` (home volume detached — Incus refuses one block volume on two
+VMs), create and start the new VM, and delete `<id>-prev` only after that succeeds. On ANY failure in
+between it SHALL remove the half-made VM and put `<id>-prev` back exactly as it was (devices, name,
+running state), then report the failure. If a crash leaves only `<id>-prev`, the next update SHALL
+restore it instead of answering "not found". Rationale: on 2026-09-29 delete-then-create on a broken
+image (its ZFS `.block@readonly` snapshot never existed) left podway dev GONE for 3.5 hours.
+
+#### Scenario: The new image cannot be instantiated
+- **GIVEN** a running pod and an image whose clone fails
+- **WHEN** the pod is updated
+- **THEN** the update SHALL fail AND the pod SHALL be running on its previous VM with its home volume
+
+Before an update or a resize stops a pod, the provider SHALL snapshot its home volume (kept 7 days) and
+SHALL ensure the volume carries the daily snapshot policy (`@daily`, 7-day expiry; new volumes are
+created with it). If the snapshot fails, the operation SHALL NOT start. Rationale: podway dev's home
+had zero snapshots when its VM was lost.
+
+#### Scenario: A crash mid-swap
+- **GIVEN** only `<id>-prev` exists (home detached)
+- **WHEN** the pod is updated again
+- **THEN** `<id>-prev` SHALL be restored as `<id>` before the update proceeds
+
 An update SHALL also deliver the environment's CURRENT `.claude` config layer (when the caller
 supplies it) and clear the volume's seed marker before restarting the agent, so the in-pod seed
 re-runs and skills/rules shipped after the pod's creation reach it. Rationale: the recreate wipes
