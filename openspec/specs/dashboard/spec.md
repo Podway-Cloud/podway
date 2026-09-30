@@ -865,8 +865,10 @@ like `public` for transport but the two are separate flags on the pod.
 
 ### Requirement: The pod list is hand-ordered (manual order only)
 
-The owner SHALL be able to reorder pod cards by dragging (the grip is the drag target; clicking
-the card still opens it). The order SHALL persist server-side per pod and survive reload and
+The owner SHALL be able to reorder pod cards by dragging ANYWHERE on the card: a press that moves
+8 px starts the drag, a plain click still opens the pod, the release after a drag SHALL NOT open it,
+and card text SHALL NOT get selected while dragging. The grip remains the keyboard handle. (The grip
+alone, 24 px, was "almost impossible to grab" — a press beside it selected the name, 2026-09-29.) The order SHALL persist server-side per pod and survive reload and
 device changes. There SHALL be NO automatic grouping of the list; hand order wins over any default
 sort. A pod created after the owner last sorted SHALL appear ABOVE the hand-ordered pods (easy to
 find and drag into place) rather than buried by a default sort.
@@ -2330,3 +2332,15 @@ pod as unknown and back off from probing it, retrying on a slower schedule.
 #### Scenario: An unreachable pod is never reported healthy
 - **WHEN** a pod is being served from the breaker or from cache after failures
 - **THEN** it is reported as unknown, never as its last known-good value
+
+### Requirement: Pages that list pods never wait on one slow pod
+
+A page that lists the owner's pods (dashboard, billing) SHALL wait at most 800 ms for the
+reconciles of pods in transition before it renders; slower reconciles SHALL finish in the
+background and appear on the page's next refresh. Rationale: a frozen guest makes the VM state
+call take ~4 s, and every dashboard and billing load sat on skeletons for it (2026-09-29).
+
+#### Scenario: A frozen pod is waking
+- **GIVEN** one of the owner's pods is "waking" and its VM state call takes 3 s
+- **WHEN** the owner opens the dashboard
+- **THEN** the pod list SHALL render within about 1 s

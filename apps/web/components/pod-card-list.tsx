@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { qk } from "@/lib/query-keys";
 import {
@@ -38,13 +38,13 @@ const IDLE_UPDATE_DWELL_MS = 10 * 60 * 1000;
 const UNKNOWN_STATUS_IDLE_MS = 4 * 60 * 60 * 1000;
 
 /**
- * The dashboard's pod list with MANUAL drag-to-reorder (the grip is the only drag
- * target, so links/buttons keep working). A drop persists the complete order
+ * The dashboard's pod list with MANUAL drag-to-reorder. The WHOLE card is the drag target (an 8 px
+ * move starts a drag, so a plain click still opens the pod); the grip is the keyboard handle. A drop persists the complete order
  * server-side; the optimistic local order holds until the next server render
  * confirms it. No auto-grouping — the owner's hand order is the order.
  */
 
-function SortableCard({ card }: { card: PodCardProps }) {
+function SortableCard({ card, justDragged }: { card: PodCardProps; justDragged: () => boolean }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.slug,
   });
@@ -54,7 +54,9 @@ function SortableCard({ card }: { card: PodCardProps }) {
       drag={{
         innerRef: setNodeRef,
         style: { transform: CSS.Transform.toString(transform), transition },
-        handleProps: { ...attributes, ...listeners },
+        handleProps: attributes as unknown as Record<string, unknown>,
+        cardProps: listeners,
+        justDragged,
         dragging: isDragging,
       }}
     />
@@ -127,10 +129,14 @@ export default function PodCardList({
     );
   }, [cards]);
 
+  // The release that ends a drag must not also open the pod (the card is now the drag target).
+  const lastDragEnd = useRef(0);
+  const justDragged = () => Date.now() - lastDragEnd.current < 300;
+
   const sensors = useSensors(
     // A small activation distance keeps plain clicks (open the cockpit) from
     // starting a drag; touch holds briefly so scrolling still works on phones.
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
@@ -235,6 +241,7 @@ export default function PodCardList({
   }
 
   const onDragEnd = (e: DragEndEvent) => {
+    lastDragEnd.current = Date.now();
     const { active, over } = e;
     if (!over || active.id === over.id) return;
     setOrder((cur) => {
@@ -290,7 +297,7 @@ export default function PodCardList({
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <ul className="flex flex-col gap-3">
             {ordered.map((c) => (
-              <SortableCard key={c.slug} card={c} />
+              <SortableCard key={c.slug} card={c} justDragged={justDragged} />
             ))}
           </ul>
         </SortableContext>

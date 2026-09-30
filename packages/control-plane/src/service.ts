@@ -152,6 +152,9 @@ function configLayerHash(
   return createHash("sha256").update(canonical).digest("hex");
 }
 
+/** listPods waits at most this long for its reconciles before rendering (see listPods). */
+export const LIST_RECONCILE_BUDGET_MS = 800;
+
 /** A running VM whose agent has not answered this long is treated as frozen (watchUnresponsive). */
 export const UNRESPONSIVE_MS = 10 * 60_000;
 
@@ -1287,7 +1290,14 @@ export class PodService {
         (p.status === "running" && p.sessionUrl === null),
     );
     if (transient.length === 0) return this.sortForDisplay(pods);
-    await Promise.all(transient.map((p) => this.bestEffort("reconcile", p.id, () => this.reconcile(p.id))));
+    // Bounded: a page never waits on a slow pod. A FROZEN guest makes Incus's state call take ~4 s
+    // (t3tt, 2026-09-29), and every dashboard/billing load sat on skeletons for it. Wait up to
+    // LIST_RECONCILE_BUDGET_MS; slower reconciles finish in the background and the page's own
+    // refresh shows them.
+    const work = Promise.all(transient.map((p) => this.bestEffort("reconcile", p.id, () => this.reconcile(p.id))));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([work, new Promise<void>((r) => (timer = setTimeout(r, LIST_RECONCILE_BUDGET_MS)))]);
+    clearTimeout(timer);
     return this.sortForDisplay(await this.store.listByOwner(ownerId));
   }
 

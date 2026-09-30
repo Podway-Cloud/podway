@@ -78,7 +78,13 @@ export interface PodCardProps {
 export interface PodCardDrag {
   innerRef?: Ref<HTMLLIElement>;
   style?: CSSProperties;
+  /** Keyboard/a11y attributes for the grip (focus it, Space to lift, arrows to move). */
   handleProps?: Record<string, unknown>;
+  /** Pointer/touch listeners for the WHOLE card: the 24 px grip alone was "almost impossible to grab"
+   * (owner, 2026-09-29) — a press beside it selected the name or grabbed the card link instead. */
+  cardProps?: Record<string, unknown>;
+  /** True right after a drag ends, so the release does not also open the pod. */
+  justDragged?: () => boolean;
   dragging?: boolean;
 }
 
@@ -283,8 +289,15 @@ export default function PodCard({
       ref={drag?.innerRef}
       style={drag?.style}
       data-testid="pod-card"
+      {...(drag?.cardProps ?? {})}
+      onClickCapture={(e) => {
+        if (drag?.justDragged?.()) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
       className={cn(
-        "relative cursor-pointer overflow-hidden rounded-2xl border border-border bg-card transition-colors hover:border-primary/55 has-[a:focus-visible]:border-primary",
+        "relative cursor-pointer select-none overflow-hidden rounded-2xl border border-border bg-card transition-colors hover:border-primary/55 has-[a:focus-visible]:border-primary",
         drag?.dragging && "z-10 opacity-90 shadow-2xl",
         state.ribbon && "border-destructive/40",
       )}
