@@ -92,14 +92,6 @@
 .heroVisual figcaption strong { color: #dfe5e7; font-size: 13px; }
 .heroVisual figcaption span { color: #8c999e; font-size: 12px; line-height: 1.45; text-align: right; }
 
-.continuityVisual { width: min(770px, 100%); margin: 0 auto; }
-.continuityArtwork { position: relative; aspect-ratio: 1825 / 560; overflow: hidden; }
-.continuityArtwork > img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 18%; mix-blend-mode: screen; }
-.continuitySteps { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 2px; }
-.continuitySteps span { display: flex; align-items: center; gap: 7px; padding: 5px 3px; color: #8f9ca1; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
-.continuitySteps span:nth-child(2) { justify-content: center; color: #c7d5f8; }
-.continuitySteps span:last-child { justify-content: flex-end; }
-.continuitySteps strong { color: var(--blue-soft); font-size: 12px; }
 .simulated { margin-top: 10px; color: #7e8b90; font-size: 11px; text-align: right; }
 
 .sectionHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 42px; margin-bottom: 34px; }
@@ -273,11 +265,7 @@
   .heroActions { align-items: stretch; flex-direction: column; }
   .primaryCta,
   .secondaryCta { width: 100%; }
-  .continuitySteps span { align-items: flex-start; flex-direction: column; gap: 3px; padding: 5px 2px; text-align: center; }
-  .continuitySteps span,
-  .continuitySteps span:nth-child(2),
-  .continuitySteps span:last-child { justify-content: flex-start; }
-  .sectionHeading { align-items: flex-start; flex-direction: column; gap: 17px; }
+          .sectionHeading { align-items: flex-start; flex-direction: column; gap: 17px; }
   .sectionHeading > p { margin-top: 0; }
   .reasons { grid-template-columns: 1fr; }
   .reasons article { padding: 24px 0; }
@@ -369,4 +357,16 @@
   .landing *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
   .networkPacket { display: none; }
   .mobileNetworkRail i { display: none; }
+}
+
+/* "Commute" demo: just a heading and the film — no card, border or background (owner, 2026-09-29).
+   LandingDemoFrame sets the exact height from the film's content; this is only the first-paint size.
+   color-scheme matches the film's, or the browser paints an opaque backdrop behind a transparent frame. */
+.demoFrame {
+  display: block;
+  width: 100%;
+  height: 560px;
+  border: 0;
+  background: transparent;
+  color-scheme: dark;
 }

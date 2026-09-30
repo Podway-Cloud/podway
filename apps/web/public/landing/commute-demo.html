@@ -1,0 +1,439 @@
+<title>Podway Demo Films</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* "Commute" landing demo. One device in focus at a time; chapters; caption leads action.
+   Mocks follow the REAL UX: podway.io -> Open in Claude -> Claude Remote Control chat
+   (desktop, then phone) -> "Claude has a question" alert -> answer -> Preview. */
+:root{
+  color-scheme:dark;
+  --bg:#0b1220; --panel:#0f1727; --line:#22314a; --line-hi:#31456a;
+  --ink:#eaf0f8; --muted:#93a2b8; --faint:#5d6b82; --accent:#5b8cff; --accent-2:#84a7ff;
+  --d-bg:#0d1526; --d-card:#111b2e; --d-blue:#2f6bff;
+  --c-bg:#1c1c1b; --c-ink:#ececea; --c-muted:#9d9c96; --c-line:#373734; --c-bub:#2e2e2b; --c-orange:#d97757; --c-card:#252523;
+  --ok:#3ddc97;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"Hanken Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --sys:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:transparent;color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:980px;margin:0 auto;padding:0}
+.eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent-2);margin-bottom:10px}
+h1{margin:0;font-size:clamp(24px,3.6vw,34px);font-weight:800;letter-spacing:-.02em;line-height:1.1;text-wrap:balance;max-width:26ch}
+.lede{margin:10px 0 0;color:var(--muted);font-size:16px;max-width:60ch}
+
+.stage{position:relative;overflow:hidden}
+
+/* chapter bar */
+.chap{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.ch-i{appearance:none;border:1px solid var(--line);background:transparent;color:var(--faint);font:600 12.5px var(--sans);
+  padding:6px 11px;border-radius:999px;cursor:pointer;display:flex;align-items:center;gap:7px;position:relative;overflow:hidden}
+.ch-i .k{font:600 11px var(--mono)}
+.ch-i.done{color:var(--muted)}
+.ch-i.done .k{color:var(--ok)}
+.ch-i.act{color:var(--ink);border-color:var(--accent);background:rgba(91,140,255,.10)}
+.ch-i:focus-visible,.ctl:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ctls{position:absolute;top:0;right:0;z-index:12;display:flex}
+.ctl{appearance:none;border:1px solid var(--line);background:transparent;color:var(--muted);font:500 12.5px var(--sans);padding:6px 11px;border-radius:8px;cursor:pointer}
+.ctl:hover{color:var(--ink);border-color:var(--line-hi)}
+.clock{font:600 13px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums;margin-right:4px;white-space:nowrap}
+
+/* viewport: one device in focus */
+.view{position:relative;height:480px;margin-top:0}
+.dev{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:center;transition:opacity .6s ease, transform .6s ease}
+.dev.off{opacity:0;transform:scale(.94);pointer-events:none}
+
+/* desktop */
+.desk{width:min(760px,100%);border:1px solid var(--line-hi);border-radius:12px;overflow:hidden;background:#000;position:relative;
+  transform-origin:50% 100%;transition:transform .9s cubic-bezier(.6,.05,.4,1), opacity .9s}
+.desk.shut{transform:perspective(1000px) rotateX(-84deg);opacity:0}
+.desk-h{display:flex;align-items:center;gap:10px;padding:8px 12px;background:#161b26;border-bottom:1px solid #262d3b}
+.dots{display:flex;gap:6px}.dots i{width:10px;height:10px;border-radius:50%;background:#394154;display:block}
+.desk-t{font:500 12px var(--sys);color:#8b93a5;flex:1;text-align:center;margin-right:40px}
+.dview{position:relative;height:420px}
+.scr{position:absolute;inset:0;opacity:0;transition:opacity .45s;pointer-events:none}
+.scr.on{opacity:1}
+
+.dash{background:var(--d-bg);font-family:var(--sys);color:#e6ecf6}
+.dash-top{display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid #1d2a42}
+.logo{width:26px;height:22px;border-radius:9px 9px 7px 7px;background:var(--d-blue);display:grid;place-items:center;font:700 10px var(--mono);color:#fff}
+.logo-w{font:700 18px var(--sys);color:#5b8cff}
+.dash-b{padding:22px 26px}
+.dash-b h3{margin:0 0 14px;font:700 22px var(--sys)}
+.pod{border:1px solid #22314a;background:var(--d-card);border-radius:14px;padding:16px 18px;max-width:460px}
+.pod-h{display:flex;align-items:center;gap:8px}
+.pod-n{font:700 17px var(--sys)}
+.pill{margin-left:auto;font:500 11.5px var(--sys);padding:2px 9px;border-radius:999px;border:1px solid #2c3b57;color:#9fb0c8}
+.pod-s{font-size:12.5px;color:#8d9bb2;margin:2px 0 12px}
+.ag{display:flex;align-items:center;gap:8px;font-size:13.5px;margin:6px 0}
+.ci{width:16px;height:16px;border-radius:4px;background:var(--c-orange);display:grid;place-items:center;color:#fff;font-size:11px;line-height:1;flex:none}
+.xi{width:16px;height:16px;border-radius:4px;background:#000;border:1px solid #333;display:grid;place-items:center;color:#fff;font-size:9px}
+.ag .st{color:#8d9bb2}
+.chipd{font-size:11.5px;border:1px solid #2c3b57;border-radius:999px;padding:1px 8px;color:#c4cfdf}
+.pod-a{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;padding-top:14px;border-top:1px solid #22314a}
+.btn-o{font:600 13px var(--sys);padding:8px 13px;border-radius:9px;border:1px solid #2c3b57;color:#e6ecf6}
+.btn-b{font:600 13px var(--sys);padding:8px 13px;border-radius:9px;background:var(--d-blue);color:#fff;display:flex;align-items:center;gap:6px;transition:box-shadow .3s, transform .15s}
+.btn-b.hot{box-shadow:0 0 0 4px rgba(47,107,255,.35)}
+.btn-b.press{transform:scale(.95)}
+
+.claude{background:var(--c-bg);color:var(--c-ink);font-family:var(--sys);display:flex}
+.side{width:170px;border-right:1px solid var(--c-line);padding:14px 10px;font-size:12px;color:var(--c-muted);display:flex;flex-direction:column;gap:6px;flex:none}
+.side .new{color:var(--c-ink);font-weight:600;margin-bottom:6px}
+.side .it{padding:6px 8px;border-radius:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.side .it.act{background:var(--c-bub);color:var(--c-ink)}
+.cmain{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;height:100%}
+.chd{padding:11px 14px;border-bottom:1px solid var(--c-line);text-align:center;line-height:1.2}
+.chd b{display:block;font-size:13.5px}
+.chd span{font-size:11px;color:var(--c-muted)}
+.msgs{flex:1;min-height:0;overflow:hidden;padding:14px 18px;display:flex;flex-direction:column;justify-content:flex-end;gap:10px}
+.m{font-size:13.5px;line-height:1.5;animation:min .35s ease-out;transition:box-shadow .4s, background .4s}
+.m.a{align-self:stretch}
+.m.u{align-self:flex-end;background:var(--c-bub);padding:8px 12px;border-radius:14px;max-width:85%}
+.m.flash{box-shadow:0 0 0 2px var(--c-orange)}
+.m code{font:12px var(--mono);background:#2a2a28;padding:0 4px;border-radius:4px}
+.m .lk{color:#8fb3ff;text-decoration:underline;display:inline-block;transition:transform .15s}
+@keyframes min{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.think{font-size:12.5px;color:var(--c-muted);display:flex;align-items:center;gap:6px}
+.think::before{content:"✳";color:var(--c-orange);animation:spin 1.4s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.qc{border:1px solid var(--c-line);background:var(--c-card);border-radius:12px;padding:11px;animation:min .35s ease-out}
+.qh{font:600 10.5px var(--sys);text-transform:uppercase;letter-spacing:.06em;color:var(--c-orange);margin-bottom:4px}
+.qq{font-size:13.5px;font-weight:600;margin-bottom:8px}
+.qo{display:block;text-align:left;font:13px var(--sys);color:var(--c-ink);border:1px solid var(--c-line);border-radius:9px;padding:8px 10px;margin-top:6px;transition:background .2s, transform .15s, border-color .2s}
+.qo.tap{background:#3a3a36;border-color:var(--c-orange);transform:scale(.97)}
+.inp{margin:0 14px 14px;border:1px solid var(--c-line);border-radius:16px;padding:9px 11px;display:flex;align-items:center;gap:8px;min-height:42px}
+.inp .tx{flex:1;font-size:13px;color:var(--c-ink);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.inp .tx:empty::before{content:"";}
+.inp .mdl{font-size:10.5px;color:var(--c-muted);border:1px solid var(--c-line);border-radius:999px;padding:2px 8px;white-space:nowrap}
+.inp .snd{width:26px;height:26px;border-radius:50%;background:var(--c-orange);color:#fff;display:grid;place-items:center;font-size:12px;opacity:.5;transition:opacity .2s}
+.inp .snd.go{opacity:1}
+
+.claude .side{display:none}
+/* pod-still-working card (after the lid closes) */
+.still{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .6s;pointer-events:none}
+.still.on{opacity:1}
+.still-c{border:1px solid var(--line-hi);background:#0c1424;border-radius:16px;padding:20px 24px;width:min(420px,90%)}
+.still-h{display:flex;align-items:center;gap:10px;font:700 16px var(--sans)}
+.pulse{width:10px;height:10px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(61,220,151,.6);animation:pl 1.6s infinite}
+@keyframes pl{0%{box-shadow:0 0 0 0 rgba(61,220,151,.55)}100%{box-shadow:0 0 0 12px rgba(61,220,151,0)}}
+.still-s{font-size:13px;color:var(--muted);margin:4px 0 12px}
+.still-l{font:12.5px/1.8 var(--mono);color:#c9d4e6}
+.still-l div{animation:min .35s ease-out}
+.still-l .ok{color:var(--ok)}
+
+/* cursor + finger */
+.cursor{position:absolute;left:0;top:0;width:22px;height:22px;z-index:6;transition:transform .8s cubic-bezier(.45,.05,.3,1);pointer-events:none;opacity:0}
+.cursor.on{opacity:1}
+.finger{position:absolute;width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.75);
+  z-index:8;pointer-events:none;opacity:0;transform:translate(-50%,-50%) scale(1.3);transition:opacity .3s, transform .3s, left .7s ease, top .7s ease}
+.finger.on{opacity:1;transform:translate(-50%,-50%) scale(1)}
+.finger.press{transform:translate(-50%,-50%) scale(.75)}
+
+/* phone */
+.phone{zoom:.85;width:280px;height:560px;border-radius:40px;background:#05080f;border:1px solid var(--line-hi);padding:10px;position:relative;box-shadow:0 24px 60px rgba(0,0,0,.5)}
+.notch{position:absolute;top:17px;left:50%;transform:translateX(-50%);width:80px;height:22px;border-radius:12px;background:#000;z-index:5}
+.pscr{position:relative;height:100%;border-radius:31px;overflow:hidden;background:var(--c-bg)}
+.pscr .scr{display:flex;flex-direction:column}
+.lock{background:radial-gradient(260px 320px at 50% 25%, #2b3350, #0c0f18 75%);align-items:center;padding-top:66px;color:#fff;font-family:var(--sys)}
+.ltime{font:600 58px var(--sys);letter-spacing:-.03em;font-variant-numeric:tabular-nums;line-height:1}
+.ldate{font-size:13px;opacity:.75;margin-top:6px}
+.nb{position:absolute;left:9px;right:9px;top:170px;display:flex;gap:10px;align-items:center;padding:10px 11px;border-radius:18px;
+  background:rgba(210,210,215,.84);color:#111;font-family:var(--sys);opacity:0;transform:translateY(-16px) scale(.97);transition:opacity .45s, transform .45s}
+.nb.in{opacity:1;transform:none}
+.nb .ic{width:32px;height:32px;border-radius:8px;background:var(--c-orange);display:grid;place-items:center;color:#fff;font-size:19px;flex:none}
+.nb .tt{font-weight:600;font-size:12.5px;line-height:1.2;white-space:nowrap}
+.nb>div{min-width:0}
+.nb .bd{font-size:12.5px;line-height:1.25}
+.nb .nw{margin-left:auto;align-self:flex-start;font-size:11px;color:#555}
+.pchat .chd{padding-top:44px;display:flex;align-items:center;justify-content:space-between}
+.pchat .chd .bk,.pchat .chd .mo{width:26px;height:26px;border-radius:50%;background:#2a2a28;display:grid;place-items:center;font-size:12px;color:var(--c-muted)}
+.pchat .msgs{padding:12px 12px}
+.pchat .m{font-size:13px}
+.pchat .inp{margin:0 10px 12px}
+.pbrowser{background:#f3f5f9;font-family:var(--sys)}
+.url{margin:44px 10px 8px;background:#e3e7ee;border-radius:10px;padding:7px 10px;font-size:11.5px;color:#333;text-align:center}
+.site{padding:16px 16px;color:#101828}
+.site h4{margin:0 0 2px;font:800 19px var(--sys);letter-spacing:-.01em}
+.site .sub{font-size:12px;color:#667085;margin-bottom:14px}
+.plan{background:#fff;border:1px solid #e4e7ec;border-radius:12px;padding:14px}
+.plan .pn{font:700 12.5px var(--sys);color:#475467}
+.plan .pp{font:800 26px var(--sys);letter-spacing:-.02em}.plan .pp span{font:500 12px var(--sys);color:#667085}
+.plan .pp{margin-bottom:12px}
+.plan ul{margin:8px 0 12px;padding-left:16px;font-size:12px;color:#475467}
+.plan .pb{border-radius:8px;padding:9px;text-align:center;font:700 13px var(--sys);color:#fff;background:#475467;transition:background .6s, transform .3s}
+.plan .pb.new{background:#2f6bff;transform:scale(1.04)}
+.tag{margin-top:12px;font:500 11px var(--mono);color:#98a2b3;text-align:center}
+
+/* time card */
+.tcard{position:absolute;inset:0;z-index:9;background:#0b0f11;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;opacity:0;transition:opacity .5s;pointer-events:none}
+.tcard.on{opacity:1}
+.tcard .tt{font:600 clamp(40px,7vw,64px) var(--mono);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.tcard .tp{font:600 18px var(--sans);color:var(--muted)}
+
+/* caption */
+.cap{margin-top:0;margin-bottom:8px;min-height:2.7em;display:flex;align-items:flex-end;justify-content:center;font-size:clamp(19px,2.5vw,25px);font-weight:700;letter-spacing:-.01em;text-align:center;text-wrap:balance;transition:opacity .25s, transform .25s}
+.cap.out{opacity:0;transform:translateY(4px)}
+
+.end{position:absolute;inset:0;z-index:10;background:#0b0f11;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;padding:20px;opacity:0;transition:opacity .6s;pointer-events:none}
+.end.on{opacity:1;pointer-events:auto}
+.wm{font:800 20px var(--mono);color:var(--accent-2)}
+.end h2{margin:0;font-size:clamp(28px,4.4vw,44px);font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.end p{margin:0;color:var(--muted);font-size:16px;max-width:46ch}
+.cta{display:inline-block;margin-top:6px;padding:12px 22px;border-radius:10px;background:#2f6bff;color:#fff;font:700 15px var(--sans);text-decoration:none;transition:background .2s}
+.cta:hover{background:#4a80ff}.cta:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.paused{position:absolute;right:18px;bottom:18px;z-index:11;font:500 11.5px var(--mono);color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 9px;background:var(--panel)}
+.foot{margin-top:14px;text-align:center;font:11.5px var(--mono);color:var(--faint)}
+
+@media (max-width:760px){
+  .view{height:430px}
+  .dview{height:320px}
+  .side{display:none}
+  .phone{width:250px;height:500px}
+  .ltime{font-size:50px}
+  .nb{top:150px}
+  .ch-i .lb{display:none}
+  .ch-i.act .lb{display:inline}
+}
+@media (prefers-reduced-motion:reduce){ *,*::before,*::after{animation:none!important;transition:none!important} }
+</style>
+
+<div class="wrap">
+
+  <div class="stage" id="stage">
+    <div class="ctls"><button class="ctl" id="pp" type="button" aria-label="Pause the demo">Pause</button></div>
+
+    <div class="cap" id="cap" aria-live="polite"></div>
+    <div class="view" id="view">
+      <!-- Desktop -->
+      <div class="dev" id="dev-desk">
+        <div class="desk" id="desk">
+          <div class="desk-h"><div class="dots"><i></i><i></i><i></i></div><div class="desk-t" id="dtitle">podway.io</div></div>
+          <div class="dview" id="dview">
+            <div class="scr dash on" id="s-dash">
+              <div class="dash-top"><div class="logo">&gt;_</div><div class="logo-w">podway</div></div>
+              <div class="dash-b">
+                <h3>Your pods</h3>
+                <div class="pod">
+                  <div class="pod-h"><span class="pod-n">shop dev</span></div>
+                  <div class="pod-a"><span class="btn-b" id="openbtn"><span class="ci">✳</span>Open in Claude ↗</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="scr claude" id="s-claude">
+              <div class="side"><div class="new">＋ New chat</div><div class="it act">shop dev · Remote control</div><div class="it">podway GTM</div><div class="it">Trip ideas</div></div>
+              <div class="cmain">
+                <div class="chd"><b>shop dev</b></div>
+                <div class="msgs" id="dmsgs"></div>
+                <div class="inp"><div class="tx" id="dtx"></div><span class="snd" id="dsnd">↑</span></div>
+              </div>
+            </div>
+            <svg class="cursor" id="cursor" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 2l7 19 2.6-7.4L20 11z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          </div>
+        </div>
+        <div class="still" id="still">
+          <div class="still-c">
+            <div class="still-h"><span class="pulse"></span>Working…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phone -->
+      <div class="dev off" id="dev-phone">
+        <div class="phone" id="phone">
+          <div class="notch"></div>
+          <div class="pscr" id="pscr">
+            <div class="scr lock on" id="p-lock">
+              <div class="ltime" id="ltime">18:22</div>
+              <div class="nb" id="nb"><span class="ic">✳</span><div><div class="tt">Claude has a question</div></div></div>
+            </div>
+            <div class="scr claude pchat" id="p-chat">
+              <div class="cmain">
+                <div class="chd"><span class="bk">‹</span><div><b>shop dev</b></div><span class="mo">···</span></div>
+                <div class="msgs" id="pmsgs"></div>
+                <div class="inp"><div class="tx" id="ptx"></div><span class="snd" id="psnd">↑</span></div>
+              </div>
+            </div>
+            <div class="scr pbrowser" id="p-web">
+              <div class="url">brave-otter-3f1c.podway.site</div>
+              <div class="site">
+                <h4>Pricing</h4>
+                <div class="plan"><div class="pp">$12<span> /mo</span></div>
+                  <div class="pb" id="paybtn">Buy</div></div>
+              </div>
+            </div>
+            <div class="finger" id="finger"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tcard" id="tcard"><div class="tt" id="tct">18:22</div><div class="tp" id="tcp">On the train</div></div>
+    </div>
+
+
+    <div class="end" id="end">
+      <h2>Give your agent a computer.</h2>
+      <a class="cta" href="/signin" target="_top">Start with Podway</a>
+    </div>
+    <div class="paused" id="pausedchip" hidden>Paused</div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+let ended=false, run=0, paused=false, hover=false, visible=false, userPaused=false, chapter=0;
+
+/* ================= TIMING MODEL — every pause in this film comes from here =================
+   Viewers can only follow a demo if (a) each caption is on screen long enough to READ before its action,
+   (b) motion is fast enough to feel live but slow enough to track, (c) each result STAYS long enough to
+   read before the next caption, and (d) nothing sits still so long it feels stuck.
+   read(text): ~4 words/s + 0.5 s to notice it (short on-screen copy).  dwell: same, for a new result.
+   MOVE: 300-900 ms UI motion.  Never more than ~2.5 s without something changing on screen.        */
+const words = t => (String(t).replace(/<[^>]+>/g,' ').trim().match(/\S+/g)||[]).length;
+const T = {
+  read: t => 500 + 250*words(t),          // caption lead before its action
+  dwell: t => Math.min(2400, Math.max(900, 400 + 250*words(t))), // hold after a result appears
+  scene: 500,       // cross-fade between screens (CSS .45-.6 s)
+  settle: 300,      // after a scene change, before the next caption: let the eye land first
+  cursor: 800,      // cursor glide (CSS .8 s)
+  click: 350,       // press + release
+  tapShow: 500, tapPress: 250,
+  typeChar: 35, typeMax: 1500, send: 300,
+  think: 1200,      // "working" spinner before an agent reply
+  lid: 900,         // laptop lid closing (CSS .9 s)
+  card: 2600,       // time card: "18:22 · On the train" (solid, fully covers a scene swap)
+};
+/* pausable wait: time only runs while playing */
+function wait(ms){const id=run;return new Promise((res,rej)=>{let left=ms,last=performance.now();
+  (function tick(now){ if(id!==run) return rej('stop'); now=now||performance.now();
+    if(!paused) left-=now-last; last=now; if(left<=0) res(); else requestAnimationFrame(tick); })();});}
+function syncPause(){paused=userPaused||!visible;$('pausedchip').hidden=!userPaused||ended;
+  $('pp').textContent=ended?'↺ Watch again':userPaused?'Play':'Pause';$('pp').setAttribute('aria-label',ended?'Watch the demo again':userPaused?'Play the demo':'Pause the demo');}
+
+/* ---- stage helpers ---- */
+function clock(t){$('ltime').textContent=t;}
+async function cap(t){const c=$('cap');c.classList.add('out');await wait(reduce?0:180);c.textContent=t;c.classList.remove('out');await wait(T.read(t));}
+function show(which){$('dev-desk').classList.toggle('off',which!=='desk');$('dev-phone').classList.toggle('off',which!=='phone');}
+async function showW(which){const was=$('dev-'+which).classList.contains('off');show(which);if(was)await wait(T.scene);}
+function dscr(n,title){['s-dash','s-claude'].forEach(s=>$(s).classList.toggle('on',s==='s-'+n));$('dtitle').textContent=title;}
+function pscr(n){['p-lock','p-chat','p-web'].forEach(s=>$(s).classList.toggle('on',s==='p-'+n));}
+async function timecard(t,p,under){$('tct').textContent=t;$('tcp').textContent=p;clock(t);$('cap').classList.add('out');$('tcard').classList.add('on');await wait(T.scene);
+  $('cap').textContent='';$('cap').classList.remove('out'); // a caption never outlives its scene
+  if(under)under(); // swap the scene while the card fully covers it — nothing old reappears when it fades
+  await wait(T.card-T.scene);$('tcard').classList.remove('on');await wait(T.scene+T.settle);}
+
+/* ---- chat helpers (t = 'd' desktop or 'p' phone) ---- */
+const box=t=>$(t+'msgs');
+function trim(el){while(el.scrollHeight>el.clientHeight+2&&el.children.length>1)el.firstChild.remove();}
+function msg(t,cls,html){const d=document.createElement('div');d.className='m '+cls;d.innerHTML=html;box(t).appendChild(d);trim(box(t));return d;}
+async function say(t,html){const k=document.createElement('div');k.className='think';k.textContent='';box(t).appendChild(k);trim(box(t));
+  await wait(T.think);k.remove();const d=msg(t,'a',html);await wait(T.dwell(html));return d;}
+async function type(t,text){const tx=$(t+'tx'),s=$(t+'snd');tx.textContent='';s.classList.add('go');
+  const per=Math.min(T.typeChar, T.typeMax/Math.max(1,text.length));
+  if(reduce)tx.textContent=text;else for(const ch of text){tx.textContent+=ch;await wait(per);}
+  await wait(T.send);tx.textContent='';s.classList.remove('go');msg(t,'u',text);await wait(T.dwell(text));}
+
+/* cursor (desktop) + finger (phone) */
+function cursorTo(el,dx=0.6,dy=0.6){const v=$('dview').getBoundingClientRect(),r=el.getBoundingClientRect();
+  $('cursor').style.transform=`translate(${r.left-v.left+r.width*dx}px,${r.top-v.top+r.height*dy}px)`;}
+function fingerAt(el,dx=.5,dy=.5){const ps=$('pscr'),p=ps.getBoundingClientRect(),r=el.getBoundingClientRect(),f=$('finger'),z=p.width/ps.offsetWidth||1;
+  f.style.left=((r.left-p.left+r.width*dx)/z)+'px';f.style.top=((r.top-p.top+r.height*dy)/z)+'px';f.classList.add('on');}
+async function fingerTap(el,dx,dy){fingerAt(el,dx,dy);await wait(T.tapShow);$('finger').classList.add('press');await wait(T.tapPress);
+  $('finger').classList.remove('press');await wait(T.tapPress);$('finger').classList.remove('on');}
+function qcard(header,q,opts){const c=document.createElement('div');c.className='qc m';
+  c.innerHTML=(header?`<div class="qh">${header}</div>`:'')+`<div class="qq">${q}</div>`+opts.map(o=>`<span class="qo">${o}</span>`).join('');
+  box('p').appendChild(c);trim(box('p'));return c;}
+async function tapCard(c,pick,answer){const o=c.querySelectorAll('.qo')[pick];await fingerTap(o,.5,.5);o.classList.add('tap');await wait(T.click);
+  c.remove();msg('p','u',answer);await wait(T.dwell(answer));}
+
+/* message history (so any chapter can start cleanly) */
+const H={
+  task:()=>['u','Add Stripe checkout.'],
+  plan:()=>['a','On it.'],
+  ans:()=>['u','Yes'],
+  works:()=>['a','✓ Done. <span class="lk">Preview ↗</span>'],
+  change:()=>['u','Make the button “Start free trial”.'],
+  upd:()=>['a','✓ Updated.'],
+};
+function fill(t,keys){box(t).innerHTML='';keys.forEach(k=>{const[c,h]=H[k]();msg(t,c,h);});}
+
+/* ---- chapters: each beat = caption (read time) → action → dwell on the result ---- */
+async function ch1(){ // Ask — at the desk
+  clock('18:05');show('desk');dscr('dash','podway.io');$('desk').classList.remove('shut');$('still').classList.remove('on');
+  box('d').innerHTML='';$('cursor').classList.remove('on');$('cursor').style.transition='none';
+  $('cursor').style.transform='translate(60px,300px)';void $('cursor').offsetWidth;$('cursor').style.transition='';
+  await cap('At your desk, open your pod.');
+  $('cursor').classList.add('on');cursorTo($('openbtn'));await wait(T.cursor);
+  $('openbtn').classList.add('hot','press');await wait(T.click);$('openbtn').classList.remove('press','hot');
+  $('cursor').classList.remove('on');dscr('claude','Claude');await wait(T.scene+T.settle);
+  await cap('Ask for what you want.');
+  await type('d',H.task()[1]);
+  await cap('It works on your pod.');
+  await say('d',H.plan()[1]);
+}
+async function ch2(){ // Leave — the laptop closes, the pod keeps going
+  await cap('Close the laptop.');
+  $('desk').classList.add('shut');await wait(T.lid);
+  await cap('Your pod keeps working.');
+  $('still').classList.add('on');await wait(T.dwell('Working…')+T.scene);
+  // All phone setup happens UNDER the solid time card, so nothing changes invisibly later.
+  await timecard('18:22','On the train',()=>{$('still').classList.remove('on');show('phone');pscr('lock');$('nb').classList.remove('in');
+    fill('p',['task','plan']);q=qcard('','Use your Stripe test keys?',['Yes','Add new keys']);
+    $('paybtn').textContent='Buy';$('paybtn').classList.remove('new');});
+}
+let q;
+async function ch3(){ // Answer — on the phone
+  await cap('On the train: a question.');
+  $('nb').classList.add('in');await wait(T.dwell('Claude has a question'));
+  await cap('Same chat, on your phone.');
+  await fingerTap($('nb'),.5,.5);
+  $('nb').classList.remove('in');pscr('chat');await wait(T.scene+T.dwell('Use your Stripe test keys?'));
+  await cap('Answer with one tap.');
+  await tapCard(q,0,'Yes');
+}
+async function ch4(){ // Check — live preview, one change
+  await cap('It sends a live preview.');
+  const d=await say('p',H.works()[1]);
+  await cap('Your real page, live.');
+  await fingerTap(d.querySelector('.lk'),.5,.5);
+  pscr('web');await wait(T.scene+T.dwell('Pricing $12 /mo Buy'));
+  pscr('chat');await wait(T.scene+T.settle);
+  await cap('Ask for a change.');
+  await type('p',H.change()[1]);
+  await say('p',H.upd()[1]);
+  await cap('It updates while you watch.');
+  pscr('web');await wait(T.scene);
+  $('paybtn').textContent='Start free trial';$('paybtn').classList.add('new');await wait(T.dwell('Start free trial')+300);
+}
+async function ch5(){ // Done — home, on the laptop
+  await timecard('18:48','Home',()=>{show('desk');$('still').classList.remove('on');$('desk').classList.remove('shut');
+    dscr('claude','Claude');fill('d',['task','plan','works','change','upd']);$('cursor').classList.remove('on');});
+  await cap('At home: ask for the PR.');
+  await type('d','Open a PR.');
+  await cap('Done.');
+  await say('d','✓ PR #42 is ready.');
+}
+const CH=[ch1,ch2,ch3,ch4,ch5];
+
+/* Plays once, then rests on the end card (no auto-replay: a loop restarting under the reader is noise). */
+async function play(){
+  run++;ended=false;$('cap').textContent='';$('end').classList.remove('on');$('tcard').classList.remove('on');$('finger').classList.remove('on');syncPause();
+  try{
+    for(const ch of CH){await ch();}
+    await cap('');$('end').classList.add('on');ended=true;syncPause();
+  }catch(e){}
+}
+
+/* controls */
+$('pp').addEventListener('click',()=>{if(ended){userPaused=false;play();return;}userPaused=!userPaused;syncPause();});
+const st=$('stage');
+/* start only when the viewer can see it; pause when scrolled away */
+let started=false;
+const io=new IntersectionObserver(es=>{es.forEach(e=>{visible=e.isIntersecting&&e.intersectionRatio>=.35;syncPause();
+  if(visible&&!started){started=true;if(reduce)userPaused=true,syncPause();play();}});},{threshold:[0,.35,.6]});
+io.observe(st);
+$('cap').textContent='At your desk, open your pod.';
+</script>

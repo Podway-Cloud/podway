@@ -50,14 +50,11 @@ describe("revised landing bundles", () => {
     expect(computer).toContain('import dashboardImage from "../../../docs/images/dashboard.png"');
     expect(computer).toContain("See every pod at a glance.");
     expect(computer).not.toContain("Open running apps and know when Claude is working or needs you.");
-    expect(computer).toContain('/landing/session-continuity-v10.png');
-    expect(computer).toContain("Continue anywhere.");
+    // The "Commute" demo film replaced the "Continue anywhere" laptop → phone picture (owner, 2026-09-29).
+    expect(computer).toContain("<LandingDemoFrame");
+    expect(computer).not.toContain('/landing/session-continuity-v10.png');
+    expect(computer).not.toContain("Continue anywhere.");
     expect(computer).not.toContain("Start here.");
-    expect(computer).toContain("Close your laptop and Claude keeps working in the pod.");
-    expect(computer).toContain("Pick up the same session from desktop, mobile, or web without restarting or moving the project.");
-    expect(computer).toContain("Start on desktop");
-    expect(computer).toContain("Pod runs 24/7");
-    expect(computer).toContain("Continue on phone");
     expect(computer).not.toContain("Conceptual walkthrough · example session shown for illustration.");
     expect(computer).not.toContain('/landing/pod-computer-v1.jpg');
     expect(computer).toContain("Self-host Podway");
@@ -114,19 +111,10 @@ describe("revised landing bundles", () => {
     expect(copy).not.toContain("—");
   });
 
-  it("uses one continuous responsive illustration for session continuity", () => {
-    expect(computer).not.toContain("className={styles.continuityAlwaysOnMark}");
-    expect(computer).toContain('/landing/session-continuity-v10.png');
-    expect(agentStyles).toContain(".continuityVisual { width: min(770px, 100%);");
-    expect(agentStyles).toContain("font-size: 10px; font-weight: 700;");
-    expect(agentStyles).toContain(".continuitySteps strong { color: var(--blue-soft); font-size: 12px;");
-    expect(agentStyles).toContain(".noWrap { white-space: nowrap; }");
-    expect(agentStyles).not.toContain(".continuityAlwaysOnMark");
-    expect(agentStyles).not.toContain(".capabilityVisual img");
-    expect(agentStyles).toContain(".continuityArtwork { position: relative; aspect-ratio: 1825 / 560; overflow: hidden; }");
-    expect(agentStyles).toContain("object-position: center 18%; mix-blend-mode: screen;");
-    expect(agentStyles).toContain(".continuitySteps { display: grid; grid-template-columns: repeat(3, 1fr)");
-    expect(agentStyles).not.toContain(".continuitySteps { grid-template-columns: 1fr;");
+  it("shows the demo film where the continuity illustration was, and drops its styles", () => {
+    expect(computer).toContain('id="demo"');
+    expect(agentStyles).not.toContain(".continuityVisual");
+    expect(agentStyles).toContain(".demoFrame {");
   });
 
   it("shows separate pods exchanging owner-scoped durable messages", () => {

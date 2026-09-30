@@ -23,6 +23,7 @@ import LandingAccountLink from "@/components/landing-account-link";
 import LandingFooter from "@/components/landing-footer";
 import LandingPodNetwork from "./landing-pod-network";
 import QuoteWall from "@/components/landing-quote-wall";
+import LandingDemoFrame from "./landing-demo-frame";
 import { LandingSection } from "./landing-section";
 import {
   PRICING_TIERS,
@@ -111,39 +112,25 @@ export default async function AgentComputerLanding({
         </figure>
       </section>
 
-      <LandingSection
-        id="workspace"
-        ariaLabel="Claude on desktop and mobile connected to one running pod"
-      >
+      {/* "Commute" demo film (approved by the owner via the podway GTM pod, 2026-09-29; it REPLACES the
+          old "Continue anywhere" laptop → phone picture, owner call): a silent,
+          self-contained coded animation. It sets page-wide styles (body, h1, *), so it lives in a
+          same-origin frame rather than inline, sized to its content (LandingDemoFrame). */}
+      <LandingSection id="demo" ariaLabel="A short demo: start at your desk, continue from your phone">
         <div className={styles.sectionHeading}>
           <div>
             <p className={styles.eyebrow}>Desktop, phone, or web</p>
-            <h2>Continue anywhere.</h2>
-          </div>
-          <p>Close your laptop and Claude keeps working in the pod. Pick up the same session from desktop, mobile, or web without restarting or moving the project.</p>
-        </div>
-        <div className={styles.continuityVisual}>
-          <div className={styles.continuityArtwork}>
-            <Image
-              src="/landing/session-continuity-v10.png"
-              alt="One Claude session moving from a desktop app through an always-on Podway virtual workspace to a phone"
-              width={1825}
-              height={862}
-              sizes="(max-width: 700px) 100vw, 770px"
-            />
-          </div>
-          <div className={styles.continuitySteps} aria-hidden>
-            <span><strong>01</strong> Start on desktop</span>
-            <span><strong>02</strong> Pod runs 24/7</span>
-            <span><strong>03</strong> Continue on phone</span>
+            <h2>Start at your desk. Continue from your phone.</h2>
           </div>
         </div>
+        <LandingDemoFrame className={styles.demoFrame} />
       </LandingSection>
+
 
       {/* The without/with comparison. Asked for by a real reader of this page (Nadya, 2026-09-06):
           "I'm missing a small comparison table — how it is without a pod and how with, what I don't
-          have in Claude and this gives". Placed straight after "Continue anywhere", which is where
-          that question forms: the reader has just been told the session persists and wants to know
+          have in Claude and this gives". Placed straight after the demo film, which is where
+          that question forms: the reader has just watched the session persist and wants to know
           what that actually changes for them.
 
           Every row restates a claim this page ALREADY makes further down. A comparison table is the
