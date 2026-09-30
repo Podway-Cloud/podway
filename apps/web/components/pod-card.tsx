@@ -83,8 +83,6 @@ export interface PodCardDrag {
   /** Pointer/touch listeners for the WHOLE card: the 24 px grip alone was "almost impossible to grab"
    * (owner, 2026-09-29) — a press beside it selected the name or grabbed the card link instead. */
   cardProps?: Record<string, unknown>;
-  /** True right after a drag ends, so the release does not also open the pod. */
-  justDragged?: () => boolean;
   dragging?: boolean;
 }
 
@@ -289,16 +287,14 @@ export default function PodCard({
       ref={drag?.innerRef}
       style={drag?.style}
       data-testid="pod-card"
+      // No click guard here: dnd-kit itself stops the click that ends a drag. A second guard of ours
+      // swallowed real taps after a drag (owner: "hold my finger … and nothing happens", 2026-09-30).
       {...(drag?.cardProps ?? {})}
-      onClickCapture={(e) => {
-        if (drag?.justDragged?.()) {
-          e.preventDefault();
-          e.stopPropagation();
-        }
-      }}
       className={cn(
-        "relative cursor-pointer select-none overflow-hidden rounded-2xl border border-border bg-card transition-colors hover:border-primary/55 has-[a:focus-visible]:border-primary",
-        drag?.dragging && "z-10 opacity-90 shadow-2xl",
+        // [-webkit-touch-callout:none]: no iOS link-preview pop-up on long-press (that is the long-press
+        // gesture we use to pick the card up). touch-manipulation: no double-tap zoom delay on taps.
+        "relative cursor-pointer select-none touch-manipulation overflow-hidden rounded-2xl border border-border bg-card transition-[colors,transform,box-shadow] [-webkit-touch-callout:none] hover:border-primary/55 has-[a:focus-visible]:border-primary",
+        drag?.dragging && "z-10 scale-[1.02] opacity-95 shadow-2xl ring-2 ring-primary/40",
         state.ribbon && "border-destructive/40",
       )}
     >

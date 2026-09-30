@@ -83,8 +83,12 @@ export class DunningService {
   async evaluateOwner(
     ownerId: string,
     billablePods: Pick<PodRecord, "size">[],
+    /** Once we SUSPENDED the account, its pods no longer count as billable — so judge it on what was
+     * due when we suspended it. Without this, a suspended account looked "paid", was resolved, and its
+     * pods resumed an hour later with no payment (found by the hourly-sweep test, 2026-09-30). */
+    suspendedDueCents = 0,
   ): Promise<{ delinquent: boolean; amountDueCents: number }> {
-    const amountDueCents = this.amountDueCents(billablePods);
+    const amountDueCents = Math.max(this.amountDueCents(billablePods), suspendedDueCents);
     // No billable pods → nothing owed → never delinquent (and any stale row gets resolved).
     if (amountDueCents <= 0) return { delinquent: false, amountDueCents: 0 };
     const acct = await this.billing.getAccount(ownerId);
@@ -110,8 +114,12 @@ export class DunningService {
     const billable = (await this.pods.listAllPods()).filter(
       (p) => p.ownerId === ownerId && isBillable(p.status),
     );
-    const { delinquent, amountDueCents } = await this.evaluateOwner(ownerId, billable);
     const row = await this.getRow(ownerId);
+    const { delinquent, amountDueCents } = await this.evaluateOwner(
+      ownerId,
+      billable,
+      row?.suspendedAt ? row.amountDueCents : 0,
+    );
     if (delinquent && !row) {
       await this.openRow(ownerId, amountDueCents);
     } else if (delinquent && row) {
@@ -207,8 +215,12 @@ export class DunningService {
     existingRow: Awaited<ReturnType<DunningService["getRow"]>> | null,
   ): Promise<{ opened: number; emailed: number; suspended: number; resolved: number }> {
     const delta = { opened: 0, emailed: 0, suspended: 0, resolved: 0 };
-    const { delinquent, amountDueCents } = await this.evaluateOwner(ownerId, billable);
     let row = existingRow;
+    const { delinquent, amountDueCents } = await this.evaluateOwner(
+      ownerId,
+      billable,
+      row?.suspendedAt ? row.amountDueCents : 0,
+    );
 
     if (!delinquent) {
       if (row) {
@@ -252,7 +264,9 @@ export class DunningService {
         ownerId,
         graceDay,
         amountDueCents,
-        daysLeft: DUNNING_GRACE_DAYS - graceDay,
+        // Suspension lands at the START of day GRACE+1, so on day d it is GRACE+1-d days away
+        // (day 1 → 7, day 7 → 1). It said GRACE-d: "in 6 days" on day 1, "in 0 days" on the last day.
+        daysLeft: DUNNING_GRACE_DAYS + 1 - graceDay,
         suspended: false,
       });
       await this.db

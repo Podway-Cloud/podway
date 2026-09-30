@@ -1,9 +1,9 @@
 import "server-only";
 
-import { eq, createAppDb, user as userTable, pods as podsTable, billingAccounts } from "@podway/db";
+import { eq, createAppDb, user as userTable, pods as podsTable, billingAccounts, billingDelinquencies } from "@podway/db";
 import { ramGbForSize, isPodSize, ACCOUNT_RAM_GB, CARDED_RAM_GB, type PodSize } from "@podway/shared";
 import { getBillingService, getPodService } from "./pod-service";
-import { stripeConfigured, stripeLiveMode } from "@podway/control-plane";
+import { stripeConfigured, stripeLiveMode, DUNNING_GRACE_DAYS } from "@podway/control-plane";
 
 /** A pod status contributes to the RAM tally only while it's actually holding memory. */
 const ACTIVE = (status: string) => status !== "suspended" && status !== "error" && status !== "gone";
@@ -30,6 +30,8 @@ export interface BillingRow {
   capGb: number;
   /** True when active RAM meets or exceeds the budget — the account is at its ceiling. */
   overBudget: boolean;
+  /** Non-payment grace clock (billing_delinquencies): which grace day, or suspended. Null = paid up. */
+  unpaid: { day: number; suspended: boolean; since: string } | null;
 }
 
 /**
@@ -40,11 +42,13 @@ export interface BillingRow {
  */
 export async function listBillingOverview(): Promise<BillingRow[]> {
   const db = createAppDb();
-  const [users, accounts, pods] = await Promise.all([
+  const [users, accounts, pods, unpaidRows] = await Promise.all([
     db.select().from(userTable),
     db.select().from(billingAccounts),
     db.select({ ownerId: podsTable.ownerId, size: podsTable.size, status: podsTable.status }).from(podsTable),
+    db.select().from(billingDelinquencies),
   ]);
+  const unpaidByOwner = new Map(unpaidRows.map((r) => [r.ownerId, r]));
 
   const acctByOwner = new Map(accounts.map((a) => [a.ownerId, a]));
   const podsByOwner = new Map<string, { size: string; status: string }[]>();
@@ -74,9 +78,15 @@ export async function listBillingOverview(): Promise<BillingRow[]> {
         usedGb,
         capGb,
         overBudget: usedGb >= capGb,
+        unpaid: (() => {
+          const d = unpaidByOwner.get(u.id);
+          if (!d) return null;
+          const day = Math.min(DUNNING_GRACE_DAYS, Math.floor((Date.now() - d.since.getTime()) / 86_400_000) + 1);
+          return { day, suspended: !!d.suspendedAt, since: d.since.toISOString() };
+        })(),
       };
     })
-    .sort((a, b) => b.creditCents - a.creditCents || b.totalPods - a.totalPods || a.email.localeCompare(b.email));
+    .sort((a, b) => Number(!!b.unpaid) - Number(!!a.unpaid) || b.creditCents - a.creditCents || b.totalPods - a.totalPods || a.email.localeCompare(b.email));
 }
 
 export interface PodLine {

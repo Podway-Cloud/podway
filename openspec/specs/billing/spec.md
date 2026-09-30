@@ -211,8 +211,17 @@ Before suspending, the cloud edition SHALL give a delinquent account a grace per
 of those days it SHALL show a warning on the user's dashboard AND send the user an email asking them
 to pay and warning that their pods will be suspended. Only after the account has been continuously
 delinquent for the full grace period SHALL its pods be suspended. The daily email SHALL be sent at
-most once per day (idempotent across a webhook-triggered start and the daily sweep). If the account
+most once per day (idempotent across a webhook-triggered start and the sweep). If the account
 resolves its delinquency at any point during grace, the clock and warnings SHALL stop.
+
+The sweep SHALL run shortly after the gateway starts and then hourly, so its cadence never depends on
+gateway uptime (it ran only after 24 h of uptime and had never fired until 2026-09-29). Each reminder
+SHALL state the days left until suspension, counting 7 on day 1 down to 1 on day 7. When the account has
+no card on file, the email SHALL say so — never "we could not charge". A SUSPENDED account SHALL stay
+delinquent, judged on the amount due when it was suspended, until it adds a card or enough credit; only
+then are its pods resumed (its suspended pods no longer count as billable, which made it look paid and
+resumed them within the hour). The admin billing overview SHALL show each unpaid account's grace day or
+that it is suspended.
 
 #### Scenario: Daily warning during grace
 
@@ -223,6 +232,12 @@ resolves its delinquency at any point during grace, the clock and warnings SHALL
 
 - **WHEN** an account has been delinquent for fewer than the full grace-period days
 - **THEN** its pods SHALL NOT yet be suspended
+
+#### Scenario: The full grace period under the hourly sweep
+
+- **GIVEN** a delinquent account with no card and the sweep running hourly
+- **THEN** exactly seven reminders SHALL be sent (7 → 1 days left), then one suspension notice
+- **AND** the pods SHALL be suspended exactly seven days after day 1 and SHALL stay suspended
 
 #### Scenario: Resolving during grace stops the clock
 

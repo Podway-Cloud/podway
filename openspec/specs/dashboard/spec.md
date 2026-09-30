@@ -866,8 +866,10 @@ like `public` for transport but the two are separate flags on the pod.
 ### Requirement: The pod list is hand-ordered (manual order only)
 
 The owner SHALL be able to reorder pod cards by dragging ANYWHERE on the card: a press that moves
-8 px starts the drag, a plain click still opens the pod, the release after a drag SHALL NOT open it,
-and card text SHALL NOT get selected while dragging. The grip remains the keyboard handle. (The grip
+8 px starts the drag (mouse), a plain click still opens the pod, the release after a drag SHALL NOT open it,
+and card text SHALL NOT get selected while dragging. On TOUCH, a tap SHALL open the pod, a 0.4 s
+long-press SHALL pick the card up (it visibly lifts) and a move then reorders, and a swipe SHALL scroll
+the page; the long-press SHALL NOT open the iOS link preview. The grip remains the keyboard handle. (The grip
 alone, 24 px, was "almost impossible to grab" — a press beside it selected the name, 2026-09-29.) The order SHALL persist server-side per pod and survive reload and
 device changes. There SHALL be NO automatic grouping of the list; hand order wins over any default
 sort. A pod created after the owner last sorted SHALL appear ABOVE the hand-ordered pods (easy to

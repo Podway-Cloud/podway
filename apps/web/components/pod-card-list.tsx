@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { qk } from "@/lib/query-keys";
 import {
   DndContext,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   KeyboardSensor,
   closestCenter,
@@ -44,7 +44,7 @@ const UNKNOWN_STATUS_IDLE_MS = 4 * 60 * 60 * 1000;
  * confirms it. No auto-grouping — the owner's hand order is the order.
  */
 
-function SortableCard({ card, justDragged }: { card: PodCardProps; justDragged: () => boolean }) {
+function SortableCard({ card }: { card: PodCardProps }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.slug,
   });
@@ -56,7 +56,6 @@ function SortableCard({ card, justDragged }: { card: PodCardProps; justDragged: 
         style: { transform: CSS.Transform.toString(transform), transition },
         handleProps: attributes as unknown as Record<string, unknown>,
         cardProps: listeners,
-        justDragged,
         dragging: isDragging,
       }}
     />
@@ -129,15 +128,14 @@ export default function PodCardList({
     );
   }, [cards]);
 
-  // The release that ends a drag must not also open the pod (the card is now the drag target).
-  const lastDragEnd = useRef(0);
-  const justDragged = () => Date.now() - lastDragEnd.current < 300;
-
   const sensors = useSensors(
-    // A small activation distance keeps plain clicks (open the cockpit) from
-    // starting a drag; touch holds briefly so scrolling still works on phones.
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    // MOUSE: an 8 px move starts a drag, so a plain click still opens the pod.
+    // TOUCH: a 0.4 s long-press picks the card up (like the iPhone home screen). It was 0.18 s — about
+    // a normal tap's length, so taps turned into zero-distance "drags" and the pod never opened
+    // (owner, 2026-09-30: "I hold my finger, feel a short vibration, and nothing happens"). Mouse and
+    // touch are separate sensors (PointerSensor handled both), so a swipe scrolls instead of dragging.
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 400, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -241,7 +239,6 @@ export default function PodCardList({
   }
 
   const onDragEnd = (e: DragEndEvent) => {
-    lastDragEnd.current = Date.now();
     const { active, over } = e;
     if (!over || active.id === over.id) return;
     setOrder((cur) => {
@@ -297,7 +294,7 @@ export default function PodCardList({
         <SortableContext items={order} strategy={verticalListSortingStrategy}>
           <ul className="flex flex-col gap-3">
             {ordered.map((c) => (
-              <SortableCard key={c.slug} card={c} justDragged={justDragged} />
+              <SortableCard key={c.slug} card={c} />
             ))}
           </ul>
         </SortableContext>

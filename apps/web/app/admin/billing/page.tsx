@@ -25,6 +25,7 @@ export default async function AdminBillingPage() {
   const rows = await listBillingOverview();
   const carded = rows.filter((r) => r.hasCard).length;
   const withCredit = rows.filter((r) => r.creditCents > 0).length;
+  const unpaid = rows.filter((r) => r.unpaid).length;
   const stripeOff = !stripeConfigured();
 
   const th = "px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
@@ -33,7 +34,7 @@ export default async function AdminBillingPage() {
   return (
     <DashboardPage
       title="Billing"
-      intro={`${rows.length} users · ${carded} with a card · ${withCredit} holding credit`}
+      intro={`${rows.length} users · ${carded} with a card · ${withCredit} holding credit${unpaid ? ` · ${unpaid} unpaid` : ""}`}
       wide
     >
       {stripeOff && (
@@ -49,6 +50,7 @@ export default async function AdminBillingPage() {
               <th className={th}>User</th>
               <th className={`${th} text-right`}>Credit</th>
               <th className={th}>Card</th>
+              <th className={th}>Payment</th>
               <th className={`${th} text-right`}>Pods</th>
               <th className={`${th} text-right`}>RAM</th>
               <th className={th}>Stripe</th>
@@ -74,6 +76,19 @@ export default async function AdminBillingPage() {
                       </span>
                     ) : (
                       <span className="text-[12px] text-muted-foreground">none</span>
+                    )}
+                  </td>
+                  <td className={td} data-testid="payment-state">
+                    {r.unpaid?.suspended ? (
+                      <span className="rounded-full border border-destructive/40 bg-destructive/10 px-2 py-0.5 text-[10.5px] font-medium text-destructive" title={`Unpaid since ${r.unpaid.since.slice(0, 10)}`}>
+                        suspended
+                      </span>
+                    ) : r.unpaid ? (
+                      <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[10.5px] font-medium text-warning" title={`Unpaid since ${r.unpaid.since.slice(0, 10)}`}>
+                        unpaid · day {r.unpaid.day} of 7
+                      </span>
+                    ) : (
+                      <span className="text-[12px] text-muted-foreground">—</span>
                     )}
                   </td>
                   <td className={`${td} text-right tabular-nums`}>

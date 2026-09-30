@@ -276,7 +276,10 @@ async function main(): Promise<void> {
   // Non-payment safety net (cloud only): a daily sweep opens/advances each delinquent account's
   // 7-day grace clock, emails the user daily, and suspends ONLY that account's pods once grace
   // elapses. Gated on stripeConfigured() so it never runs in dev/test or self-host (no Stripe).
-  const dunningMs = Number(process.env.PODWAY_DUNNING_SWEEP_MS ?? 24 * 60 * 60_000);
+  // HOURLY, and once shortly after start. It used to run only after 24 h of UPTIME, and the gateway
+  // is redeployed more often than that, so it had never run until 2026-09-29. The sweep is idempotent
+  // per grace day (lastNotifiedDay) and suspends once, so running it often changes nothing else.
+  const dunningMs = Number(process.env.PODWAY_DUNNING_SWEEP_MS ?? 60 * 60_000);
   if (stripeConfigured() && dunningMs > 0) {
     const billing = new BillingService(db);
     const appUrl = (process.env.BETTER_AUTH_URL || "https://podway.io").replace(/\/+$/, "");
@@ -285,16 +288,21 @@ async function main(): Promise<void> {
         const rows = await db.select().from(user).where(eq(user.id, ownerId));
         const u = rows[0];
         if (!u?.email) return;
+        const hasCard = (await billing.getAccount(ownerId).catch(() => null))?.hasCard ?? false;
         await sendDunningEmail(
           { name: u.name, email: u.email },
-          { daysLeft, amountDueCents, suspended },
+          { daysLeft, amountDueCents, suspended, hasCard },
           { billingUrl: `${appUrl}/dashboard/billing` },
         );
       },
     });
-    setInterval(() => {
-      void dunning.sweep().catch((e) => console.error("dunning_sweep_failed", e));
-    }, dunningMs).unref();
+    const runDunning = () =>
+      void dunning
+        .sweep()
+        .then((r) => console.log("dunning_sweep", JSON.stringify(r)))
+        .catch((e) => console.error("dunning_sweep_failed", e));
+    setTimeout(runDunning, 60_000).unref();
+    setInterval(runDunning, dunningMs).unref();
     console.log(`podway-gateway dunning sweep every ${dunningMs}ms`);
   }
 

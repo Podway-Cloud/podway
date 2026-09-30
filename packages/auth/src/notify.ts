@@ -226,7 +226,8 @@ export async function sendApprovalEmail(u: { name?: string | null; email: string
  */
 export async function sendDunningEmail(
   u: { name?: string | null; email: string },
-  info: { daysLeft: number; amountDueCents: number; suspended: boolean },
+  /** hasCard=false: there is nothing to charge — say so, never "we could not charge". */
+  info: { daysLeft: number; amountDueCents: number; suspended: boolean; hasCard?: boolean },
   links: { billingUrl: string },
   deps: EmailDeps = {},
 ): Promise<void> {
@@ -240,7 +241,9 @@ export async function sendDunningEmail(
           name: u.name,
           heading: "Your pods are suspended",
           paragraphs: [
-            `We could not collect payment for your pods (${amount}/month), and your credit did not cover it, so your pods are suspended.`,
+            info.hasCard === false
+              ? `There was no card on file for your pods (${amount}/month), and your credit did not cover them, so your pods are suspended.`
+              : `We could not collect payment for your pods (${amount}/month), and your credit did not cover it, so your pods are suspended.`,
             "Your data is safe. Add a card or credit and your pods come right back.",
           ],
           button: { label: "Fix billing and resume", url: links.billingUrl },
@@ -250,7 +253,9 @@ export async function sendDunningEmail(
           name: u.name,
           heading: `Your pods will be suspended in ${days}`,
           paragraphs: [
-            `We could not charge for your pods (${amount}/month), and your credit does not cover it.`,
+            info.hasCard === false
+              ? `There is no card on file for your pods (${amount}/month), and your credit does not cover them.`
+              : `We could not charge for your pods (${amount}/month), and your credit does not cover it.`,
             `Add a card or credit within ${days} to keep them running. Your data stays safe either way.`,
           ],
           button: { label: "Update billing", url: links.billingUrl },

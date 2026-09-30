@@ -176,6 +176,30 @@ describe("DunningService.sweep (the clock)", () => {
     expect(rows[0]?.suspendedAt).not.toBeNull();
   });
 
+  it("the whole grace period under the HOURLY sweep: 7 reminders counting 7→1 days, then one suspension (2026-09-29)", async () => {
+    const db = await freshDb();
+    await seedUser(db, "u1");
+    const pods = [pod("p1", "u1", "m")];
+    const emails: DunningEmailInfo[] = [];
+    const t0 = Date.UTC(2026, 8, 29, 6, 22);
+    let t = t0;
+    const svc = new DunningService(db, fakeBilling({ u1: { creditCents: 0, hasCard: false } }), fakePods(pods), {
+      now: () => t,
+      sendEmail: async (i) => void emails.push(i),
+    });
+    let suspendedAt: number | null = null;
+    for (let h = 0; h <= 8 * 24; h++) {
+      t = t0 + h * 60 * 60_000;
+      await svc.sweep();
+      if (suspendedAt === null && pods[0].status === "suspended") suspendedAt = t;
+    }
+    const reminders = emails.filter((e) => !e.suspended);
+    expect(reminders.map((e) => e.graceDay)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(reminders.map((e) => e.daysLeft)).toEqual([7, 6, 5, 4, 3, 2, 1]); // was 6..0
+    expect(emails.filter((e) => e.suspended)).toHaveLength(1);
+    expect(suspendedAt).toBe(t0 + DUNNING_GRACE_DAYS * DAY); // never before 7 full days
+  });
+
   it("does not suspend before the grace period elapses", async () => {
     const db = await freshDb();
     await seedUser(db, "u1");
