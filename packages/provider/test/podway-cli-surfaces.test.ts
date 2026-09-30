@@ -338,6 +338,13 @@ describe("podway msg (agent-to-agent, same owner)", () => {
     expect(outbox()[0].body).toBe(nasty);
   });
 
+  it("REFUSES a body over 4000 characters at send time and queues nothing (bounced silently before)", () => {
+    expect(() => runMsg(["msg", "send", "cheerful donkey", "x".repeat(4001)])).toThrow(/limit is 4000/);
+    expect(() => runMsg(["msg", "send", "cheerful donkey", "✳".repeat(2000) + "😀"])).not.toThrow(); // 2002
+    expect(() => runMsg(["msg", "send", "cheerful donkey", "😀".repeat(2001)])).toThrow(/4002 characters/); // emoji = 2
+    expect(outbox().map((m: { body: string }) => m.body.length)).toEqual([2002]);
+  });
+
   it("reads the inbox and replies back to the original sender", async () => {
     await fs.writeFile(
       path.join(dir, "inbox.jsonl"),

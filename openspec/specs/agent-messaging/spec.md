@@ -202,7 +202,9 @@ SHALL append to the local outbox; `pods` SHALL list the owner's fleet from the p
 the current pod. `send` SHALL resolve its reference locally for immediate feedback and refuse an
 ambiguous or unknown reference. A reply SHALL route back to the original sender by the same outbox →
 poll → injected-delivery path. Message bodies SHALL be encoded (not hand-escaped) so quotes, newlines,
-and shell metacharacters are preserved and inert.
+and shell metacharacters are preserved and inert. `send` and `reply` SHALL refuse, before queuing and with a
+non-zero exit, a body longer than the server's 4000-character limit (counted like JavaScript `.length`:
+an emoji counts 2), naming the length — never print "queued" for a message the server will bounce.
 
 The inbox is a per-pod concept with a lifecycle so an agent is not re-reading a stale backlog on every
 poll. The delivery poll appends to an append-only local inbox log; "done" is a pod-local set of handled

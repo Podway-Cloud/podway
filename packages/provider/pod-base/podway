@@ -871,6 +871,11 @@ cmd_msg_pods() {
 cmd_msg_send() {
   local to="${1:-}"; shift || true; local body="$*"
   [ -n "$to" ] && [ -n "$body" ] || die "usage: podway msg send <pod> <message>"
+  # The control plane refuses bodies over MSG_MAX_BODY (4000, counted like JS .length: an emoji is 2).
+  # Refuse HERE, before queuing — otherwise this printed "queued" and the message bounced minutes later,
+  # so the sender believed it was delivered (podway GTM, 2026-09-29).
+  local len; len=$(jq -rn --arg b "$body" '[$b|explode[]|if . > 65535 then 2 else 1 end]|add // 0')
+  [ "$len" -le 4000 ] || die "message is $len characters; the limit is 4000. Split it into parts (e.g. 'PART 1/3 …') and send each."
   local ids; ids=$(msg_resolve "$to")
   if [ "$ids" = "__noroster__" ]; then
     die "no fleet roster yet (the control plane pushes it on its next poll — try again shortly)."
