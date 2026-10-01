@@ -312,14 +312,16 @@ export class IncusProvider implements SandboxProvider {
    * block custom volume. LEGACY pods created before the 9p→block switch have a
    * `filesystem` volume, which REQUIRES a path (the 9p share mountpoint); detect
    * that so recreating an old pod (updateImage) still works. */
-  /** Free-page reporting on the VM's existing balloon device (guest-memory-return): memory the guest
-   * frees goes back to the box, which is what lets the box overcommit. Pilot 2026-09-28: whole-box Shmem
-   * fell by exactly what the guest freed. It touches ONLY the balloon — never `mem0`: the reverted KSM
-   * override (`mem0 share=off`) doubled pod memory (2026-09-27). Setting this value also REPLACES any
-   * such leftover override. raw.qemu.conf only takes effect on a stopped VM, so pods get it on the next
-   * create / resize / update. */
-  private guestMemoryConfig(_home: Record<string, string>): Record<string, string> {
-    return { "raw.qemu.conf": '[device "qemu_balloon"]\nfree-page-reporting = "on"\n' };
+  /** Guest RAM (box-memory-dedup): a block-home pod gets ANONYMOUS private RAM (`memory-backend-ram`,
+   * `merge = "on"`) so KSM can merge pages that are identical across pods, instead of Incus's shared memfd,
+   * which KSM cannot touch. NEVER `share = "off"` on the memfd: that kept a second copy of every page and
+   * doubled pod memory (2026-09-27). A legacy filesystem home keeps the default backing (its share needs
+   * shared memory). Free-page reporting on the balloon (guest-memory-return) returns what the guest frees.
+   * raw.qemu.conf only takes effect on a stopped VM, so pods get it on the next create / resize / update. */
+  private guestMemoryConfig(home: Record<string, string>): Record<string, string> {
+    const balloon = '[device "qemu_balloon"]\nfree-page-reporting = "on"\n';
+    const mem0 = '[object "mem0"]\nqom-type = "memory-backend-ram"\nshare = "off"\nmerge = "on"\n\n';
+    return { "raw.qemu.conf": home.path ? balloon : mem0 + balloon };
   }
 
   private async homeDevice(id: string): Promise<Record<string, string>> {

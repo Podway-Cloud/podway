@@ -463,27 +463,35 @@ describe("IncusProvider", () => {
     expect(info.status).toBe("running");
   });
 
-  describe("guest memory: free-page reporting on the balloon, never a mem0 override", () => {
+  describe("guest memory: private + mergeable RAM for block homes, free-page reporting always", () => {
     const BALLOON = '[device "qemu_balloon"]\nfree-page-reporting = "on"\n';
-    it("create, resize and updateImage all turn on free-page reporting", async () => {
+    const PRIVATE =
+      '[object "mem0"]\nqom-type = "memory-backend-ram"\nshare = "off"\nmerge = "on"\n\n' + BALLOON;
+    it("create, resize and updateImage give a block-home pod anonymous mergeable RAM", async () => {
       const f = fakeIncus();
       const p = mkProvider(f);
       await p.createPod(input("pod-a"));
-      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBe(BALLOON);
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBe(PRIVATE);
       await p.resize("pod-a", { cpus: 2, memoryGb: 4, diskGb: 20 });
-      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBe(BALLOON);
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBe(PRIVATE);
       await p.updateImage("pod-a", "pod-base-v2");
-      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBe(BALLOON);
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBe(PRIVATE);
     });
-    it("resize REPLACES a leftover KSM mem0 override (it doubled pod memory, 2026-09-27)", async () => {
+    it("never a memfd with share=off (it doubled pod memory, 2026-09-27)", async () => {
       const f = fakeIncus();
       const p = mkProvider(f);
       await p.createPod(input("pod-a"));
       f.instances.get("pod-a")!.config["raw.qemu.conf"] = '[object "mem0"]\nshare = "off"\n';
       await p.resize("pod-a", { cpus: 2, memoryGb: 4, diskGb: 20 });
-      const conf = f.instances.get("pod-a")!.config["raw.qemu.conf"];
-      expect(conf).toBe(BALLOON);
-      expect(conf).not.toContain("mem0");
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBe(PRIVATE);
+    });
+    it("a legacy filesystem home keeps the default backing (its share needs shared memory)", async () => {
+      const f = fakeIncus();
+      const p = mkProvider(f);
+      await p.createPod(input("pod-a"));
+      f.filesystemVolumes.add("pod-a-home");
+      await p.resize("pod-a", { cpus: 2, memoryGb: 4, diskGb: 20 });
+      expect(f.instances.get("pod-a")!.config["raw.qemu.conf"]).toBe(BALLOON);
     });
   });
 
