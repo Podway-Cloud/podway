@@ -381,6 +381,11 @@ export class IncusApi {
     ).metadata;
   }
 
+  /** Server config (incl. the box's `user.*` keys, e.g. user.podway.hostmem). */
+  async serverConfig(): Promise<Record<string, string>> {
+    return (await this.req<{ config?: Record<string, string> }>("GET", "/1.0")).metadata.config ?? {};
+  }
+
   /** Storage-pool space used/total (bytes). */
   async poolResources(pool: string): Promise<{ space?: { used?: number; total?: number } }> {
     return (

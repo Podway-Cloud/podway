@@ -76,7 +76,7 @@ function BoxFit({ box }: { box: BoxStats }) {
         ))}
         {otherMb > 0 && (
           <div
-            title={`host + cache (ZFS ARC) · ${gb(otherMb)}`}
+            title={`host + ZFS cache · ${gb(otherMb)}`}
             className="h-full min-w-[3px] bg-[#3a4152]"
             style={{ width: `${pct(otherMb, box.ramTotalMb)}%` }}
           />
@@ -94,7 +94,7 @@ function BoxFit({ box }: { box: BoxStats }) {
           <span className="h-2 w-2 rounded-sm" style={{ background: tierColor("l") }} /> Large
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-sm bg-[#3a4152]" /> host + cache
+          <span className="h-2 w-2 rounded-sm bg-[#3a4152]" /> host + ZFS cache
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-sm bg-surface-3" /> free {gb(freeMb)}
@@ -116,7 +116,6 @@ function BoxCard({ box }: { box: BoxStats }) {
   // so it's much larger than the sum of pods. The overcommit story is about pod
   // memory; the difference is host + cache, not pod consumption.
   const podUsedMb = box.pods.reduce((n, p) => n + (p.ramUsedMb ?? 0), 0);
-  const hostCacheMb = Math.max(0, box.ramUsedMb - podUsedMb);
 
   const alerts: string[] = [];
   if (diskPct > 85) alerts.push(`Disk ${diskPct.toFixed(0)}% full — nearing the quota ceiling.`);
@@ -151,6 +150,13 @@ function BoxCard({ box }: { box: BoxStats }) {
           />
         </div>
 
+        {!box.hostMeasured && (
+          <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[12.5px] text-warning">
+            Box memory not published (podway-mem-pressure). RAM here is Incus&apos;s view, which counts pod
+            RAM as cache — real free memory is much lower. Do not sell on it.
+          </p>
+        )}
+
         <p className="-mt-1 text-[11.5px] text-muted-foreground">
           ${BOX_USD_PER_MONTH}/mo box · ~${(BOX_USD_PER_MONTH / physicalSlots).toFixed(0)}/slot ·{" "}
           {soldSlots} sold ≈ ${((soldSlots * BOX_USD_PER_MONTH) / physicalSlots).toFixed(0)}/mo
@@ -174,19 +180,25 @@ function BoxCard({ box }: { box: BoxStats }) {
           </div>
           <div>
             <div className="mb-1 flex justify-between text-[11px] text-muted-foreground">
-              <span>Actual pod RAM</span>
+              <span>Pod RAM on the box</span>
               <span className="tabular-nums">
                 {gb(podUsedMb)} of {gb(reservedMb)} sold
               </span>
             </div>
             <Bar pctUsed={pct(podUsedMb, box.ramTotalMb)} tone="primary" />
           </div>
-          <p className="text-[11.5px] text-muted-foreground">
-            Pods actually use <span className="tabular-nums">{gb(podUsedMb)}</span> of the{" "}
-            {gb(reservedMb)} sold — idle pods sit well under their 4&nbsp;GB ceiling. The host reports{" "}
-            {gb(box.ramUsedMb)} used, but ~{gb(hostCacheMb)} of that is ZFS&nbsp;ARC / page cache
-            (reclaimable), not pod memory. Lots of headroom to sell more.
-          </p>
+          {box.hostMeasured ? (
+            <p className="text-[11.5px] text-muted-foreground">
+              Pods hold <span className="tabular-nums">{gb(podUsedMb)}</span> of the {gb(reservedMb)} sold
+              {box.ksmSavedMb ? <> (KSM merges {gb(box.ksmSavedMb)} of it)</> : null}. ZFS cache{" "}
+              {gb(box.cacheMb ?? 0)}. Free on the box:{" "}
+              <span className="tabular-nums">{gb(box.ramTotalMb - box.ramUsedMb)}</span>.
+            </p>
+          ) : (
+            <p className="text-[11.5px] text-muted-foreground">
+              Pod RAM here is each guest&apos;s own view, which understates what the box holds.
+            </p>
+          )}
         </div>
 
         {/* Fit visual. */}

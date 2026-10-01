@@ -464,3 +464,22 @@ mode that only logs what it would do.
 #### Scenario: A frozen pod
 - **WHEN** a pod does not answer the watcher within the timeout
 - **THEN** the watcher SHALL skip that pod and continue with the others
+
+### Requirement: Box memory stats come from the box itself
+
+The Incus box SHALL publish its own memory numbers at least once a minute: total RAM, available RAM,
+ZFS cache size, memory saved by KSM, and each pod VM's resident memory on the host. The provider's box
+stats SHALL use them when they are at most five minutes old, and SHALL otherwise fall back to Incus's view
+and mark the stats as not host-measured. Incus's own "used" counts guest RAM (a memfd) as reclaimable
+cache: on 2026-10-01 it showed 81 GB free on a box with 28 GB available. The admin box page SHALL warn
+when the stats are not host-measured and SHALL NOT claim spare capacity from Incus's view.
+
+#### Scenario: Fresh box numbers
+- **GIVEN** the box published its memory one minute ago
+- **WHEN** the admin box page loads
+- **THEN** used RAM SHALL be total minus available, and each pod SHALL show its memory on the host
+
+#### Scenario: Stale or missing box numbers
+- **GIVEN** the box has not published for more than five minutes
+- **WHEN** the admin box page loads
+- **THEN** it SHALL show a warning that the RAM numbers overstate free memory

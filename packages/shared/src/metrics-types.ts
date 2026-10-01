@@ -44,7 +44,8 @@ export interface BoxPod {
   size: string;
   slots: number;
   status: string;
-  /** Live RAM the pod is actually using on the host, or null if unreadable. */
+  /** RAM the pod holds on the HOST (its VM's resident memory) when the box publishes it; otherwise
+   * the guest's own view, which understates it. Null if unreadable. */
   ramUsedMb: number | null;
 }
 
@@ -60,4 +61,12 @@ export interface BoxStats {
   diskUsedMb: number;
   diskTotalMb: number;
   pods: BoxPod[];
+  /** True when RAM numbers come from the box's own /proc (podway-mem-pressure publishes them every
+   * minute): ramUsedMb = total − MemAvailable. False/absent = Incus's view, which counts guest RAM
+   * (a memfd) as reclaimable cache and so overstates free memory by tens of GB. */
+  hostMeasured?: boolean;
+  /** ZFS ARC on the box (reclaimable, but capped and wanted). */
+  cacheMb?: number;
+  /** Memory KSM saves by merging identical pages across pods. */
+  ksmSavedMb?: number;
 }

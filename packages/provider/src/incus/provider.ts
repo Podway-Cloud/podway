@@ -297,6 +297,29 @@ export function sanitizePodHealth(h: PodHealth): PodHealth {
   };
 }
 
+/** Overlay the box's own memory numbers (published every minute by podway-mem-pressure as
+ * `user.podway.hostmem`) on Incus's view. Incus counts guest RAM — a memfd — as reclaimable cache, so it
+ * showed 81 GB free on a box with 28 GB available (2026-10-01). Stale (>5 min) or bad data is ignored. */
+export function withHostMemory(stats: BoxStats, raw: string | undefined, nowMs: number): BoxStats {
+  let h: { t?: number; totalMb?: number; availMb?: number; arcMb?: number; ksmMb?: number; pods?: Record<string, number> };
+  try {
+    h = JSON.parse(raw ?? "");
+  } catch {
+    return stats;
+  }
+  if (!h.t || !h.totalMb || h.availMb == null || nowMs - h.t * 1000 > 5 * 60_000) return stats;
+  const hp = h.pods ?? {};
+  return {
+    ...stats,
+    hostMeasured: true,
+    ramTotalMb: h.totalMb,
+    ramUsedMb: h.totalMb - h.availMb,
+    cacheMb: h.arcMb,
+    ksmSavedMb: h.ksmMb,
+    pods: stats.pods.map((p) => (hp[p.id] != null ? { ...p, ramUsedMb: hp[p.id] } : p)),
+  };
+}
+
 export class IncusProvider implements SandboxProvider {
   constructor(
     private readonly incus: IncusApi,
@@ -1184,10 +1207,13 @@ export class IncusProvider implements SandboxProvider {
       pods: [],
     };
     try {
-      const [res, pool, instances] = await Promise.all([
+      const [res, pool, instances, server] = await Promise.all([
         this.incus.hostResources(),
         this.incus.poolResources(this.config.pool),
         this.incus.listInstances(),
+        Promise.resolve()
+          .then(() => this.incus.serverConfig())
+          .catch(() => ({}) as Record<string, string>),
       ]);
       const pods: BoxPod[] = await Promise.all(
         instances.map(async (inst) => {
@@ -1203,17 +1229,21 @@ export class IncusProvider implements SandboxProvider {
           };
         }),
       );
-      return {
-        name: this.config.region,
-        region: this.config.region,
-        reachable: true,
-        cpuCores: res.cpu?.total ?? 0,
-        ramUsedMb: Math.round((res.memory?.used ?? 0) / MB),
-        ramTotalMb: Math.round((res.memory?.total ?? 0) / MB),
-        diskUsedMb: Math.round((pool.space?.used ?? 0) / MB),
-        diskTotalMb: Math.round((pool.space?.total ?? 0) / MB),
-        pods,
-      };
+      return withHostMemory(
+        {
+          name: this.config.region,
+          region: this.config.region,
+          reachable: true,
+          cpuCores: res.cpu?.total ?? 0,
+          ramUsedMb: Math.round((res.memory?.used ?? 0) / MB),
+          ramTotalMb: Math.round((res.memory?.total ?? 0) / MB),
+          diskUsedMb: Math.round((pool.space?.used ?? 0) / MB),
+          diskTotalMb: Math.round((pool.space?.total ?? 0) / MB),
+          pods,
+        },
+        server["user.podway.hostmem"],
+        Date.now(),
+      );
     } catch {
       return unreachable;
     }
