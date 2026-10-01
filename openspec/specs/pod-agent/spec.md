@@ -1278,3 +1278,15 @@ dropped cache returns to the host, so an idle pod stops holding memory it is not
 #### Scenario: The agent is working
 - **GIVEN** an agent turn is running
 - **THEN** the pod-agent SHALL NOT trim the cache
+
+### Requirement: The pod-agent prunes dead Codex builds on its own
+
+The pod-agent SHALL run the Codex release prune (keep the running release and any pending one, delete
+the rest) five minutes after start and every six hours. Codex's built-in self-updater adds a ~350 MB
+release every few days and never prunes; on 2026-10-01 podway dev held 22 dead builds (6.9 GB) because
+the prune only ran when podway itself updated Codex.
+
+#### Scenario: Codex updated itself
+- **GIVEN** Codex's own updater installed a new release and left the old ones
+- **WHEN** the pod-agent's next prune runs
+- **THEN** only the running release (and a pending one, if named) SHALL remain

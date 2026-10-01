@@ -19,3 +19,10 @@
 - [x] 5.1 Unit tests: `packages/provider/test/codex-prune.test.ts` (keeps current+pending, honours no-pending, two fail-safe paths, no-op on empty). 52/52 in the provider CLI/doctor suite pass.
 - [ ] 5.2 Build pod-base via `build-and-record.sh` + digest bump — NEEDS owner yes (ask-before-image-build).
 - [x] 5.3 Verified on the test:1 repro 2026-09-23: prune reclaimed 4.4G (disk 99%→52%), kept current+pending, `codex --version` still 0.155.1. With 4.5G free, doctor's disk-low finding clears and handoff writes succeed. (Ran the new script via a temp push; NOT yet baked into the image — 5.2.)
+
+## 6. Codex self-updates bypass the prune (2026-10-01)
+- [x] 6.1 Root cause of the recurrence: Codex's built-in updater flips `current` itself (podway dev: current
+      0.159.0 dated 09-30, `auto-update-version` still 0.155.0 from 09-18), so `agent_update_codex` never ran
+      and 22 builds (6.9 GB) piled up. Fix: pod-agent runs `podway __prune-codex-releases` 5 min after start
+      and every 6 h (`packages/pod-agent/src/main.ts`). Verified the command on test:2 (removed 2, kept current).
+- [ ] 6.2 Ships with the next pod-base image (owner yes).

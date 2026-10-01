@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { readFileSync, existsSync, mkdirSync, renameSync, chownSync } from "node:fs";
 import path from "node:path";
 import { createLogger } from "@podway/shared/log";
@@ -177,6 +177,12 @@ async function main(): Promise<void> {
     /* best-effort: a fresh pod has nothing to migrate */
   }
   if (isRoot) startCacheTrim(log); // guest-memory-return: idle pods hand cache back to the box
+  // Codex's built-in self-updater adds a ~350 MB release every few days and never prunes; podway's prune
+  // only ran on `podway agent update codex`, so podway dev held 22 dead builds (6.9 GB, 2026-10-01).
+  const pruneCodex = () =>
+    execFile("podway", ["__prune-codex-releases"], { uid: isRoot ? 1000 : undefined, gid: isRoot ? 1000 : undefined, timeout: 60_000 }, () => undefined);
+  setTimeout(pruneCodex, 5 * 60_000).unref();
+  setInterval(pruneCodex, 6 * 3_600_000).unref();
   startScheduler({
     sessionName: "main",
     jobsPath: path.join(opsDir, "ops-jobs.json"),
