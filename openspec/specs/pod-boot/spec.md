@@ -880,3 +880,17 @@ registration required.
 - **WHEN** a pod boots (a plain restart, resume, or post-update boot)
 - **THEN** Docker SHALL bring the app-pod's `unless-stopped` services back up on its own, with no
   Podway-authored boot hook or startup-command entry required to do so
+
+### Requirement: The cloud pod-base kernel keeps warnings off the slow consoles
+
+The cloud pod-base image SHALL set the guest kernel's console log level so that only emergency messages
+are written to the VM's screen and serial console; every message SHALL still reach the kernel log and the
+journal. On 2026-09-29 three guests froze: a stall report from every CPU queued all CPUs behind the slow
+console (about 1.5 ms per line), and they spun in the console lock for days. Measured on a pod: 12,000
+error lines took 18.8 s with console printing and 1.1 s without.
+
+#### Scenario: A burst of kernel errors
+- **GIVEN** a pod booted from the image
+- **WHEN** the kernel logs many error-level messages at once
+- **THEN** the messages SHALL appear in `dmesg`
+- **AND** they SHALL NOT be written to the screen or serial console
