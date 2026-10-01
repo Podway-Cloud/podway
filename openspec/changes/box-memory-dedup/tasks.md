@@ -35,7 +35,7 @@
 
 ## 4. Ship (owner yes per step)
 
-- [ ] 4.1 PR + merge (spec in the same commit)
-- [ ] 4.2 Ask: deploy gateway (provider change)
+- [x] 4.1 PR + merge (spec in the same commit)
+- [x] 4.2 Ask: deploy gateway (provider change)
 - [x] 4.3 Ask: switch the watcher to `on`
 - [ ] 4.4 Owner clicks Update on pods; watch whole-box memory daily via `box-memory-check`
