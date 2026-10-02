@@ -180,7 +180,8 @@ async function main(): Promise<void> {
   // Codex's built-in self-updater adds a ~350 MB release every few days and never prunes; podway's prune
   // only ran on `podway agent update codex`, so podway dev held 22 dead builds (6.9 GB, 2026-10-01).
   const pruneCodex = () =>
-    execFile("podway", ["__prune-codex-releases"], { uid: isRoot ? 1000 : undefined, gid: isRoot ? 1000 : undefined, timeout: 60_000 }, () => undefined);
+    // HOME: a systemd service has none, and `podway` (set -u) dies on it — the first ship pruned nothing.
+    execFile("podway", ["__prune-codex-releases"], { uid: isRoot ? 1000 : undefined, gid: isRoot ? 1000 : undefined, timeout: 60_000, env: { ...process.env, HOME: home } }, () => undefined);
   setTimeout(pruneCodex, 5 * 60_000).unref();
   setInterval(pruneCodex, 6 * 3_600_000).unref();
   startScheduler({

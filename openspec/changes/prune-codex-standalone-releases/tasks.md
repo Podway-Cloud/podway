@@ -25,4 +25,5 @@
       0.159.0 dated 09-30, `auto-update-version` still 0.155.0 from 09-18), so `agent_update_codex` never ran
       and 22 builds (6.9 GB) piled up. Fix: pod-agent runs `podway __prune-codex-releases` 5 min after start
       and every 6 h (`packages/pod-agent/src/main.ts`). Verified the command on test:2 (removed 2, kept current).
-- [ ] 6.2 Ships with the next pod-base image (owner yes).
+- [x] 6.2 Shipped in v0.8.40 (cc0340dcc14f) but pruned NOTHING on test:2: the pod-agent (systemd) has no HOME and `podway` (set -u) died on line 353. Fixed by passing HOME; proven by running the call with the agent's exact env, without and with HOME.
+- [ ] 6.3 Ship the HOME fix in the next pod-base image; verify a planted dead release disappears ~5 min after a pod-agent restart.
