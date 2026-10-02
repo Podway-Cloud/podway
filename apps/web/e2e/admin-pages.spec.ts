@@ -30,9 +30,13 @@ test.describe("admin backoffice pages", () => {
   test("Boxes shows host vitals and the pod-fit visualisation", async ({ page }) => {
     await login(page, "admin");
     await page.goto("/admin/boxes");
-    await expect(page.getByText("How pods fit")).toBeVisible();
-    // The fake box reports a name; the overcommit view names its axes.
-    await expect(page.getByText(/Overcommit/i).first()).toBeVisible();
+    // Capacity in GB (no slots): free RAM, RAM sold, the projection, and a pods table that links each
+    // pod to its admin page.
+    await expect(page.getByText("Free RAM")).toBeVisible();
+    await expect(page.getByText("Sold", { exact: true })).toBeVisible();
+    await expect(page.getByText(/slot/i)).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "saas-app-1" })).toHaveAttribute("href", "/admin/pods/saas-app-1");
+    await expect(page.getByRole("cell", { name: "8.8 / 16 GB" })).toBeVisible(); // XL at 55%
   });
 
   test("Images shows the pod-base image history", async ({ page }) => {
@@ -99,6 +103,8 @@ test.describe("admin pods table + drill-in", () => {
     const sizeHeader = page.getByRole("link", { name: /Size/ }).first();
     await expect(sizeHeader).toBeVisible();
     await sizeHeader.click();
-    await expect(page).toHaveURL(/\/admin\/pods\?sort=size/);
+    // 20s like the phone test: the dev server re-renders the table (fleet + box + manifest reads) on the
+    // sorted URL, and 5s flaked on a cold route.
+    await expect(page).toHaveURL(/\/admin\/pods\?sort=size/, { timeout: 20_000 });
   });
 });

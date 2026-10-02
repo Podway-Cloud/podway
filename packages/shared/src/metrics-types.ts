@@ -47,6 +47,10 @@ export interface BoxPod {
   /** RAM the pod holds on the HOST (its VM's resident memory) when the box publishes it; otherwise
    * the guest's own view, which understates it. Null if unreadable. */
   ramUsedMb: number | null;
+  /** The pod's promised RAM (its size), GB. */
+  memoryGb?: number;
+  /** When the VM last booted (ISO), null when not running or unknown. */
+  startedAt?: string | null;
 }
 
 /** Host-level stats for one self-hosted box (docs/plans/box-observability-plan.md).

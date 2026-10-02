@@ -100,9 +100,10 @@ test.describe("admin access requests", () => {
     });
     expect(await box.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
 
-    // A tap on a FAR cell of that row opens that pod — not whichever row is first.
+    // A tap on a FAR cell of that row opens that pod — not whichever row is first. The far DATA cell:
+    // the last column is the row's Update action, which must NOT navigate.
     const row = page.locator("tbody tr", { hasText: slug });
-    await row.locator("td").last().click();
+    await row.locator("td").nth(-2).click();
     // Generous timeout: whichever test reaches /admin/pods/[id] FIRST pays for the
     // dev server to compile that route (~3.6s observed), and the default 5s left
     // ~1s of slack — so this flaked about one run in three while the click itself

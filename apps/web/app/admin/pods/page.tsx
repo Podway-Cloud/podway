@@ -1,36 +1,40 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { requireAdmin } from "@/lib/access";
-import { getFleet } from "@/lib/fleet";
+import { POD_TIERS, isPodSize } from "@podway/shared";
+import { getFleet, pinnedDigestFor } from "@/lib/fleet";
 import { getPodService } from "@/lib/pod-service";
+import { listImages } from "@/lib/image-manifest";
+import { imageVersionLabel, sameDigest } from "@/lib/pod-image";
 import DashboardPage from "@/components/dashboard-page";
+import { StatusBadge } from "@/components/pod-status";
+import AdminRowUpdate from "@/components/admin-row-update";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Backoffice pods table. One scannable row per pod with the facts that matter;
- * all controls (Suspend/Update/Reconcile/Destroy) live on the drill-in
- * (/admin/pods/[id]) so this stays clean and non-destructive. Cost is
- * backoffice-only (users never see dollars). Box capacity/economics live on
- * /admin/boxes.
+ * Backoffice pods table: which pod needs me, and act on it. One row per pod — size in GB, status, the
+ * RAM it holds ON THE BOX (from the box's own numbers, not the guest's), uptime since its last boot,
+ * how long its agent has been idle, its real image version, and a forced Update. Suspend / Resize /
+ * Destroy stay on the drill-in (/admin/pods/[id]). Box capacity lives on /admin/boxes.
  */
 
-function hours(ms: number): string {
-  if (ms < 60_000) return "0h";
-  const h = ms / 3_600_000;
-  return h < 1 ? `${Math.round(ms / 60_000)}m` : `${h.toFixed(1)}h`;
+/** A duration as one short unit: 45s, 12m, 5h, 3d. */
+function dur(ms: number | null): string {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return "—";
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)}m`;
+  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)}h`;
+  return `${Math.round(ms / 86_400_000)}d`;
 }
-function tierLabel(size: string): string {
-  return size === "l" ? "Large" : size === "m" ? "Medium" : "Small";
+function sizeGb(size: string): number {
+  return isPodSize(size) ? POD_TIERS[size].memoryGb : 0;
 }
-function statusTone(s: string): string {
-  if (s === "running") return "text-success";
-  if (s === "suspended") return "text-muted-foreground";
-  if (s === "error" || s === "destroying") return "text-destructive";
-  return "text-warning";
+function gb1(mb: number): string {
+  return (mb / 1024).toFixed(1);
 }
 
-type SortKey = "pod" | "environment" | "provider" | "size" | "status" | "uptime" | "version" | "cost";
+type SortKey = "pod" | "environment" | "size" | "status" | "memory" | "uptime" | "idle" | "version";
 
 export const metadata = { title: "Pods" };
 
@@ -41,7 +45,7 @@ export default async function PodsPage({
 }) {
   await requireAdmin();
   const sp = await searchParams;
-  const sort = (["pod", "environment", "provider", "size", "status", "uptime", "version", "cost"] as const).includes(
+  const sort = (["pod", "environment", "size", "status", "memory", "uptime", "idle", "version"] as const).includes(
     sp.sort as SortKey,
   )
     ? (sp.sort as SortKey)
@@ -54,6 +58,28 @@ export default async function PodsPage({
   const attention = await getPodService()
     .adminFleetHealth()
     .catch(() => []);
+  // RAM on the box + last boot come from the box itself; versions from the image manifest. Both are
+  // best-effort: a box or manifest failure leaves "—", never a broken table.
+  const [boxes, images] = await Promise.all([
+    getPodService().getBoxStats().catch(() => []),
+    listImages().catch(() => []),
+  ]);
+  const onBox = new Map(boxes.flatMap((b) => b.pods.map((bp) => [bp.id, bp] as const)));
+  const now = Date.now();
+  const versionOf = (digest: string | null | undefined) => {
+    const row = digest ? images.find((i) => sameDigest(i.digest, digest)) : undefined;
+    return digest ? imageVersionLabel(row?.version, digest) : "—";
+  };
+  // Every row's Update goes to its provider's pin; the label names the cloud (Incus) one.
+  const pin = pinnedDigestFor("incus");
+  const target = pin ? versionOf(pin).replace(/ \(.*\)$/, "") : "the latest image";
+  const memMb = (id: string) => onBox.get(id)?.ramUsedMb ?? null;
+  const uptimeMs = (id: string) => {
+    const t = onBox.get(id)?.startedAt;
+    return t ? now - Date.parse(t) : null;
+  };
+  const idleMs = (p: (typeof fleet.pods)[number]) =>
+    p.pod.status === "running" && p.pod.lastActiveAt ? now - Date.parse(p.pod.lastActiveAt) : null;
 
   const th = "px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-muted-foreground";
   const td = "px-3 py-2.5 align-middle whitespace-nowrap";
@@ -63,12 +89,12 @@ export default async function PodsPage({
   const key = (p: (typeof fleet.pods)[number]): string | number => {
     switch (sort) {
       case "environment": return p.pod.environmentName;
-      case "provider": return p.pod.provider ?? "";
-      case "size": return p.slots;
+      case "size": return sizeGb(p.pod.size);
       case "status": return p.pod.status;
-      case "uptime": return p.usage?.runningMs ?? 0;
+      case "memory": return memMb(p.pod.id) ?? -1;
+      case "uptime": return uptimeMs(p.pod.id) ?? -1;
+      case "idle": return idleMs(p) ?? -1;
       case "version": return p.machineCount > 1 ? 2 : p.stale ? 1 : 0;
-      case "cost": return p.estUsd;
       default: return (p.pod.name?.trim() || p.pod.id).toLowerCase();
     }
   };
@@ -213,12 +239,15 @@ export default async function PodsPage({
             <tr>
               <SortTh col="pod" label="Pod" />
               <SortTh col="environment" label="Environment" />
-              <SortTh col="provider" label="Provider" />
               <SortTh col="size" label="Size" />
               <SortTh col="status" label="Status" />
-              <SortTh col="uptime" label="Uptime" right />
+              <SortTh col="memory" label="RAM on box" right />
+              <SortTh col="uptime" label="Up" right />
+              <SortTh col="idle" label="Idle" right />
               <SortTh col="version" label="Version" />
-              <SortTh col="cost" label="Cost" right />
+              <th className={th}>
+                <span className="sr-only">Update</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -238,32 +267,47 @@ export default async function PodsPage({
                   <CellLink id={p.pod.id}>{p.pod.environmentName}</CellLink>
                 </td>
                 <td className={`${td} text-muted-foreground`}>
-                  <CellLink id={p.pod.id}>{p.pod.provider ?? "—"}</CellLink>
-                </td>
-                <td className={`${td} text-muted-foreground`}>
                   <CellLink id={p.pod.id}>
-                    {tierLabel(p.pod.size)} <span className="text-[11px]">· {p.slots} sl</span>
+                    {isPodSize(p.pod.size) ? POD_TIERS[p.pod.size].label : p.pod.size}{" "}
+                    <span className="text-[11px]">· {sizeGb(p.pod.size)} GB</span>
                   </CellLink>
-                </td>
-                <td className={`${td} ${statusTone(p.pod.status)}`}>
-                  <CellLink id={p.pod.id}>{p.pod.status}</CellLink>
-                </td>
-                <td className={`${td} text-right tabular-nums text-muted-foreground`}>
-                  <CellLink id={p.pod.id}>{hours(p.usage?.runningMs ?? 0)}</CellLink>
                 </td>
                 <td className={td}>
                   <CellLink id={p.pod.id}>
-                    {p.machineCount > 1 ? (
-                      <span className="text-destructive">{p.machineCount} machines</span>
-                    ) : p.stale ? (
-                      <span className="text-warning">update ready</span>
+                    <StatusBadge status={p.pod.status} />
+                  </CellLink>
+                </td>
+                <td className={`${td} text-right tabular-nums text-muted-foreground`}>
+                  <CellLink id={p.pod.id}>
+                    {memMb(p.pod.id) != null ? (
+                      <>
+                        <span className="text-foreground">{gb1(memMb(p.pod.id)!)}</span> / {sizeGb(p.pod.size)} GB
+                      </>
                     ) : (
-                      <span className="text-muted-foreground">current</span>
+                      "—"
                     )}
                   </CellLink>
                 </td>
                 <td className={`${td} text-right tabular-nums text-muted-foreground`}>
-                  <CellLink id={p.pod.id}>${p.estUsd.toFixed(2)}/mo</CellLink>
+                  <CellLink id={p.pod.id}>{dur(uptimeMs(p.pod.id))}</CellLink>
+                </td>
+                <td className={`${td} text-right tabular-nums text-muted-foreground`}>
+                  <CellLink id={p.pod.id}>{dur(idleMs(p))}</CellLink>
+                </td>
+                <td className={td}>
+                  <CellLink id={p.pod.id}>
+                    <span className="font-mono text-[12px]">{versionOf(p.pod.imageDigest)}</span>
+                    {p.machineCount > 1 ? (
+                      <span className="ml-2 text-[11px] text-destructive">{p.machineCount} machines</span>
+                    ) : p.stale ? (
+                      <span className="ml-2 text-[11px] text-warning">→ {target}</span>
+                    ) : null}
+                  </CellLink>
+                </td>
+                <td className={`${td} text-right`}>
+                  {p.pod.status === "running" && (
+                    <AdminRowUpdate id={p.pod.id} name={p.pod.name?.trim() || p.pod.id} target={target} />
+                  )}
                 </td>
               </tr>
             ))}
@@ -272,9 +316,10 @@ export default async function PodsPage({
       </div>
 
       <p className="text-[12px] text-muted-foreground">
-        Click a pod for details + controls (Suspend, Update, Reconcile, Destroy). Uptime is from the
-        event log; cost is each pod&rsquo;s RAM-slot share of the box (backoffice-only — users never
-        see dollars). Box capacity + economics live on <a className="underline" href="/admin/boxes">Boxes</a>.
+        Click a pod for details + controls (Suspend, Resize, Rollback, Destroy). RAM on box is what the
+        pod&rsquo;s VM holds on the host; Up is time since its last boot; Idle is time since its agent last
+        worked. Update moves a pod to the pinned image even when it is current (a reinstall). Box capacity
+        lives on <a className="underline" href="/admin/boxes">Boxes</a>.
       </p>
     </DashboardPage>
   );

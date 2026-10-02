@@ -889,8 +889,7 @@ export class PodService {
    * box concept and is skipped. Pod display names are enriched from the DB (the
    * provider knows only instance ids). */
   async getBoxStats(): Promise<BoxStats[]> {
-    const names = new Map<string, string | null>();
-    for (const p of await this.store.list()) names.set(p.id, p.name);
+    const recs = new Map((await this.store.list()).map((p) => [p.id, p]));
     const providers = new Set<SandboxProvider>([
       this.provider,
       ...Object.values(this.config.providers ?? {}),
@@ -900,7 +899,13 @@ export class PodService {
       if (typeof p.boxStats !== "function") continue;
       const b = await p.boxStats().catch(() => null);
       if (!b) continue;
-      for (const pod of b.pods) pod.name = names.get(pod.id) ?? null;
+      for (const pod of b.pods) {
+        const r = recs.get(pod.id);
+        pod.name = r?.name ?? null;
+        // The provider only guesses a tier from limits.memory (it called a 16 GB pod "Large"); the
+        // record holds the real size.
+        if (r?.size) pod.size = r.size;
+      }
       boxes.push(b);
     }
     return boxes;

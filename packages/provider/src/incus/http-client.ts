@@ -31,6 +31,8 @@ export interface IncusInstance {
   status_code: number;
   config: Record<string, string>;
   devices: Record<string, Record<string, string>>;
+  /** When the instance last started (Incus sets it on every start). */
+  last_used_at?: string;
 }
 
 export interface IncusInstanceState {

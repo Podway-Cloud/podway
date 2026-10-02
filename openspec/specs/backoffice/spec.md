@@ -208,3 +208,30 @@ action itself (not only by page access), and SHALL be inert when Stripe is not c
 - **WHEN** the self-host edition serves `/admin/billing` or `/admin/billing/[id]`
 - **THEN** the route SHALL return not-found
 
+
+### Requirement: The pods table shows each pod's real state in GB
+
+`/admin/pods` SHALL show, per pod: name and id, environment, size as its tier and RAM in GB (never
+"slots"), lifecycle status, the RAM its VM holds on the box against its size, time since its last boot,
+time since its agent last worked, and its image version (with the target version when an update is
+available). A running pod's row SHALL offer Update, which moves it to the pinned image after a
+confirmation even when it is already current. There is no provider column.
+
+#### Scenario: A pod behind the pinned image
+- **WHEN** a running pod's image differs from the pinned image
+- **THEN** its row SHALL show its version and the version it would update to, and an Update action
+
+### Requirement: The boxes page answers "can we sell more" in GB
+
+`/admin/boxes` SHALL show, per box: free RAM (from the box's own numbers), RAM sold (the sum of pod
+sizes) and its ratio to box RAM, and — when a sales ceiling is configured — the RAM the box would need
+if pods were sold up to the ceiling and used their size like today's running pods, with a verdict
+(fits under 85% of box RAM, tight under 100%, does not fit). It SHALL show where RAM goes (pods net of
+KSM, ZFS cache, host, free) and a pod table with each pod's RAM on the box against its size, status,
+uptime, idle time, version and a link to the pod's admin page. It SHALL NOT express capacity in
+"slots".
+
+#### Scenario: Selling to the ceiling would not fit
+- **GIVEN** running pods use 50% of their size and the ceiling is 2× box RAM
+- **WHEN** the boxes page loads
+- **THEN** the projection SHALL exceed box RAM and read "does not fit"

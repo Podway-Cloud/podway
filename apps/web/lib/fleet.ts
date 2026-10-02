@@ -131,7 +131,7 @@ export function pinnedDigest(): string | null {
  * OCI digest live in different namespaces, so a pod must be compared against its
  * own provider's pin (same logic as the pod detail page). Comparing every pod to
  * the Fly digest made Incus pods read "update ready" forever, even post-update. */
-function pinnedDigestFor(provider: string | null | undefined): string | null {
+export function pinnedDigestFor(provider: string | null | undefined): string | null {
   if (provider === "incus") return process.env.PODWAY_INCUS_IMAGE_DIGEST ?? null;
   return pinnedDigest();
 }

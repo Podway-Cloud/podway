@@ -482,24 +482,27 @@ export class FakeProvider implements SandboxProvider {
   async boxStats(): Promise<BoxStats> {
     // A synthetic spread (independent of the in-memory pods) so /admin/boxes shows
     // realistic density in fake/local mode.
-    const spec: [string, "s" | "m" | "l"][] = [
-      ["doc-qa-demo", "m"],
-      ["saas-app-1", "l"],
-      ["bot-2", "s"],
-      ["landing-3", "s"],
-      ["repo-onboard-4", "m"],
-      ["game-jam-5", "s"],
+    const spec: [string, "m" | "l" | "xl", number][] = [
+      ["doc-qa-demo", "l", 0.4],
+      ["saas-app-1", "xl", 0.55],
+      ["bot-2", "m", 0.3],
+      ["landing-3", "m", 0.95],
+      ["repo-onboard-4", "l", 0.45],
+      ["game-jam-5", "m", 0.5],
     ];
-    const memGb = (sz: string) => (sz === "l" ? 16 : sz === "m" ? 8 : 4);
-    const pods = spec.map(([id, size]) => ({
+    const gbOf = (sz: "m" | "l" | "xl") => (sz === "xl" ? 16 : sz === "l" ? 8 : 4);
+    const pods = spec.map(([id, size, use], i) => ({
       id,
       name: null,
       size,
-      slots: memGb(size) / 4,
+      slots: gbOf(size) / 4,
       status: "running",
-      ramUsedMb: Math.round(memGb(size) * 1024 * 0.55), // ~55% of the ceiling, actual
+      ramUsedMb: Math.round(gbOf(size) * 1024 * use), // RAM the VM holds on the box
+      memoryGb: gbOf(size),
+      startedAt: new Date(Date.now() - (i + 1) * 7 * 3_600_000).toISOString(),
     }));
-    const usedMb = pods.reduce((n, p) => n + (p.ramUsedMb ?? 0), 0) + 6144; // + host overhead
+    // Pods + 16 GB ZFS cache + 4 GB host, as the box publishes it (hostMeasured).
+    const usedMb = pods.reduce((n, p) => n + (p.ramUsedMb ?? 0), 0) + 20 * 1024;
     return {
       name: "hetzner-fsn1",
       region: "hetzner-fsn1",
@@ -509,6 +512,9 @@ export class FakeProvider implements SandboxProvider {
       ramTotalMb: 128 * 1024,
       diskUsedMb: 40 * 1024,
       diskTotalMb: 1700 * 1024,
+      hostMeasured: true,
+      cacheMb: 16 * 1024,
+      ksmSavedMb: 2 * 1024,
       pods,
     };
   }

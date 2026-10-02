@@ -1226,6 +1226,8 @@ export class IncusProvider implements SandboxProvider {
             slots: Math.max(1, Math.round(memGb / 4)),
             status: mapStatus(inst.status),
             ramUsedMb: st?.memory?.usage != null ? Math.round(st.memory.usage / MB) : null,
+            memoryGb: memGb,
+            startedAt: inst.status === "Running" ? (inst.last_used_at ?? null) : null,
           };
         }),
       );
