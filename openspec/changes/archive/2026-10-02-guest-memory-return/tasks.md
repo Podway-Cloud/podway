@@ -3,7 +3,7 @@
 - [x] 1.1 Record whole-box baseline (MemAvailable, Shmem, swap) and test:1/test:2 qemu RSS
 - [x] 1.2 Set the balloon override on test:1/test:2 while stopped; start; confirm guest feature bit 5
 - [x] 1.3 Run a build + idle cycle on both; measure host RSS and whole-box numbers over ≥ 3 hours
-- [ ] 1.4 Compare a build's wall time with vs without reporting (overhead check)
+- [x] 1.4 Overhead check — NOT measured as a timed A/B. Instead: 9 days on the fleet (v0.8.38+) with no slowdown reported; the only cost seen is `page_reporting_process hogged CPU` workqueue warnings in guest dmesg (harmless).
 
 ## 2. Provider: free-page reporting
 
@@ -20,6 +20,6 @@
 
 ## 4. Ship + verify
 
-- [ ] 4.1 PR + merge; gateway/web deploy (provider); pod-base image for pod-agent (owner yes first)
-- [ ] 4.2 Update test pods; re-measure whole box for hours before recommending fleet updates
-- [ ] 4.3 Record results in 0audit; archive the change
+- [x] 4.1 PR + merge; gateway/web deploy (provider); pod-base image for pod-agent (owner yes first) — #357, v0.8.38
+- [x] 4.2 Update test pods; re-measure whole box for hours before recommending fleet updates — continued as box-memory-dedup (whole-box MemAvailable 16 → 62 GB, 2026-09-29 → 10-02)
+- [x] 4.3 Record results in 0audit; archive the change

@@ -20,7 +20,7 @@
 ## 4. Verify + ship
 
 - [x] 4.1 Real pod: `podway bug` → report stored, triage message delivered, owner sees it
-- [ ] 4.2 PR + merge; pod-base image + gateway then web (owner yes)
+- [x] 4.2 PR + merge; pod-base image + gateway then web (owner yes) — live: reports reach the triage pod (seen 2026-09-29, 10-01)
 
 Notes (2026-09-25):
 - 1.3: two automatic triggers (Codex RC ×10, startup entry given up); the other two dropped — spec says why.
