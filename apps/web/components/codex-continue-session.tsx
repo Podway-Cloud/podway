@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Smartphone, Monitor } from "lucide-react";
+import { Smartphone, Monitor, ShieldCheck } from "lucide-react";
 
 /**
  * The "Continue this Codex session" guidance — ONE source, rendered verbatim by BOTH the Codex info
@@ -37,6 +37,23 @@ function StepList({ children }: { children: ReactNode[] }) {
   );
 }
 
+/** The step the app does not let podway do: a chat starts in "Ask for approval", so Codex stops and waits
+ * on every command until the owner switches it. Podway's config defaults can't reach that per-chat
+ * choice (owner request, 2026-10-03). */
+function FullAccessStep() {
+  return (
+    <div className="flex items-start gap-2.5 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2.5">
+      <ShieldCheck className="mt-0.5 size-4 shrink-0 text-warning" />
+      <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+        <strong className="text-foreground">In every new chat, switch to Full access.</strong> Under the message
+        box, change <Chip>Ask for approval</Chip> to <Chip>Full access</Chip>. Otherwise Codex stops and waits
+        for you to approve each command. The app keeps this choice per chat, so podway can&apos;t set it for
+        you.
+      </p>
+    </div>
+  );
+}
+
 function MobileSection({ podName }: { podName: string }) {
   return (
     <div className="flex flex-col gap-2">
@@ -54,9 +71,10 @@ function MobileSection({ podName }: { podName: string }) {
             <strong className="text-foreground">work</strong> with{" "}
             <strong className="text-foreground">{podName}</strong> shown underneath.
           </>,
-          <>Tap it to continue your session.</>,
+          <>Tap it, then start a new chat.</>,
         ]}
       </StepList>
+      <FullAccessStep />
     </div>
   );
 }
@@ -89,10 +107,11 @@ function DesktopSection({ podName }: { podName: string }) {
             it—your project is in <Chip>/home/dev/work</Chip>.
           </>,
           <>
-            Click <strong className="text-foreground">Add project</strong>.
+            Click <strong className="text-foreground">Add project</strong>, then start a new chat in it.
           </>,
         ]}
       </StepList>
+      <FullAccessStep />
       <p className="text-[12.5px] leading-relaxed text-muted-foreground">
         Next time, just select the project from the sidebar.
       </p>
