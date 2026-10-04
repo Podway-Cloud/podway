@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login, launchPod } from "./helpers";
+import { login, launchPod, seedReport } from "./helpers";
 
 /**
  * The admin backoffice sub-pages. Each is read-mostly, and none had e2e coverage —
@@ -37,6 +37,20 @@ test.describe("admin backoffice pages", () => {
     await expect(page.getByText(/slot/i)).toHaveCount(0);
     await expect(page.getByRole("link", { name: "saas-app-1" })).toHaveAttribute("href", "/admin/pods/saas-app-1");
     await expect(page.getByRole("cell", { name: "8.8 / 16 GB" })).toBeVisible(); // XL at 55%
+  });
+
+  test("Bug reports: triage a report without touching the database", async ({ page }) => {
+    await seedReport("e2efp000000000000000001", "podway msg send accepted a too-long message", "cli", 3);
+    await login(page, "admin");
+    await page.goto("/admin/reports");
+    const row = page.locator("li", { hasText: "podway msg send accepted a too-long message" });
+    await expect(row).toContainText("×3");
+    await expect(row).toContainText("open");
+    await row.getByRole("button", { name: /^Mark fixed$/ }).click();
+    await expect(row.getByRole("button", { name: /^Reopen$/ })).toBeVisible({ timeout: 15_000 });
+    await expect(row).toContainText("fixed");
+    await row.getByRole("button", { name: /^Reopen$/ }).click();
+    await expect(row.getByRole("button", { name: /^Mark fixed$/ })).toBeVisible({ timeout: 15_000 });
   });
 
   test("Images shows the pod-base image history", async ({ page }) => {

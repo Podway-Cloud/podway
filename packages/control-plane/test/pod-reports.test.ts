@@ -61,3 +61,30 @@ describe("PodReports.ingest", () => {
     }
   });
 });
+
+describe("PodReports admin triage (list + status)", () => {
+  it("lists every fingerprint newest-first with its pods, and sets/rejects statuses", async () => {
+    const { db, close } = await createTestDb();
+    try {
+      await db.insert(user).values({ id: "o1", name: "Dana", email: "d@x.com" });
+      const reports = new PodReports(db, { wakeTriage: async () => undefined });
+      await reports.ingest("pod-a", "o1", [line("r1", "Codex RC keeps failing pid 1")]);
+      await reports.ingest("pod-b", "o1", [line("r2", "Codex RC keeps failing pid 2")]);
+      await reports.ingest("pod-a", "o1", [line("r3", "disk full", { area: "disk" })]);
+
+      const all = await reports.listAll();
+      expect(all).toHaveLength(2);
+      const rc = all.find((r) => r.area === "rc")!;
+      expect(rc.count).toBe(2);
+      expect(rc.pods.sort()).toEqual(["pod-a", "pod-b"]);
+      expect(rc.status).toBe("open");
+
+      await reports.setStatus(rc.fingerprint, "fixed");
+      expect((await reports.listAll()).find((r) => r.area === "rc")!.status).toBe("fixed");
+      await expect(reports.setStatus(rc.fingerprint, "bogus" as never)).rejects.toThrow();
+      await expect(reports.setStatus("no-such-fp", "ignored")).rejects.toThrow();
+    } finally {
+      await close();
+    }
+  });
+});

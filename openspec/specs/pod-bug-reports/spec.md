@@ -58,3 +58,14 @@ fixed, ignored).
 #### Scenario: The owner opens Insights
 - **WHEN** a report was filed from the owner's pod
 - **THEN** Insights SHALL list it with its status
+
+### Requirement: Admins triage reports in the backoffice
+
+`/admin/reports` SHALL list every report fingerprint, most recently seen first, with its status, area,
+count, first/last seen, summary and the pods that filed it, and SHALL let an admin mark it fixed, ignore it,
+or reopen it. Only admins SHALL be able to list or change reports (checked at runtime). Until 2026-10-04 a
+status change was a hand-written database write.
+
+#### Scenario: Mark a report fixed
+- **WHEN** an admin clicks Mark fixed on an open report
+- **THEN** its status SHALL become fixed, and a recurrence SHALL reopen it and wake triage as before

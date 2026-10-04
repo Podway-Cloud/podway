@@ -330,3 +330,22 @@ export async function scriptPodSecretRequests(
 ): Promise<void> {
   await scriptPodGithub(slug, { secretRequests: requests } as never);
 }
+
+/** Seed one bug-report fingerprint (for /admin/reports). */
+export async function seedReport(fp: string, summary: string, area = "cli", count = 1): Promise<void> {
+  const { Client } = await import("pg");
+  const { readFileSync } = await import("node:fs");
+  const path = await import("node:path");
+  const { dbUrl } = JSON.parse(readFileSync(path.join(process.cwd(), ".e2e-state.json"), "utf8")) as { dbUrl: string };
+  const c = new Client({ connectionString: dbUrl });
+  await c.connect();
+  try {
+    await c.query(
+      `INSERT INTO report_fingerprints (fingerprint, area, summary, count, status) VALUES ($1,$2,$3,$4,'open')
+       ON CONFLICT (fingerprint) DO UPDATE SET status = 'open'`,
+      [fp, area, summary, count],
+    );
+  } finally {
+    await c.end();
+  }
+}

@@ -15,7 +15,7 @@
 ## 3. Web
 
 - [x] 3.1 Cockpit Insights → Reports (owner's pods)
-- [ ] 3.2 Admin list with status actions
+- [x] 3.2 Admin list with status actions — /admin/reports (2026-10-04)
 
 ## 4. Verify + ship
 

@@ -90,6 +90,30 @@ export class PodReports {
     }
   }
 
+  /** ADMIN triage view: every fingerprint, most recently seen first, with the pods that hit it. The
+   * caller (an admin-gated action) is responsible for the gate. */
+  async listAll(limit = 200) {
+    const fps = await this.db.select().from(reportFingerprints).orderBy(desc(reportFingerprints.lastSeen)).limit(limit);
+    const pods = await this.db
+      .selectDistinct({ fingerprint: podReports.fingerprint, podId: podReports.podId })
+      .from(podReports);
+    const byFp = new Map<string, string[]>();
+    for (const p of pods) byFp.set(p.fingerprint, [...(byFp.get(p.fingerprint) ?? []), p.podId]);
+    return fps.map((f) => ({ ...f, pods: byFp.get(f.fingerprint) ?? [] }));
+  }
+
+  /** ADMIN: mark a fingerprint fixed / ignored / open. "fixed" reopens itself (and wakes triage) when
+   * the bug recurs; "ignored" stays quiet. Throws on an unknown status or fingerprint. */
+  async setStatus(fingerprint: string, status: "open" | "fixed" | "ignored"): Promise<void> {
+    if (!["open", "fixed", "ignored"].includes(status)) throw new Error(`bad status: ${status}`);
+    const r = await this.db
+      .update(reportFingerprints)
+      .set({ status })
+      .where(eq(reportFingerprints.fingerprint, fingerprint))
+      .returning({ fp: reportFingerprints.fingerprint });
+    if (r.length === 0) throw new Error(`no such report: ${fingerprint}`);
+  }
+
   /** The owner's view: reports filed from one of THEIR pods, newest first, with the group's status. */
   async forPod(ownerId: string, podId: string) {
     return this.db
