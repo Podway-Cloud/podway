@@ -894,3 +894,15 @@ error lines took 18.8 s with console printing and 1.1 s without.
 - **WHEN** the kernel logs many error-level messages at once
 - **THEN** the messages SHALL appear in `dmesg`
 - **AND** they SHALL NOT be written to the screen or serial console
+
+### Requirement: Pods allow unprivileged user namespaces
+
+The cloud pod-base image SHALL allow unprivileged user namespaces (`unshare -r`, rootless containers,
+browser sandboxes) by setting `kernel.apparmor_restrict_unprivileged_userns = 0`; Ubuntu 24.04 blocks
+them through AppArmor while the other sysctls advertise them. A pod is one tenant's own VM, so the added
+kernel surface stays inside it. Existing pods with a `.bashrc` from before the podbay→podway rename SHALL
+have its secrets hook pointed at `/etc/podway/secrets-load.sh` on boot.
+
+#### Scenario: A rootless sandbox
+- **WHEN** the pod user runs `unshare -r id -u`
+- **THEN** it SHALL print 0 and exit 0

@@ -151,6 +151,25 @@ describe("runSchedulerTick", () => {
     ]);
   });
 
+  it("a one-shot job fires once at its time, then removes itself from the jobs file", async () => {
+    // makore.app prod (2026-09-03): every one-off wake became a DAILY job that re-fired until an agent
+    // deleted it by hand.
+    const p = tmp();
+    const once: OpsJob = { id: "once", name: "Wake once", mode: "routine", enabled: true, schedule: { at: "2026-07-22T08:02:00Z" } };
+    writeJobs(p, [once, brief]);
+    const before = opts(p, new Date("2026-07-22T08:01:00Z"));
+    expect((await runSchedulerTick(before.o)).fired && before.injected.some((t) => t.includes("Wake once"))).toBe(false);
+
+    const { o, injected } = opts(p, new Date("2026-07-22T08:02:30Z"), { makeRunId: (id) => `${id}-run` });
+    // brief (08:00) is due too; one per tick, earliest-due first — fire until neither is due.
+    await runSchedulerTick(o);
+    await runSchedulerTick(o);
+    expect(injected.filter((t) => t.includes("Wake once"))).toHaveLength(1);
+    const left = JSON.parse(readFileSync(p.jobsPath, "utf8")).jobs.map((j: OpsJob) => j.id);
+    expect(left).toEqual(["brief"]);
+    expect(await runSchedulerTick(o)).toEqual({ fired: false, reason: "none-due" });
+  });
+
   it("a new daily job does NOT fire a slot that passed before it existed (2026-09-27)", async () => {
     const p = tmp();
     writeJobs(p, [{ ...brief, schedule: { times: ["00:50"], timezone: "UTC" } }]);

@@ -1290,3 +1290,24 @@ the prune only ran when podway itself updated Codex.
 - **GIVEN** Codex's own updater installed a new release and left the old ones
 - **WHEN** the pod-agent's next prune runs
 - **THEN** only the running release (and a pending one, if named) SHALL remain
+
+### Requirement: A schedule can fire once
+
+`podway schedule add` SHALL accept a one-shot form — `--in MINUTES`, or `--once --at HH:MM [--tz IANA]`
+(the next such time) — stored as a single moment. The pod-agent SHALL fire it once when that moment has
+passed (while the agent can take a turn) and then remove it from the jobs file. `podway schedule list`
+SHALL show each job's task. Before this, every one-off wake became a daily job that re-fired until an
+agent deleted it (makore.app prod, 2026-09-03).
+
+#### Scenario: Wake once in five minutes
+- **WHEN** an agent runs `podway schedule add --name wake --in 5 --do "check the deploy"`
+- **THEN** the job SHALL fire once about five minutes later and SHALL then be gone from `podway schedule list`
+
+### Requirement: --help never acts
+
+Any `podway` command given `-h` or `--help` SHALL print its usage and exit without side effects. Before
+this, `podway bug --help` filed a real bug report and `msg send <pod> --help` would have sent "--help".
+
+#### Scenario: Asking a command for help
+- **WHEN** an agent runs `podway bug --help`
+- **THEN** the usage SHALL print and no report SHALL be filed

@@ -390,6 +390,9 @@ export BASH_ENV=/etc/podway/secrets-load.sh
 PROFILE
 chmod 644 /etc/profile.d/podway-secrets.sh
 BASHRC=/home/dev/.bashrc
+# Pods from before the podbay→podway rename still source /etc/podbay/…, which no longer exists (a silent
+# no-op; makore.app prod, 2026-09-03). Point it at the live path; the grep below then sees it.
+sed -i 's#/etc/podbay/secrets-load\.sh#/etc/podway/secrets-load.sh#g; s/^# podbay: load per-pod/# podway: load per-pod/' "$BASHRC" 2>/dev/null || true
 if ! grep -q 'secrets-load.sh' "$BASHRC" 2>/dev/null; then
   cat >> "$BASHRC" <<'RC'
 # podway: load per-pod app secrets into interactive shells (see secrets-load.sh)

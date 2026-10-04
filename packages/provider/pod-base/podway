@@ -491,20 +491,23 @@ cmd_schedule_list() {
   local n; n=$(jq '.jobs | length' "$SCHED_JOBS")
   if [ "$n" = "0" ]; then echo "no scheduled jobs (add one: podway schedule add --name … --at HH:MM --do \"…\")"; return 0; fi
   jq -r '.jobs[] | "\(if .enabled then "on " else "off" end)  \(.id)\t\(.name)\t" +
-    (.schedule | if .times then (.times|join(",")) + (if .timezone then " "+.timezone else " UTC" end)
+    (.schedule | if .at then "once at \(.at)" elif .times then (.times|join(",")) + (if .timezone then " "+.timezone else " UTC" end)
       + (if .days then " on " + ([.days[] | ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][.]] | join(",")) else "" end)
-      else "every \(.everyMinutes)m" end)' "$SCHED_JOBS"
+      else "every \(.everyMinutes)m" end)
+    + (if .instructions then "\n       do: " + (.instructions | gsub("\n"; " ") | if length > 160 then .[:157] + "…" else . end) else "" end)' "$SCHED_JOBS"
 }
 
 cmd_schedule_add() {
   sched_ensure
-  local name="" tz="" mode="routine" instr="" every="" id="" days_raw=""
+  local name="" tz="" mode="routine" instr="" every="" id="" days_raw="" in_min="" once=""
   local -a times=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --name) name="${2:-}"; shift 2 ;;
       --at) times+=("${2:-}"); shift 2 ;;
       --every) every="${2:-}"; shift 2 ;;
+      --in) in_min="${2:-}"; shift 2 ;;
+      --once) once=1; shift ;;
       --tz) tz="${2:-}"; shift 2 ;;
       --days | --on) days_raw="${2:-}"; shift 2 ;;
       --do | --instructions) instr="${2:-}"; shift 2 ;;
@@ -514,7 +517,26 @@ cmd_schedule_add() {
     esac
   done
   [ -n "$name" ] || die "usage: podway schedule add --name NAME (--at HH:MM [--at …] [--tz IANA] [--days mon,wed|weekdays|weekends] | --every MINUTES) --do \"what to do\""
-  [ ${#times[@]} -gt 0 ] || [ -n "$every" ] || die "give --at HH:MM (one or more) or --every MINUTES"
+  # One-shot: fires once, then the pod-agent removes the job (no daily leftover). --in N = N minutes
+  # from now; --once --at HH:MM = the next HH:MM in --tz.
+  local at_iso=""
+  if [ -n "$in_min" ] || [ -n "$once" ]; then
+    [ -z "$every" ] && [ -z "$days_raw" ] || die "--in/--once are one-shot; drop --every/--days"
+    if [ -n "$in_min" ]; then
+      [ -z "$once" ] && [ ${#times[@]} -eq 0 ] || die "use --in MIN alone, or --once --at HH:MM"
+      case "$in_min" in '' | *[!0-9]*) die "--in wants a whole number of minutes" ;; esac
+      at_iso=$(date -u -d "+$in_min minutes" +%Y-%m-%dT%H:%M:%SZ)
+    else
+      [ ${#times[@]} -eq 1 ] || die "--once needs exactly one --at HH:MM"
+      case "${times[0]}" in [0-2][0-9]:[0-5][0-9]) ;; *) die "bad --at '${times[0]}' (want HH:MM, 24h)" ;; esac
+      local z="${tz:-UTC}" e
+      e=$(TZ="$z" date -d "${times[0]}" +%s) || die "bad --tz '$z'"
+      [ "$e" -gt "$(date +%s)" ] || e=$(TZ="$z" date -d "tomorrow ${times[0]}" +%s)
+      at_iso=$(date -u -d "@$e" +%Y-%m-%dT%H:%M:%SZ)
+      times=()
+    fi
+  fi
+  [ -n "$at_iso" ] || [ ${#times[@]} -gt 0 ] || [ -n "$every" ] || die "give --at HH:MM (one or more), --every MINUTES, or --in MINUTES"
   [ ${#times[@]} -eq 0 ] || [ -z "$every" ] || die "use either --at or --every, not both"
   case "$mode" in brief | watch | routine) ;; *) die "mode must be brief|watch|routine" ;; esac
   local t; for t in "${times[@]}"; do case "$t" in [0-2][0-9]:[0-5][0-9]) ;; *) die "bad --at '$t' (want HH:MM, 24h)" ;; esac; done
@@ -548,7 +570,9 @@ cmd_schedule_add() {
     id="${slug:-job}-$(date +%s)"
   fi
   local schedule
-  if [ ${#times[@]} -gt 0 ]; then
+  if [ -n "$at_iso" ]; then
+    schedule=$(jq -cn --arg a "$at_iso" '{at:$a}')
+  elif [ ${#times[@]} -gt 0 ]; then
     local times_json; times_json=$(printf '%s\n' "${times[@]}" | jq -R . | jq -s .)
     schedule=$(jq -cn --argjson t "$times_json" '{times:$t}')
     [ -n "$tz" ] && schedule=$(jq -cn --argjson s "$schedule" --arg tz "$tz" '$s + {timezone:$tz}')
@@ -564,6 +588,7 @@ cmd_schedule_add() {
   local tmp; tmp=$(mktemp)
   jq --argjson job "$job" '.jobs += [$job]' "$SCHED_JOBS" > "$tmp" && mv "$tmp" "$SCHED_JOBS"
   echo "scheduled '$name' (id $id) — survives restarts; the pod-agent runs it on schedule."
+  [ -z "$at_iso" ] || echo "runs once at $at_iso, then removes itself."
   [ ${#times[@]} -eq 0 ] || echo "note: times are ${tz:-UTC}; a due time catches up after a suspend, and fires only while you're idle."
 }
 
@@ -1124,6 +1149,12 @@ cmd_agent() {
   esac
 }
 
+# `podway <cmd> … --help` prints that command's usage and does nothing else. Without this, `bug` and
+# `msg send|reply` took "--help" as their text — `podway bug --help` filed a real report (2026-10-01).
+for _a in "${@:2}"; do
+  case "$_a" in -h | --help) bash "$0" --help | grep -w -- "${1:-}" || bash "$0" --help; exit 0 ;; esac
+done
+
 case "${1:-info}" in
   info) cmd_info ;;
   preview) shift || true; cmd_preview "${1:-}" ;;
@@ -1146,7 +1177,7 @@ case "${1:-info}" in
     echo "              | fetch report <domain> <rung> <outcome>"
     echo "              | relay status"
     echo "              | secrets list | secrets get KEY | secrets env | secrets request KEY [why] | secrets withdraw KEY"
-    echo "              | schedule list | schedule add --name … --at HH:MM [--tz IANA] [--days mon,wed|weekdays] --do \"…\" | schedule remove ID"
+    echo "              | schedule list | schedule add --name … (--at HH:MM [--tz IANA] [--days mon,wed|weekdays] | --every MIN | --in MIN | --once --at HH:MM [--tz IANA]) --do \"…\" | schedule remove ID"
     echo "              | startup list | startup add --do \"…\" [--slug NAME] [--port N] | startup restart|stop|start SLUG | startup remove SLUG"
     echo "              | dev restart | dev stop | dev start | dev disable | dev enable | dev logs [N] | dev status  (the SUPERVISED dev server — never hand-kill it; 'disable' if this pod serves its own :3000)"
     echo "              | agent versions | agent update [claude | codex [version] | --all]  (update the agent CLIs as dev; codex npm+standalone stay in lockstep)"

@@ -33,6 +33,8 @@ const DEFAULT_STALL_GRACE_MS = 30 * 60_000;
 export type JobMode = "brief" | "watch" | "routine";
 
 export interface JobSchedule {
+  /** OR one moment (ISO timestamp): the job fires once, then is removed from the jobs file. */
+  at?: string;
   /** Daily local times ("HH:MM"). */
   times?: string[];
   /** OR a repeating interval in minutes (watch jobs). */
@@ -227,8 +229,10 @@ export function dueJobs(
   for (const job of jobs) {
     if (!job.enabled) continue;
     const js = state.jobs[job.id] ?? {};
-    const { times, everyMinutes, timezone, days } = job.schedule ?? {};
-    if (Array.isArray(times) && times.length > 0) {
+    const { at, times, everyMinutes, timezone, days } = job.schedule ?? {};
+    if (typeof at === "string") {
+      if (!js.lastRunAt && now.getTime() >= Date.parse(at)) out.push({ job });
+    } else if (Array.isArray(times) && times.length > 0) {
       const { date, hhmm, weekday } = localParts(now, timezone);
       // Weekday restriction (absent = every day): skip on days not listed.
       if (Array.isArray(days) && days.length > 0 && !days.includes(weekday)) continue;
@@ -314,6 +318,11 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
     await inject(runTrigger(job, runId));
     markRan(state, job, markTime, now());
     writeJson(opts.statePath, state, opts.uid, opts.gid);
+    if (typeof job.schedule?.at === "string") {
+      // One-shot: done after firing. Re-read so a job the CLI added this tick is not lost.
+      const latest = readJson<JobsConfig>(opts.jobsPath, { jobs: [] });
+      writeJson(opts.jobsPath, { ...latest, jobs: (latest.jobs ?? []).filter((j) => j.id !== job.id) }, opts.uid, opts.gid);
+    }
     appendEvent(opts, { runId, jobId: job.id, jobName: job.name, event: "started", at: now().toISOString() });
     log.info("ops_run_injected", { jobId: job.id, runId, mode: job.mode });
     return { fired: true, kind: "run", jobId: job.id, runId };
