@@ -1082,3 +1082,59 @@ describe("pod-base packaging ships what init.sh needs", () => {
     expect(payload).toContain("podway-refresh");
   });
 });
+
+/** codex-first-class 1.2/1.3: the hold switch decides whether ANY agent keeps the relentless mechanism. */
+describe("relentless gate follows the hold switch", () => {
+  async function gate(hold: boolean | null) {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relgate-"));
+    const home = path.join(dir, "home"), etc = path.join(dir, "etc");
+    const planted = [
+      path.join(etc, "rules", "relentless.md"), path.join(etc, "skills", "relentless", "SKILL.md"),
+      path.join(home, ".claude", "skills", "relentless", "SKILL.md"), path.join(home, ".codex", "skills", "relentless", "SKILL.md"),
+      path.join(home, "work", ".claude", "rules", "relentless.md"),
+    ];
+    const kept = path.join(home, ".codex", "skills", "handoff", "SKILL.md");
+    for (const f of [...planted, kept]) { await fs.mkdir(path.dirname(f), { recursive: true }); await fs.writeFile(f, "x"); }
+    const spec = path.join(dir, "spec.json");
+    await fs.writeFile(spec, JSON.stringify(hold === null ? {} : { relentless: { hold, wake: false } }));
+    const src = await fs.readFile(refreshLib, "utf8");
+    const block = src.split(">>> podway:relentless-gate")[1].split("\n").slice(1).join("\n").split("# <<< podway:relentless-gate")[0];
+    const out = execFileSync("bash", ["-c", `f(){\n${block}\n}; f; echo "$PODWAY_RELENTLESS"`], {
+      encoding: "utf8", env: { ...process.env, PODWAY_SPEC: spec, PB_HOME: home, PB_ETC_CLAUDE: etc },
+    }).trim();
+    const exists = async (f: string) => fs.access(f).then(() => true, () => false);
+    return { mode: out, left: await Promise.all(planted.map(exists)), keptOther: await exists(kept) };
+  }
+
+  it("OFF (and absent) removes every relentless copy, and only those", async () => {
+    for (const hold of [false, null]) {
+      const r = await gate(hold);
+      expect(r.mode).toBe("off");
+      expect(r.left).toEqual([false, false, false, false, false]);
+      expect(r.keptOther).toBe(true);
+    }
+  });
+  it("ON keeps them", async () => {
+    const r = await gate(true);
+    expect(r.mode).toBe("on");
+    expect(r.left).toEqual([true, true, true, true, true]);
+  });
+  it("OFF strips the marked section from the runtime rules (CLAUDE.md)", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relrules-"));
+    const src = await fs.readFile(refreshLib, "utf8");
+    const after = src.split(">>> podway:runtime-rules-refresh")[1];
+    const block = after.slice(after.indexOf("\n") + 1).split("<<< podway:runtime-rules-refresh")[0];
+    const rules = path.join(dir, "rules.md");
+    await fs.writeFile(rules, "# Rules\nkeep me\n<!-- podway:relentless -->\n## Always go\nbe relentless\n<!-- /podway:relentless -->\n");
+    const script = path.join(dir, "run.sh");
+    await fs.writeFile(script, `#!/usr/bin/env bash\nset -u\n${block}\n`);
+    const run = (mode: string) => {
+      execFileSync("bash", [script], { env: { ...process.env, PODWAY_RELENTLESS: mode, RULES_SRC: rules,
+        CLAUDE_MD: path.join(dir, mode, "CLAUDE.md"), RULES_MARKER: path.join(dir, mode, ".h"), RULES_OWNER: os.userInfo().username } });
+      return readFileSync(path.join(dir, mode, "CLAUDE.md"), "utf8");
+    };
+    expect(run("off")).not.toContain("be relentless");
+    expect(run("off")).toContain("keep me");
+    expect(run("on")).toContain("be relentless");
+  });
+});

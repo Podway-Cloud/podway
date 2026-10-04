@@ -321,6 +321,7 @@ fi
 # So: track what podway last wrote in a marker. If the on-disk file is still exactly
 # what we wrote, refresh it. If the user changed it, leave theirs alone and drop the new
 # canonical copy beside it so an update is never silently lost.
+pb_relentless_gate   # first: the hold switch decides whether the relentless rule/skill/section exist
 pb_refresh_runtime_rules
 
 # Permission preset → ~/.claude/settings.json, refreshed EVERY boot (NOT seed-once).

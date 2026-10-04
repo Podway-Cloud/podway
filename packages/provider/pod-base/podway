@@ -1090,6 +1090,69 @@ _codex_prune_releases() {
   printf '%s' "$removed"
 }
 
+# Post a turn into the Codex session the owner has OPEN (the ChatGPT app drives the remote-control
+# daemon, which has no tmux, so a typed notice never reaches it). Text on stdin. Speaks JSON-RPC over the
+# daemon's control socket (a WebSocket on a Unix socket). Prints CODEX:1 delivered · CODEX:0 no open
+# session/daemon (caller falls back to the terminal) · CODEX:BUSY a turn is running (caller retries later).
+_codex_turn() {
+  # The text comes in on stdin; python's own stdin is the heredoc below, so hand it over in the env.
+  CODEX_TEXT="$(cat)" CODEX_SOCK="${CODEX_SOCK:-$HOME/.codex/app-server-control/app-server-control.sock}" python3 - <<'PY'
+import socket, os, base64, json, struct, sys
+text = os.environ.get("CODEX_TEXT", "")
+try:
+    s = socket.socket(socket.AF_UNIX); s.settimeout(15); s.connect(os.environ["CODEX_SOCK"])
+except Exception:
+    print("CODEX:0"); raise SystemExit
+s.sendall(("GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+           "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n" % base64.b64encode(os.urandom(16)).decode()).encode())
+buf = b""
+while b"\r\n\r\n" not in buf: buf += s.recv(1024)
+buf = buf.split(b"\r\n\r\n", 1)[1]
+def send(o):
+    d = json.dumps(o).encode(); m = os.urandom(4); n = len(d)
+    h = bytes([0x81]) + (bytes([0x80 | n]) if n < 126 else bytes([0xFE]) + struct.pack(">H", n) if n < 65536 else bytes([0xFF]) + struct.pack(">Q", n))
+    s.sendall(h + m + bytes(b ^ m[i % 4] for i, b in enumerate(d)))
+def need(k):
+    global buf
+    while len(buf) < k:
+        c = s.recv(65536)
+        if not c: raise SystemExit("closed")
+        buf += c
+def recv():
+    global buf
+    msg = b""
+    while True:
+        need(2); b0, n = buf[0], buf[1] & 0x7F; off = 2
+        if n == 126: need(4); n = struct.unpack(">H", buf[2:4])[0]; off = 4
+        elif n == 127: need(10); n = struct.unpack(">Q", buf[2:10])[0]; off = 10
+        need(off + n); pl = buf[off:off + n]; buf = buf[off + n:]
+        if b0 & 0x0F in (0, 1): msg += pl
+        if b0 & 0x80 and b0 & 0x0F in (0, 1): return json.loads(msg)
+rid = [0]
+def call(method, params):
+    rid[0] += 1; send({"jsonrpc": "2.0", "id": rid[0], "method": method, "params": params})
+    while True:
+        m = recv()
+        if m.get("id") == rid[0]: return m
+try:
+    call("initialize", {"clientInfo": {"name": "podway", "version": "1"}})
+    send({"jsonrpc": "2.0", "method": "initialized"})
+    loaded = set(call("thread/loaded/list", {}).get("result", {}).get("data") or [])
+    if not loaded:
+        print("CODEX:0"); raise SystemExit
+    # Most recently updated open session: thread/list is newest-first; fall back to any loaded one.
+    recent = [t.get("id") for t in (call("thread/list", {"limit": 50}).get("result", {}).get("data") or [])]
+    tid = next((t for t in recent if t in loaded), next(iter(loaded)))
+    call("thread/resume", {"threadId": tid})  # attach this connection to the app's open session first
+    r = call("turn/start", {"threadId": tid, "input": [{"type": "text", "text": text, "text_elements": []}]})
+    print("CODEX:1" if "result" in r else "CODEX:BUSY")
+except SystemExit:
+    raise
+except Exception:
+    print("CODEX:0")
+PY
+}
+
 agent_update_claude() {
   _agent_npm_env
   echo "updating claude-code (npm → ~/.npm-global, as dev)…"
@@ -1167,6 +1230,7 @@ case "${1:-info}" in
   dev) shift || true; cmd_dev "$@" ;;
   agent) shift || true; cmd_agent "$@" ;;
   __prune-codex-releases) shift || true; _codex_prune_releases "${1:-$CODEX_SA_DIR}" ;;  # internal: used by doctor --fix + tests
+  __codex-turn) _codex_turn ;;  # internal: the control plane posts a message into the open Codex app session
   msg) shift || true; cmd_msg "$@" ;;
   bug) shift || true; cmd_bug "$@" ;;
   link) shift || true; cmd_link "${1:-}" ;;

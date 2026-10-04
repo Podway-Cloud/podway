@@ -15,6 +15,25 @@
 # temp dirs. Keep the sentinels and the ${VAR:-default} indirection.
 
 # Rules → ~/.claude/CLAUDE.md (USER memory). Reloads in a live session only at the next /compact.
+# The relentless rule + skill follow the pod's hold switch (codex-first-class). OFF → remove every copy
+# (the delivered layer, Claude's and the workspace's .claude, Codex's skills) and export
+# PODWAY_RELENTLESS=off so the runtime-rules steps below strip the marked section from CLAUDE.md and
+# AGENTS.md. Copy steps elsewhere only ADD files, so without this an OFF switch changed nothing.
+pb_relentless_gate() {
+# >>> podway:relentless-gate — base-image.test.ts extracts and runs this block against temp dirs.
+local spec="${PODWAY_SPEC:-/etc/podway/pod-spec.json}" home="${PB_HOME:-/home/dev}" etc="${PB_ETC_CLAUDE:-/etc/podway/claude}"
+if python3 -c 'import json,sys; sys.exit(0 if (json.load(open(sys.argv[1])).get("relentless") or {}).get("hold") is True else 1)' "$spec" 2>/dev/null; then
+  export PODWAY_RELENTLESS=on
+else
+  export PODWAY_RELENTLESS=off
+  rm -rf "$etc/rules/relentless.md" "$etc/skills/relentless" \
+    "$home/.claude/rules/relentless.md" "$home/.claude/skills/relentless" \
+    "$home/work/.claude/rules/relentless.md" "$home/work/.claude/skills/relentless" \
+    "$home/.codex/skills/relentless"
+fi
+# <<< podway:relentless-gate
+}
+
 pb_refresh_runtime_rules() {
 # >>> podway:runtime-rules-refresh — base-image.test.ts extracts this block verbatim and
 # runs it against temp paths, so the three behaviours below are covered by a real test
@@ -23,6 +42,9 @@ RULES_SRC="${RULES_SRC:-/opt/podway/runtime-rules.md}"
 CLAUDE_MD="${CLAUDE_MD:-/home/dev/.claude/CLAUDE.md}"
 RULES_MARKER="${RULES_MARKER:-$(dirname "$CLAUDE_MD")/.podway-runtime-hash}"
 RULES_OWNER="${RULES_OWNER:-dev:dev}"
+if [ "${PODWAY_RELENTLESS:-on}" = off ] && [ -f "$RULES_SRC" ]; then
+  _rs="$(mktemp)"; sed '/<!-- podway:relentless -->/,/<!-- \/podway:relentless -->/d' "$RULES_SRC" > "$_rs"; RULES_SRC="$_rs"
+fi
 if [ -f "$RULES_SRC" ]; then
   RULES_DIR="$(dirname "$CLAUDE_MD")"
   mkdir -p "$RULES_DIR"
@@ -288,7 +310,10 @@ MARK_BEGIN = re.compile(r"<!-- BEGIN:podway-runtime\b[^>]*-->")
 MARK_END = re.compile(r"<!-- END:podway-runtime -->")
 parts = []
 if os.path.exists(runtime):
-    parts.append(open(runtime, encoding="utf-8", errors="replace").read().rstrip())
+    txt = open(runtime, encoding="utf-8", errors="replace").read()
+    if os.environ.get("PODWAY_RELENTLESS") == "off":   # hold switch OFF → no relentless section
+        txt = re.sub(r"<!-- podway:relentless -->.*?<!-- /podway:relentless -->\n?", "", txt, flags=re.S)
+    parts.append(txt.rstrip())
 for rf in sorted(glob.glob(os.path.join(rulesdir, "*.md"))):
     body = open(rf, encoding="utf-8", errors="replace").read().rstrip()
     parts.append("<!-- source: .claude/rules/%s -->\n%s" % (os.path.basename(rf), body))

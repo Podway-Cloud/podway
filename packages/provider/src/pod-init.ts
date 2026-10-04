@@ -154,6 +154,13 @@ export async function buildInitFiles(
         if (rel.startsWith("skills/web-fetch/")) claudeByRel.delete(rel);
       }
     }
+    // The relentless rule + skill follow the hold switch (codex-first-class): OFF means neither agent
+    // gets them. Until 2026-10-03 the switch only disarmed Claude's hooks.
+    if (!input.relentlessHold) {
+      for (const rel of [...claudeByRel.keys()]) {
+        if (rel === "rules/relentless.md" || rel.startsWith("skills/relentless/")) claudeByRel.delete(rel);
+      }
+    }
     for (const [r, content] of [...claudeByRel].sort(([a], [b]) => a.localeCompare(b))) {
       files.push({ guest_path: `/etc/podway/claude/${r}`, raw_value: b64(content) });
       claudeFiles.push(`.claude/${r}`);

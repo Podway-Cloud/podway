@@ -22,6 +22,7 @@ export SPEC="${SPEC:-/etc/podway/pod-spec.json}"
 export PODWAY_SPEC="$SPEC"
 
 echo "podway-refresh: applying config in place (no restart)…"
+pb_relentless_gate
 pb_refresh_runtime_rules
 pb_refresh_settings
 pb_refresh_codex_agents

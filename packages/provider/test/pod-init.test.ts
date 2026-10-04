@@ -174,3 +174,28 @@ describe("web-fetch skill is gated by the capability", () => {
     expect(files.some((f) => f.guest_path.includes("/claude/"))).toBe(true);
   });
 });
+
+/**
+ * The relentless rule + skill follow the hold switch (codex-first-class 1.1). Until 2026-10-03 the
+ * switch only disarmed Claude's hooks; the rule text and skill still reached BOTH agents.
+ */
+describe("relentless rule + skill follow the hold switch", () => {
+  const has = (files: { guest_path: string }[], part: string) => files.some((f) => f.guest_path.includes(part));
+
+  it("ships them when the hold is on", async () => {
+    const { resolved, envDir } = await makePod();
+    const files = await buildInitFiles({ id: "x", resolved, envDir, relentlessHold: true });
+    expect(has(files, "/claude/rules/relentless.md")).toBe(true);
+    expect(has(files, "/claude/skills/relentless/")).toBe(true);
+  });
+
+  it("omits them when the hold is off (or unset)", async () => {
+    const { resolved, envDir } = await makePod();
+    for (const hold of [false, undefined]) {
+      const files = await buildInitFiles({ id: "x", resolved, envDir, relentlessHold: hold });
+      expect(has(files, "/claude/rules/relentless.md")).toBe(false);
+      expect(has(files, "/claude/skills/relentless/")).toBe(false);
+      expect(has(files, "/claude/rules/resume-from-handoff.md")).toBe(true); // the rest of the layer stays
+    }
+  });
+});

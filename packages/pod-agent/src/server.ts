@@ -3525,7 +3525,9 @@ export class AgentServer {
         // Permissions come from init.sh's persisted Codex defaults. The managed
         // daemon in Codex 0.155.1 drops -c overrides; TUI bypass flags don't reach it.
         ["remote-control", "start"],
-        { env, uid: this.tmuxUid, gid: this.tmuxGid },
+        // Run it in the project, not / or /root: sessions the app opens without a folder start here,
+        // and the app's "Source folder" kept defaulting to /home/dev (codex-first-class 3.4).
+        { env, uid: this.tmuxUid, gid: this.tmuxGid, cwd: "/home/dev/work" },
         (err, stdout) => {
           if (err) {
             this.log.warn("codex_rc_start_failed", { err: String(err) });

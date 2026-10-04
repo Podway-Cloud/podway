@@ -1899,7 +1899,7 @@ export class PodService {
       (await this.rosterFor(rec.ownerId).catch(() => [])).map((p) => [p.id, p.name] as const),
     );
     const provider = prov ?? this.providerFor(rec.provider);
-    const delivered = await deliverMessages(provider, rec.id, inbound, senderNames).catch(
+    const delivered = await deliverMessages(provider, rec.id, inbound, senderNames, (rec.agents as string[] | null)?.[0]).catch(
       () => [] as string[],
     );
     for (const id of delivered) {
@@ -2126,6 +2126,9 @@ export class PodService {
     await this.providerFor(rec.provider)
       .patchPodSpec?.(id, { relentless: { hold: next.hold, wake: next.wake } })
       .catch(() => undefined);
+    // The rule + skill files follow the switch too (codex-first-class): push the re-gated .claude layer
+    // and run podway-refresh in place, so both agents gain/lose them without a restart.
+    if (next.hold !== rec.relentlessHold) await this.refreshPodConfig(ownerId, id).catch(() => undefined);
     return updated;
   }
 
@@ -3496,6 +3499,7 @@ export class PodService {
         name: rec.name ?? undefined,
         githubRepo: rec.githubRepo ?? undefined,
         agents: (rec.agents as never) ?? undefined,
+        relentlessHold: rec.relentlessHold, // the relentless rule + skill follow the switch
       });
       const claudeFiles = files.filter((f) => f.guest_path.startsWith("/etc/podway/claude/"));
       return { claudeFiles, permissions, hash: configLayerHash(claudeFiles, permissions) };
@@ -3815,6 +3819,7 @@ export class PodService {
         name: rec.name ?? undefined,
         githubRepo: rec.githubRepo ?? undefined,
         agents: (rec.agents as never) ?? undefined,
+        relentlessHold: rec.relentlessHold, // the relentless rule + skill follow the switch
       });
       claudeFiles = files.filter((f) => f.guest_path.startsWith("/etc/podway/claude/"));
     } catch (e) {

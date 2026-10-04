@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Loader2, RefreshCw, Smartphone, Monitor, Check, X } from "lucide-react";
+import { Loader2, RefreshCw, Smartphone, Monitor, Check, X, ArrowUpRight } from "lucide-react";
 import QRCode from "qrcode";
 import { Button } from "@/components/ui/button";
 import { CopyCodeButton } from "@/components/copy-code-button";
@@ -256,6 +256,15 @@ export function CodexPairPanel({
             code below.
           </span>
         </div>
+      )}
+
+      {/* On the phone itself a QR is useless — offer the same pairing link as a tap (codex-first-class 3.2). */}
+      {pairing && platform === "phone" && !isWide && !expired && (
+        <Button asChild className="self-start">
+          <a href={`https://chatgpt.com/codex/pair?pairing_code=${pairing.pairingCode}`} target="_blank" rel="noopener noreferrer">
+            Pair in the ChatGPT app <ArrowUpRight />
+          </a>
+        </Button>
       )}
 
       {pairing && (

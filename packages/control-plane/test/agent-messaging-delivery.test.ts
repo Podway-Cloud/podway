@@ -37,6 +37,37 @@ const okHandler = (s: string): string => {
   return "";
 };
 
+describe("deliverMessages routes to the pod's MAIN agent (codex-first-class)", () => {
+  it("a codex pod posts into the OPEN app session first, and records the inbox only once it landed", async () => {
+    const { provider, calls } = providerWith((s) => {
+      if (s.includes("__codex-turn")) return "CODEX:1";
+      return okHandler(s);
+    });
+    expect(await deliverMessages(provider, "beta", inbound, undefined, "codex")).toEqual(["m1"]);
+    const codex = calls.find((c) => c.includes("__codex-turn"))!;
+    expect(codex).toContain("msg-inbox.jsonl");
+    expect(calls.some((c) => c.includes("send-keys"))).toBe(false); // no terminal typing needed
+  });
+
+  it("a codex pod with NO open app session falls back to its terminal", async () => {
+    const { provider, calls } = providerWith((s) => {
+      if (s.includes("__codex-turn")) return "CODEX:0";
+      return okHandler(s);
+    });
+    expect(await deliverMessages(provider, "beta", inbound, undefined, "codex")).toEqual(["m1"]);
+    expect(calls.some((c) => c.includes("send-keys") && c.includes("main:0"))).toBe(true);
+  });
+
+  it("a codex pod whose app session is mid-turn defers (retried on the next poll)", async () => {
+    const { provider, calls } = providerWith((s) => {
+      if (s.includes("__codex-turn")) return "CODEX:BUSY";
+      return okHandler(s);
+    });
+    expect(await deliverMessages(provider, "beta", inbound, undefined, "codex")).toEqual([]);
+    expect(calls.some((c) => c.includes("send-keys"))).toBe(false);
+  });
+});
+
 describe("deliverMessages (the wake inject)", () => {
   it("injects a verified turn into a ready window and writes the inbox", async () => {
     const { provider, calls } = providerWith(okHandler);

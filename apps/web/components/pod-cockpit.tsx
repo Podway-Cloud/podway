@@ -1003,7 +1003,9 @@ export default function PodCockpit(props: PodCockpitProps) {
         void addPodAgent(slug, a)
           .then((r) => {
             if (r?.error) setActionError(`Couldn't add ${agentLabel(a)}: ${r.error}`);
-            else router.refresh();
+            // Straight on to sign-in (codex-first-class 3.1): the next step was a separate button the
+            // owner had to find on the refreshed card.
+            else setWiz(`signin:${a}`);
           })
           .finally(() => setAddingAgent(null));
       },
@@ -1158,7 +1160,9 @@ export default function PodCockpit(props: PodCockpitProps) {
         steps={[{ provider: signinWizard.agentId as ProviderId, kind }]}
         stepIndex={0}
         onStepIndex={() => {}}
-        onDone={() => setWiz(null)}
+        // A first Codex sign-in leads straight into pairing — the step that makes it reachable from the
+        // ChatGPT app (codex-first-class 3.1). A reconnect just returns to the cockpit.
+        onDone={() => setWiz(signinWizard.agentId === "codex" && signinWizard.mode === "signin" ? "pair" : null)}
         onCancel={() => setWiz(null)}
         reconnect={signinWizard.mode === "reconnect"}
       />

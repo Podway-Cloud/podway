@@ -53,6 +53,17 @@ describe("refreshPodConfig — live config refresh", () => {
     expect(ev?.meta?.refreshed).toBe(true);
   });
 
+  it("flipping the relentless hold refreshes the running pod's config (codex-first-class)", async () => {
+    // Until 2026-10-03 the switch only patched the spec, so the rule + skill files stayed on both agents.
+    const id = await runningPod();
+    await svc.setAgenticBehavior("u1", id, { hold: true, wake: false });
+    expect(provider.refreshConfigCalls).toHaveLength(1);
+    await svc.setAgenticBehavior("u1", id, { hold: true, wake: true }); // wake only → no refresh
+    expect(provider.refreshConfigCalls).toHaveLength(1);
+    await svc.setAgenticBehavior("u1", id, { hold: false, wake: true });
+    expect(provider.refreshConfigCalls).toHaveLength(2);
+  });
+
   it("surfaces an older-image note (refreshed:false) without throwing", async () => {
     const id = await runningPod();
     provider.refreshConfigResult = { refreshed: false, note: "refresh script not present" };

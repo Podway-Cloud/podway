@@ -187,6 +187,20 @@ export function formatDeliveryTurn(
   );
 }
 
+/** Each message as the base64'd JSON line the pod's inbox holds (base64 → inert in the shell).
+ * `fromName` is the OWNER'S name for the sending pod, so `podway msg inbox` shows the name they chose
+ * instead of our internal slug (owner, 2026-09-06); `from` stays the slug because reply addressing
+ * resolves against it. */
+function inboxLines(messages: InboxMessage[], names?: ReadonlyMap<string, string | null>): { id: string; b64: string }[] {
+  return messages.map((m) => ({
+    id: m.id,
+    b64: Buffer.from(
+      JSON.stringify({ id: m.id, from: m.fromPod, fromName: names?.get(m.fromPod) ?? null, body: m.body, at: m.createdAt }) + "\n",
+      "utf8",
+    ).toString("base64"),
+  }));
+}
+
 /**
  * Deliver pending messages to a RUNNING recipient by waking its live agent session.
  *
@@ -204,10 +218,33 @@ export async function deliverMessages(
   messages: InboxMessage[],
   /** slug -> the owner's name for that pod, so the notice names the SENDER the way the owner does. */
   names?: ReadonlyMap<string, string | null>,
+  /** The pod's MAIN agent (agents[0]). For "codex" the open ChatGPT-app session is tried first. */
+  primary?: string,
 ): Promise<string[]> {
   if (messages.length === 0) return [];
   try {
     if (typeof provider.exec !== "function") return [];
+    if (primary === "codex") {
+      // The session the owner drives from the ChatGPT app runs in the Codex remote-control daemon, which
+      // has no tmux — a typed notice never reaches it (owner, 2026-10-03). Post the turn there; record the
+      // inbox only once it landed, so a fall-back to the terminal below still has something NEW to wake.
+      const lines = inboxLines(messages, names);
+      const turn = Buffer.from(formatDeliveryTurn(messages, names), "utf8").toString("base64");
+      const out = await exec(
+        provider,
+        podId,
+        `INBOX='${MSG_INBOX}'; mkdir -p /home/dev/.podway; touch "$INBOX"; NEW=0\n` +
+          lines.map((l) => `grep -q '"id":"${l.id}"' "$INBOX" 2>/dev/null || NEW=1`).join("\n") +
+          `\nif [ "$NEW" = 0 ]; then echo "ALLPRESENT:1"; exit 0; fi\n` +
+          `R="$(printf %s '${turn}' | base64 -d | podway __codex-turn 2>/dev/null)"; echo "$R"\n` +
+          `if [ "$R" = "CODEX:1" ]; then exec 9>>"$INBOX.lock"; flock -w 20 9 2>/dev/null\n` +
+          lines.map((l) => `grep -q '"id":"${l.id}"' "$INBOX" 2>/dev/null || printf %s '${l.b64}' | base64 -d >> "$INBOX"`).join("\n") +
+          `\nfi`,
+      );
+      if (out.includes("ALLPRESENT:1") || out.includes("CODEX:1")) return messages.map((m) => m.id);
+      if (out.includes("CODEX:BUSY")) return []; // a turn is running there; retry on the next poll
+      // CODEX:0 (no open app session, or an image without __codex-turn) → the terminal path below.
+    }
     // Find a window whose agent can take a turn. First ready window wins.
     let target: string | null = null;
     for (const w of await listWindows(provider, podId)) {
@@ -231,26 +268,11 @@ export async function deliverMessages(
     //      `›` for Codex). Only then echo SUBMIT:1.
     // The caller marks a message delivered ONLY for ids we return, so a wake that never
     // submitted stays pending and is retried on the next poll instead of vanishing.
-    const inboxAppends = messages
-      .map((m) => {
-        // `fromName` is the OWNER'S name for the sending pod, so `podway msg inbox` can show the
-        // name they chose instead of our internal slug — which is what an agent then repeats back to
-        // them in chat (owner, 2026-09-06). Unlike the notification text this needs no sanitising:
-        // the line is JSON, base64'd before it crosses the shell, so it never reaches a shell context.
-        // `from` stays the slug because reply addressing resolves against it.
-        const line = JSON.stringify({
-          id: m.id,
-          from: m.fromPod,
-          fromName: names?.get(m.fromPod) ?? null,
-          body: m.body,
-          at: m.createdAt,
-        });
-        const b = Buffer.from(line + "\n", "utf8").toString("base64");
-        // m.id is validated to [A-Za-z0-9._-] upstream, so it is safe to inline in grep.
-        // NEW=1 means at least one message was not already in the pod's inbox, i.e. there is
-        // genuinely something to announce. See the ALLPRESENT guard below.
-        return `if grep -q '"id":"${m.id}"' "$INBOX" 2>/dev/null; then :; else printf %s '${b}' | base64 -d >> "$INBOX"; NEW=1; fi`;
-      })
+    const inboxAppends = inboxLines(messages, names)
+      // m.id is validated to [A-Za-z0-9._-] upstream, so it is safe to inline in grep. NEW=1 means at
+      // least one message was not already in the pod's inbox, i.e. there is genuinely something to
+      // announce. See the ALLPRESENT guard below.
+      .map(({ id, b64 }) => `if grep -q '"id":"${id}"' "$INBOX" 2>/dev/null; then :; else printf %s '${b64}' | base64 -d >> "$INBOX"; NEW=1; fi`)
       .join("\n");
     const b64text = Buffer.from(formatDeliveryTurn(messages, names), "utf8").toString("base64");
     const script =

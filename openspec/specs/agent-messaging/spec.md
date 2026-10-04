@@ -229,3 +229,22 @@ replied message done, because replying is acting on it.
 - **THEN** only the unhandled messages SHALL be listed, newest first, under a header naming how many
   are open and how many done are hidden — and `podway msg done <id>` SHALL remove a message from that
   default view without deleting it (it remains under `--all`)
+
+### Requirement: A message reaches the Codex session the owner has open
+
+When a pod's main agent is Codex, delivery SHALL first post the message as a turn into the Codex session
+the owner has open (the remote-control daemon the ChatGPT app drives, reached over its local control
+socket), and SHALL record it in the pod's inbox once that turn was accepted. When no app session is open
+it SHALL fall back to the terminal wake; when a turn is already running there it SHALL leave the message
+pending and retry on a later poll. Before this, the app session — which has no terminal — never saw a
+message (owner, 2026-10-03). Verified 2026-10-04 on a test pod: a simulated app client saw the message
+arrive in its open session and Codex answer it.
+
+#### Scenario: Owner chatting with Codex from the app
+- **GIVEN** a Codex pod with a session open in the ChatGPT app
+- **WHEN** another pod sends it a message
+- **THEN** the message SHALL appear in that session as a new turn
+
+#### Scenario: No app session open
+- **WHEN** a Codex pod with no open app session receives a message
+- **THEN** it SHALL be delivered to the Codex terminal as before

@@ -24,6 +24,10 @@ test.describe("adding a second agent from the cockpit", () => {
     await expect(enable).toBeVisible({ timeout: 15_000 });
     await enable.click();
     await page.locator("[role=alertdialog]").getByRole("button", { name: /^add codex$/i }).click();
+    // Adding chains into sign-in → pairing (codex-first-class 3.1). Leave that chain; what is tested
+    // below is that the cockpit never opens pairing ON ITS OWN on a plain page load.
+    await expect(page).toHaveURL(/wiz=/, { timeout: 20_000 });
+    await page.goto(`/dashboard/pods/${slug}`);
 
     // Codex becoming live must not replace the cockpit just because no device label is remembered.
     const pair = page.getByRole("button", { name: /^pair a device$/i });
@@ -68,6 +72,10 @@ test.describe("adding a second agent from the cockpit", () => {
     const dialog = page.locator("[role=alertdialog]");
     await expect(dialog).toContainText(/workspace/i);
     await dialog.getByRole("button", { name: /^add codex$/i }).click(); // dialog's confirm is exact
+
+    // Adding leads straight into Codex sign-in (codex-first-class 3.1) — no hunting for the next button.
+    await expect(page).toHaveURL(/wiz=signin(:|%3A)codex/, { timeout: 20_000 });
+    await page.goto(`/dashboard/pods/${slug}`); // leave the wizard; the cockpit reflects the added agent
 
     // Once the pod runs both: the offer is gone and each agent has its own card.
     await expect(page.getByRole("button", { name: /enable codex/i })).toHaveCount(0, {

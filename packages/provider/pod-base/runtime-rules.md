@@ -223,6 +223,7 @@ laptop. Trust the `podway` CLI over any assumption about this environment.
   paste them again. Never commit or echo secrets, and never write them into a file under `~/work`
   (it persists and is the thing that gets shared) — the owner manages them in the dashboard.
 
+<!-- podway:relentless -->
 ## Always go, never assume — the default working posture
 
 This pod runs 24/7 and its owner is usually elsewhere. Idling at a prompt wastes the machine they
@@ -249,3 +250,4 @@ the always-loaded summary that reaches both agents.)
 
 Nothing here overrides the confirm-before-outbound rule above: autonomy is about *initiative*, never
 about escalating your own permissions.
+<!-- /podway:relentless -->
