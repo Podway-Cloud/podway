@@ -71,6 +71,26 @@ test.describe("secrets tab", () => {
     await row.getByRole("button", { name: /^Cancel$/ }).click();
     await expect(field).toHaveValue(/•+/);
 
+    // Shown, THEN Edit → the field opens with the value, selected and visible; typing stays visible
+    // (owner, 2026-10-04). The hidden case above stays empty + masked.
+    await row.getByRole("button", { name: /show value/i }).click();
+    await expect(field).toHaveValue("peekaboo-123", { timeout: 20_000 });
+    await row.getByRole("button", { name: /^Edit$/ }).click();
+    const shownEdit = row.getByPlaceholder(/New value/i);
+    await expect(shownEdit).toHaveValue("peekaboo-123");
+    await expect(shownEdit).toHaveAttribute("type", "text");
+    expect(await shownEdit.evaluate((el: HTMLInputElement) => el.selectionEnd! - el.selectionStart!)).toBe("peekaboo-123".length);
+    await shownEdit.pressSequentially("typed-789");
+    await expect(shownEdit).toHaveValue("typed-789"); // the selection was replaced
+    await expect(shownEdit).toHaveAttribute("type", "text");
+    await row.getByRole("button", { name: /^Cancel$/ }).click();
+    await expect(field).toHaveValue(/•+/);
+    // …and hidden again, Edit is empty + masked once more.
+    await row.getByRole("button", { name: /^Edit$/ }).click();
+    await expect(row.getByPlaceholder(/New value/i)).toHaveValue("");
+    await expect(row.getByPlaceholder(/New value/i)).toHaveAttribute("type", "password");
+    await row.getByRole("button", { name: /^Cancel$/ }).click();
+
     // Edit → type → Save replaces the value.
     await row.getByRole("button", { name: /^Edit$/ }).click();
     await row.getByPlaceholder(/New value/i).fill("rotated-456");

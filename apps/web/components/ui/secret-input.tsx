@@ -27,6 +27,7 @@ export function SecretInput({
   autoComplete = "off",
   autoFocus,
   className,
+  defaultShow = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -41,8 +42,10 @@ export function SecretInput({
   autoComplete?: string;
   autoFocus?: boolean;
   className?: string;
+  /** Start revealed — when the owner already chose to see this value before editing it. */
+  defaultShow?: boolean;
 }) {
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState(defaultShow);
   const hasValue = value.length > 0;
   return (
     // ph-no-capture: the eye toggle can turn this into a PLAINTEXT field, so masking

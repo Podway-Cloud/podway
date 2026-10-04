@@ -63,6 +63,8 @@ export default function SecretsPanel({ slug }: { slug: string }) {
   const [revealed, setRevealed] = useState<Record<string, string>>({});
   // Keys currently in "replace" (edit) mode, showing the typed-value input.
   const [editing, setEditing] = useState<Record<string, true>>({});
+  // Edits started while the value was SHOWN: prefilled and kept visible (owner, 2026-10-04).
+  const [editVisible, setEditVisible] = useState<Record<string, true>>({});
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [newKey, setNewKey] = useState("");
   const [newVal, setNewVal] = useState("");
@@ -184,10 +186,20 @@ export default function SecretsPanel({ slug }: { slug: string }) {
     });
 
   const startEdit = (key: string) => {
+    // Shown → open the edit with that value, selected and visible (the owner already chose to see it).
+    // Hidden → an empty, masked field, as before.
+    if (key in revealed) {
+      setDrafts((d) => ({ ...d, [key]: revealed[key] }));
+      setEditVisible((v) => ({ ...v, [key]: true }));
+    }
     hide(key);
     setEditing((e) => ({ ...e, [key]: true }));
   };
   const stopEdit = (key: string) => {
+    setEditVisible((v) => {
+      const { [key]: _drop, ...rest } = v;
+      return rest;
+    });
     setDrafts((d) => ({ ...d, [key]: "" }));
     setEditing((e) => {
       const { [key]: _drop, ...rest } = e;
@@ -581,6 +593,7 @@ export default function SecretsPanel({ slug }: { slug: string }) {
                     value={drafts[s.key] ?? ""}
                     disabled={pending}
                     autoFocus={isEditing}
+                    defaultShow={s.key in editVisible}
                     onChange={(v) => setDrafts((d) => ({ ...d, [s.key]: v }))}
                     onEnter={() => save(s.key)}
                     onPasteEnv={applyPaste}
