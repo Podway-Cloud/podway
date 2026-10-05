@@ -20,7 +20,7 @@ batched.
       cred → then `enableT3Code` (which launches t3 on the token, 2.1). agentAuth threaded page→cockpit.
       **Needs live verify.**
 - [x] 2.3 Parallelize handoff ∥ download; full 60s handoff budget. `e04f39f` (committed, undeployed).
-- [ ] 2.4 Cold-`npx t3` download reliability — robust/retrying download with real progress, keeping
+- [x] 2.4 Cold-`npx t3` download reliability — robust/retrying download with real progress, keeping — 2026-10-05: the wait follows progress (cache growth) up to just under T3_ENABLE_STALE_MS (~7.5 min, was 300s), fails early on a 120s stall with a clear error; the startup supervisor already retries a crashed npx. Not yet exercised live on a cold pod.
       `t3@latest` (no baked version). (Tracked; the 300s hard-poll failed on test:1.)
 
 ## 3. Launch toggle (T3 at pod creation)

@@ -196,6 +196,9 @@ export interface PodServiceConfig {
   /** Claude read signed-out (expired/rejected) BEFORE its expiry date — send the "expired" login
    * notice now (login-expiry-reminders). Idempotent on the receiving side. */
   onClaudeSignedOut?: (pod: PodRecord) => Promise<void>;
+  /** After a pod is deleted (owner or admin): clean up what hangs off it, e.g. its custom domains.
+   *  Best-effort — a failure is logged, never resurrects the pod. */
+  onPodDestroyed?: (pod: PodRecord) => Promise<void>;
   /** Claude's login expiry moved forward (a reconnect landed) — tell the pod an earlier reminder is resolved. */
   onClaudeRenewed?: (pod: PodRecord, oldExpiresAt: string, newExpiresAt: string) => Promise<void>;
 }
@@ -2273,8 +2276,16 @@ export class PodService {
     // enables answer in seconds. Stay on the "downloading" stage during the wait — it read as a stuck
     // "starting" for minutes; flip to "starting" only once :3000 answers. If it never does, throw →
     // clearT3Failure rolls the pod back rather than leaving it stranded.
+    // Wait while the download PROGRESSES, not for a fixed count: a slow-but-moving cold download used to
+    // die at 300s (test:1). Cap just under T3_ENABLE_STALE_MS so the orphan sweeper never races a live
+    // enable; give up early only when the npx cache stops growing (a real stall).
     let up = false;
-    for (let i = 0; i < 100; i++) {
+    const deadline = Date.now() + T3_ENABLE_STALE_MS - 30_000;
+    const STALL_MS = 120_000; // margin for T3 booting after the download lands (cache stops growing)
+    let lastBytes = -1;
+    let lastGrowth = Date.now();
+    let stalled = false;
+    while (Date.now() < deadline) {
       // In ONE short exec: check :port, and (while still downloading) measure the npx cache size so the
       // wizard can show a REAL % instead of a spinner that reads as stuck. `du -sb` is cheap; the value
       // rides in t3Stage as `downloading:<pct>` (no new column) and the client parses the suffix.
@@ -2291,6 +2302,13 @@ export class PodService {
         break;
       }
       const bytes = Number.parseInt(out, 10);
+      if (Number.isFinite(bytes) && bytes > lastBytes) {
+        lastBytes = bytes;
+        lastGrowth = Date.now();
+      } else if (Date.now() - lastGrowth > STALL_MS) {
+        stalled = true;
+        break;
+      }
       if (Number.isFinite(bytes) && bytes > 0) {
         const pct = Math.min(99, Math.round((bytes / T3_RUNTIME_BYTES) * 100));
         // Write the row directly (not setT3Stage) so the 3s progress ticks don't spam the stage log.
@@ -2298,7 +2316,13 @@ export class PodService {
       }
       await new Promise((res) => setTimeout(res, 3_000));
     }
-    if (!up) throw new Error(`T3 backend didn't answer on :${T3_SERVE_PORT} within ~300s`);
+    if (!up) {
+      throw new Error(
+        stalled
+          ? `T3 download stalled (no progress for ${STALL_MS / 1000}s) — check the pod's network, then retry`
+          : `T3 backend didn't answer on :${T3_SERVE_PORT} within ~${Math.round((T3_ENABLE_STALE_MS - 30_000) / 60_000)} min`,
+      );
+    }
     await this.setT3Stage(id, "starting");
     // ready: T3 in control, clear the wizard. NOTE: we do NOT set previewAppAuth — the pod's own app
     // keeps :3000 (its preview stays owner-auth as normal); T3 is reached via its relay, not the podway
@@ -3613,6 +3637,7 @@ export class PodService {
     // (what did this actually cost?). pod_events has no FK, so it survives.
     await this.emit(rec, "destroyed", { machineId: rec.machineId });
     await this.store.delete(id);
+    await this.config.onPodDestroyed?.(rec).catch((e) => this.log.error("pod_destroyed_hook_failed", { podId: id, err: e }));
   }
 
   /**

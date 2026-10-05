@@ -1868,6 +1868,9 @@ provisioning downloads the T3 runtime (a large, native-compiled package) and can
 enabling SHALL run as an **asynchronous, refresh-safe full-page setup flow** that replaces the cockpit
 (the same pattern as an image update), showing progress through its stages — and the download stage
 SHALL report a REAL percentage (measured from the runtime cache growing), not a static spinner.
+The wait SHALL follow progress, not a fixed count: it continues while the cache grows (capped just
+under the orphan-sweep age, so the sweep never races a live enable) and fails early with a "download
+stalled" error only when the cache stops growing for a sustained window.
 
 If a gateway restart orphans an in-flight enable (its detached task dies with `t3_since` still set), a
 maintenance sweep SHALL reconcile it — failing the stale enable so the wizard surfaces an error and the
@@ -2263,6 +2266,18 @@ the clothes of a cleanup.
 
 - **WHEN** the owner opens a pod's settings
 - **THEN** relay state and usage SHALL NOT appear there
+
+### Requirement: A deleted pod takes its custom domains with it
+
+When a pod is deleted (by its owner or an admin), every custom domain attached to it SHALL be removed:
+its edge certificate revoked first, then its row deleted, so no certificate outlives the pod and the
+hostname is free to connect to another pod. A cleanup failure SHALL be logged and SHALL NOT block or
+undo the pod's deletion.
+
+#### Scenario: Deleting a pod with a custom domain
+- **WHEN** the owner deletes a pod that has `app.acme.com` connected
+- **THEN** the certificate for `app.acme.com` SHALL be revoked, the domain row SHALL be gone, and
+  `app.acme.com` SHALL be addable to another pod
 
 ### Requirement: A live custom domain is the pod's address
 

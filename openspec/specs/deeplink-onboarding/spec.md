@@ -34,7 +34,9 @@ The `/start` entry SHALL accept an optional `size=<tier>` param, validated again
 open the create wizard for a blank bring-your-own-repo workspace at that size — the path a landing
 pricing card takes ("launch a pod at this size"). The chosen size SHALL be floored to the target
 env's `minSize` so an app cannot start below its supported tier. As with `app`, `/start` SHALL carry
-`size` through sign-in and SHALL NEVER create a pod on its own.
+`size` through sign-in and SHALL NEVER create a pod on its own. An explicit `size` in the link SHALL
+win over an older wizard draft saved in the same browser tab; a reload mid-wizard (no `size` in the
+URL) SHALL still restore the draft's size.
 
 #### Scenario: A pricing card preselects the size on a blank workspace
 

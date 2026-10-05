@@ -229,7 +229,9 @@ export default function LaunchConfigure({
     }
     if (draft) {
       if (typeof draft.name === "string") setName(draft.name);
-      if (draft.size) setSize(minSize ? maxSize(draft.size, minSize) : draft.size);
+      // An explicit ?size= (a fresh deep link) beats an older draft; the URL drops ?size after the
+      // first step, so a reload mid-wizard still restores the draft's size.
+      if (draft.size && !initialSize) setSize(minSize ? maxSize(draft.size, minSize) : draft.size);
       if (typeof draft.cpus === "number" || draft.cpus === null) setCpus(draft.cpus ?? null);
       if (typeof draft.memoryMb === "number" || draft.memoryMb === null)
         setMemoryMb(draft.memoryMb ?? null);

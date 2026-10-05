@@ -115,6 +115,25 @@ test.describe("launch wizard", () => {
     await expect(page.getByLabel("Name")).toHaveValue("e2e Chef");
   });
 
+  test("a ?size= link beats an older draft in the same tab; a later reload keeps the draft", async ({ page }) => {
+    await login(page, "approved");
+    const pressed = (label: string) => page.getByRole("button", { name: new RegExp(`\\b${label}\\b`) });
+
+    // An earlier visit in this tab picked XL (saved as the session draft).
+    await page.goto("/dashboard/pods/new?env=nextjs-starter");
+    await page.getByLabel("Name").fill("e2e size draft");
+    await pressed("XL").click();
+    await expect(pressed("XL")).toHaveAttribute("aria-pressed", "true");
+
+    // A landing deep link asks for Small: the explicit choice in the URL wins over the stale draft.
+    await page.goto("/dashboard/pods/new?env=nextjs-starter&size=s");
+    await expect(pressed("Small")).toHaveAttribute("aria-pressed", "true");
+
+    // Without ?size (a plain reload mid-wizard), the draft still restores.
+    await page.goto("/dashboard/pods/new?env=nextjs-starter");
+    await expect(pressed("Small")).toHaveAttribute("aria-pressed", "true");
+  });
+
   test("the connected repository step: search + pick a repo, Next stays reachable on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await login(page, "approved");

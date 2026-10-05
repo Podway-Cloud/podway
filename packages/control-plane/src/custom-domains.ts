@@ -148,6 +148,12 @@ export class CustomDomainService {
     await this.db.delete(customDomains).where(and(eq(customDomains.id, id), eq(customDomains.ownerId, ownerId)));
   }
 
+  /** The pod was deleted: revoke + remove every domain it had, so no row or certificate outlives it
+   *  (and the hostname is free to connect elsewhere). Same revoke-before-delete order as remove(). */
+  async removeForPod(podId: string): Promise<void> {
+    for (const d of await this.listForPod(podId)) await this.remove(d.ownerId, d.id);
+  }
+
   /**
    * Advance a DNS-verified domain to LIVE once the edge has actually issued its certificate.
    * This is the only path to `active` — a domain is not live because DNS is right, it is live

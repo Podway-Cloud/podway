@@ -21,7 +21,7 @@
 - [x] 2.3 Verification poller (verify logic + on-demand re-check; background scheduler wired with the edge): resolve CNAME target + TXT challenge; drive `pending → verifying →
   active`, with backoff + human-readable `error`.
 - [x] 2.4 Domain→pod lookup for the gateway (cached, busted on add/remove/pod-move).
-- [ ] 2.5 Cascade: pod destroy/suspend updates domain state.
+- [x] 2.5 Cascade: pod destroy/suspend updates domain state. — pod DESTROY done 2026-10-05: `PodService` `onPodDestroyed` → `CustomDomainService.removeForPod` (cert revoked, row deleted, hostname freed); tests in custom-domains + service-drizzle. Suspend leaves domains as-is (the pod comes back).
 
 ## 3. Gateway (`packages/gateway`)
 - [x] 3.1 On-demand TLS wired to the edge (or embedded), with the **ask endpoint** — OBSOLETE: FlyCertIssuer replaces the ask endpoint (audit 2026-10-05)

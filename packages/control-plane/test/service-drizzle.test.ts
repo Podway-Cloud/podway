@@ -45,6 +45,25 @@ describe("PodService over DrizzlePodStore", () => {
     expect(provider.destroyed).toContain(rec.id);
   }, 30_000);
 
+  it("destroy runs onPodDestroyed after the row is gone; a failing hook never breaks the delete", async () => {
+    const { db, close: c } = await createTestDb();
+    close = c;
+    await db.insert(user).values({ id: "u1", name: "Vels", email: "vels@example.com" });
+    const seen: string[] = [];
+    const svc = new PodService(new MockProvider(), new DrizzlePodStore(db), {
+      environmentsRoot,
+      onPodDestroyed: async (pod) => {
+        seen.push(pod.id);
+        throw new Error("domain cleanup down");
+      },
+    });
+    const rec = await svc.launchPod("u1", "nextjs-starter");
+    await svc.provisionPending();
+    await svc.destroy("u1", rec.id);
+    expect(seen).toEqual([rec.id]);
+    expect(await db.select().from(pods).where(eq(pods.id, rec.id))).toEqual([]);
+  }, 30_000);
+
   it("onboarding milestones round-trip through the Postgres columns", async () => {
     const { db, close: c } = await createTestDb();
     close = c;

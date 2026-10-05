@@ -59,6 +59,20 @@ describe("CustomDomainService (add-custom-domains)", () => {
     // hostname freed → re-addable
     expect((await svc.add("o", "p", "y.acme.com")).ok).toBe(true);
   });
+
+  it("removeForPod revokes the cert and deletes ONLY that pod's domains (pod deleted)", async () => {
+    const revoked: string[] = [];
+    const certs = { issue: async () => {}, state: async () => "none" as const, revoke: async (h: string) => void revoked.push(h) };
+    const s2 = new CustomDomainService(db, { cnameTarget: "cname.podway.site", anycastIp: "76.76.21.9" }, undefined, certs as never);
+    await s2.add("o", "gone", "a.acme.com");
+    await s2.add("o", "gone", "b.acme.com");
+    await s2.add("o", "kept", "c.acme.com");
+    await s2.removeForPod("gone");
+    expect(revoked.sort()).toEqual(["a.acme.com", "b.acme.com"]);
+    expect(await s2.listForPod("gone")).toHaveLength(0);
+    expect(await s2.listForPod("kept")).toHaveLength(1);
+    expect((await s2.add("o", "other", "a.acme.com")).ok).toBe(true); // hostname freed
+  });
 });
 
 describe("CustomDomainService.verify (DNS check)", () => {

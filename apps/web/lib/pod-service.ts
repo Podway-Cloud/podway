@@ -1,4 +1,5 @@
 import "server-only";
+import { customDomainService } from "./custom-domain-service";
 import {
   PodService,
   BillingService,
@@ -230,6 +231,8 @@ export function getPodService(): PodService {
   const svc = new PodService(providers[defaultProviderName] ?? base, store, {
     environmentsRoot: getEnvironmentsRoot(),
     secretVault: secretVault(db),
+    // A deleted pod takes its custom domains with it (cert revoked, hostname freed).
+    onPodDestroyed: (pod) => customDomainService().removeForPod(pod.id),
     boxRamGb: Number(process.env.PODWAY_BOX_RAM_GB) || undefined,
     providers,
     defaultProviderName,

@@ -25,5 +25,5 @@
 
 ## 5. Phase 3 — teardown
 - [ ] 5.1 Remove `podway.cloud`/`www.podway.cloud` from `apps/web/lib/canonical-host.ts` `APP_ALIAS_HOSTS`.
-- [ ] 5.2 `fly certs remove` the podway.cloud + `*.preview.podway.cloud` + `gw.podway.cloud` certs once nothing resolves there; delete the podway.cloud DNS; park/cancel the domain.
+- [ ] 5.2 (PARTLY DONE 2026-10-05: gw + *.preview certs and their DNS, cname/MX/SPF/PSL records removed; secrets moved off .cloud. Kept: podway.cloud + www for a 30-day redirect → durable reminder 2026-11-04.) `fly certs remove` the podway.cloud + `*.preview.podway.cloud` + `gw.podway.cloud` certs once nothing resolves there; delete the podway.cloud DNS; park/cancel the domain.
 - [ ] 5.3 Grep gate: `grep -rn 'podway\.cloud'` (excl. archived openspec changes + historical changelog fixtures) = 0.
