@@ -194,7 +194,12 @@ describe("podway info — the owner's dashboard link is ALWAYS surfaced", () => 
     // The bug this fixes: a stale spec (cockpitUrl null) silently dropped the link,
     // leaving a user with no idea where to enter a secret.
     const e = await withSpec({ slug: "pod-y", previewUrl: "https://pod-y.preview.podway.cloud", cockpitUrl: null });
-    expect(infoWith(e)).toMatch(/cockpit:\s+https:\/\/podway\.cloud\/dashboard\/pods\/pod-y/);
+    expect(infoWith(e)).toMatch(/cockpit:\s+https:\/\/podway\.io\/dashboard\/pods\/pod-y/);
+  });
+
+  it("a podway.site preview derives the podway.io cockpit, never podway.site (previews ≠ app host)", async () => {
+    const e = await withSpec({ slug: "pod-z", previewUrl: "https://pod-z.podway.site", cockpitUrl: null });
+    expect(infoWith(e)).toMatch(/cockpit:\s+https:\/\/podway\.io\/dashboard\/pods\/pod-z/);
   });
 });
 

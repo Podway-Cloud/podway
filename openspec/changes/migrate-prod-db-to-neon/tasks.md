@@ -24,4 +24,4 @@
 ## 5. Teardown (owner "go" — see 0asks)
 - [x] 5.1 Destroy `podway-db-backup` (no volumes, dead weight) — done 2026-09-23.
 - [ ] 5.2 After a few stable days on Neon: `fly apps destroy podway-db`; keep `~/podway-dump*.sql.gz` + CSVs until then.
-- [ ] 5.3 Re-point stale docs from `podway-db` to Neon: `docs/runbooks/agent-ops-access.md`, `scripts/check-migrations.sh`, shipping/deploy runbooks.
+- [x] 5.3 Re-point stale docs from `podway-db` to Neon: `docs/runbooks/agent-ops-access.md`, `scripts/check-migrations.sh`, shipping/deploy runbooks. — done: agent-ops-access, check-migrations, deploy.md already on Neon; 2026-10-05 `scripts/incus/backfill-pod-digests.sh` dropped its `fly proxy -a podway-db` path (reads Neon from the gateway env; override is `PROD_DATABASE_URL`, since a dev pod's `DATABASE_URL` is its LOCAL DB). Dry-run verified read-only against Neon: 17/17 full digests. `scripts/db-backup/` is dead code (its app was destroyed in 5.1) — see 0audit.

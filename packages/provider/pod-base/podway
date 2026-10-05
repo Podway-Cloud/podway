@@ -68,12 +68,14 @@ cockpit_url() {
   # original derivation was added to fix (a user with no idea where to enter a secret).
   local pv root; pv=$(field '.previewUrl')
   [ -n "$pv" ] || return 0
-  root=$(printf '%s' "$pv" | sed -E 's#^https?://[^.]+\.##; s#^preview\.##; s#/.*$##')
+  # Podway's own preview roots (podway.site; legacy preview.podway.cloud, being retired) are NOT the
+  # app host — the dashboard is podway.io. Any other root is a self-host domain: keep the strip.
+  root=$(printf '%s' "$pv" | sed -E 's#^https?://[^.]+\.##; s#^preview\.##; s#/.*$##; s#^podway\.(site|cloud)$#podway.io#')
   [ -n "$root" ] && echo "https://${root}/dashboard/pods/${slug}"
 }
 
 # A cockpit link that opens straight on the tab the user actually needs, e.g.
-# `cockpit_tab secrets` → https://podway.cloud/dashboard/pods/<slug>?tab=secrets.
+# `cockpit_tab secrets` → https://podway.io/dashboard/pods/<slug>?tab=secrets.
 # The cockpit reads `?tab=` (COCKPIT_TABS in pod-cockpit.tsx: control, settings, secrets, stats,
 # activity, details, admin), so telling someone to "go to Settings → Secrets" is both wrong (secrets
 # is its OWN top-level tab, not a child of Settings) and needless work when a direct link exists.

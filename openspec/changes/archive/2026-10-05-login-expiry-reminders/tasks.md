@@ -17,8 +17,8 @@
 
 ## 4. Verify + ship
 
-- [ ] 4.1 e2e: a pod with expiry in 3 days → one email (mocked sender) + one pod message; reconnect → none
-- [ ] 4.2 PR + merge; deploy gateway THEN web (owner yes)
+- [x] 4.1 e2e: a pod with expiry in 3 days → one email (mocked sender) + one pod message; reconnect → none — covered at the service level with a mocked sender (`packages/control-plane/test/login-reminders.test.ts` "3 days out: one pod message…, one email", renewal → nothing; `login-reminders-db.test.ts` on the real schema). There is no browser surface to click, so no Playwright spec.
+- [x] 4.2 PR + merge; deploy gateway THEN web (owner yes) — #348 + #349 merged; live since the following gateway/web deploys.
 
 Notes (2026-09-25):
 - DEFERRED: the Codex sign-in-failure notice. Codex has no expiry date to key a notice on; it needs its

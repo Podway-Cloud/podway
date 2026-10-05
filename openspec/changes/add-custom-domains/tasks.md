@@ -1,11 +1,11 @@
 # Tasks — custom domains (Option A)
 
 ## 0. Infra prerequisite (do first — unblocks everything)
-- [ ] 0.1 Stand up a stable edge that accepts on-demand TLS for arbitrary SNI: Caddy/Traefik in front
+- [x] 0.1 Stand up a stable edge that accepts on-demand TLS for arbitrary SNI: Caddy/Traefik in front — OBSOLETE: Caddy plan dropped, Fly issues certs (custom-domains-edge.md) (audit 2026-10-05)
   of the gateway on Fly (recommended) OR embedded ACME in the gateway.
-- [ ] 0.2 Provision `cname.podway.cloud` (stable CNAME target) + a dedicated anycast IPv4/IPv6 for apex
+- [x] 0.2 Provision `cname.podway.cloud` (stable CNAME target) + a dedicated anycast IPv4/IPv6 for apex — done: 37.16.21.185 + cname.podway.site (audit 2026-10-05)
   A-records on the edge app.
-- [ ] 0.3 Provision a persistent cert store that survives edge redeploys (Fly volume / shared KV / DB).
+- [x] 0.3 Provision a persistent cert store that survives edge redeploys (Fly volume / shared KV / DB). — OBSOLETE: Fly owns the cert store (audit 2026-10-05)
 
 ## 1. Data model (`packages/db`)
 - [x] 1.1 `custom_domains` migration: id, pod_id, owner_id, hostname (unique), record_type, status,
@@ -24,11 +24,11 @@
 - [ ] 2.5 Cascade: pod destroy/suspend updates domain state.
 
 ## 3. Gateway (`packages/gateway`)
-- [ ] 3.1 On-demand TLS wired to the edge (or embedded), with the **ask endpoint**
+- [x] 3.1 On-demand TLS wired to the edge (or embedded), with the **ask endpoint** — OBSOLETE: FlyCertIssuer replaces the ask endpoint (audit 2026-10-05)
   `GET /internal/tls-allowed?host=` → 200 only for registered active/verifying hostnames.
-- [ ] 3.2 Host routing for custom domains → mapped pod `:3000` (reuse preview routing).
+- [x] 3.2 Host routing for custom domains → mapped pod `:3000` (reuse preview routing). — done: #232, gateway customHostSlug (audit 2026-10-05)
 - [ ] 3.3 Parked/503 page for suspended/gone/unhealthy pods; never a dead socket or cert error.
-- [ ] 3.4 Rate-limit safety: per-owner issuance cap + backoff on Let's Encrypt failures.
+- [x] 3.4 Rate-limit safety: per-owner issuance cap + backoff on Let's Encrypt failures. — OBSOLETE: Fly owns issuance rate limits (audit 2026-10-05)
 
 ## 4. Dashboard (`apps/web`)
 - [x] 4.1 "Add domain" flow on the pod cockpit: input, the exact records to add, copy buttons.

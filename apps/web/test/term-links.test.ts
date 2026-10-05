@@ -67,7 +67,7 @@ describe("registerMultiRowLinkProvider", () => {
   it("joins a soft-wrapped URL (isWrapped tail) — the preview-URL case", () => {
     // A long preview URL xterm split at the edge: full first row + a short
     // continuation row flagged isWrapped. Both rows link to the whole URL.
-    const head = ("https://curly-otter-9f3a.preview.podway.cloud/app/dashboard?tab=" + "x".repeat(40)).slice(0, COLS);
+    const head = ("https://curly-otter-9f3a.podway.site/app/dashboard?tab=" + "x".repeat(40)).slice(0, COLS);
     const tail = "&ref=share";
     const full = head + tail;
     const { linksAt } = fakeTerm(["Preview:", head, tail, "> "], COLS, new Set([2]));
@@ -84,13 +84,13 @@ describe("registerMultiRowLinkProvider", () => {
     // A leading 🎮 (2 cells) + URL that wrapped mid-token, leaving a ragged edge —
     // the exact shape Claude Code drew the preview URL. Cell-accurate width + the
     // ragged-edge tolerance must still recognise row 1 as "full enough" to join.
-    const head = "🎮https://right-crawdad-3990.preview.podw"; // ~41 cells of 44
-    const tail = "ay.cloud";
+    const head = "🎮https://right-crawdad-3990abc.podway.si"; // ~41 cells of 44
+    const tail = "te";
     const { linksAt } = fakeTerm(["  ● Preview", head, tail, "> "], 44);
     for (const row1 of [2, 3]) {
       const links = linksAt(row1);
       expect(links, `row ${row1}`).toBeDefined();
-      expect(links![0].text).toBe("https://right-crawdad-3990.preview.podway.cloud");
+      expect(links![0].text).toBe("https://right-crawdad-3990abc.podway.site");
     }
   });
 

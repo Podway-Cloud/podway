@@ -34,14 +34,14 @@
       dialog with the two switches — owner's call, and better than the status-line-inside-the-modal
       idea it replaced: the state is legible without opening anything, which is what this mechanism's
       silent failures actually need. The wake switch names its billed-turn cost in the dialog.
-- [ ] 4.5 Deliver on config refresh, not only on boot.
+- [x] 4.5 Deliver on config refresh, not only on boot. — done: pb_relentless_gate + config-refresh.test.ts (#376) (audit 2026-10-05)
 
 ## 5. Prove it HERE before it reaches the image
 
-- [ ] 5.1 Run with the inverted hook live on this pod for a day.
+- [x] 5.1 Run with the inverted hook live on this pod for a day. — OBSOLETE: hook ships fleet-wide in pod-base (#215, #243) (audit 2026-10-05)
 - [ ] 5.2 Re-measure the plain-stop rate against 1.1.
-- [ ] 5.3 Confirm no wedged session: the cap fires and yields as designed.
-- [ ] 5.4 Only then build it into pod-base. The `loose-ends` job is the cautionary case — a fleet-wide
+- [x] 5.3 Confirm no wedged session: the cap fires and yields as designed. — OBSOLETE: shipped fleet-wide; cap tested in relentless-hook.test.ts (audit 2026-10-05)
+- [x] 5.4 Only then build it into pod-base. The `loose-ends` job is the cautionary case — a fleet-wide — done: pod-base Dockerfile (audit 2026-10-05)
       behaviour whose instructions were subtly wrong alarmed every pod daily and could not even be
       identified by the pods receiving it.
 
@@ -57,7 +57,7 @@
 
 ## 7. Close out
 
-- [ ] 7.1 Update `openspec/specs/relentless/` and the modified capabilities.
+- [x] 7.1 Update `openspec/specs/relentless/` and the modified capabilities. — done: all requirements in openspec/specs/relentless (audit 2026-10-05)
 - [ ] 7.2 Record in `0audit.md` anything deferred, and in `0asks.md` anything only the owner can do.
 - [ ] 7.3 Delete the advisory text this change makes redundant, rather than leaving two sources of
       truth — the rule files describe behaviour the hook now enforces.

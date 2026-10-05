@@ -8,7 +8,7 @@
 ## 2. Verify + ship
 
 - [ ] 2.1 Send each email to the owner's inbox (owner yes) and check Gmail web + iOS Mail, light + dark
-- [ ] 2.2 PR + merge; deploy gateway + web (owner yes)
+- [x] 2.2 PR + merge; deploy gateway + web (owner yes) — #348 merged; live since the following gateway/web deploys.
 
 Notes: main spec added as openspec/specs/transactional-email → archive with --skip-specs. Rendered and
 checked in Chromium light + dark (2026-09-25); real Gmail/iOS check is 2.1.

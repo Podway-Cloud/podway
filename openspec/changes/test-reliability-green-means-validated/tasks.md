@@ -75,5 +75,5 @@
   a new ungated action fails the build" scenario; `.claude/rules/testing-standards.md` added (no
   source-scan gates, no vacuous tests, prove-the-test-fails, quarantine-expiry) and imported in
   CLAUDE.md. REMAINING: the matching `backoffice`/`billing` runtime scenarios.
-- [ ] 5.2 Each phase lands as its own PR (Phase 1 first — it's the cheapest trust win). Verify each
+- [x] 5.2 Each phase lands as its own PR (Phase 1 first — it's the cheapest trust win). Verify each — OBSOLETE: phases already landed (#303, #305, #331, #332) (audit 2026-10-05)
   new/changed test FAILS against the bug it guards before it's considered done.

@@ -237,13 +237,13 @@ describe("TunnelRouter — teardown + metering", () => {
 });
 
 describe("TunnelRouter — health", () => {
-  const TARGET = { host: "podway.cloud", port: 443 };
+  const TARGET = { host: "podway.io", port: 443 };
 
   it("a canary dials podway's OWN host and reports ok when the relay connects", async () => {
     const h = harness({ canaryTarget: TARGET });
     const probe = h.router.canary("owner1");
     const open = h.toRelay.find((m) => m.type === "tunnel-open")!;
-    expect(open).toMatchObject({ host: "podway.cloud", port: 443, source: { system: "health-check" } });
+    expect(open).toMatchObject({ host: "podway.io", port: 443, source: { system: "health-check" } });
     h.router.fromRelay("owner1", { type: "tunnel-ready", id: open.id as string });
     expect(await probe).toMatchObject({ state: "ok", probe: true });
     // …and closes immediately, so proving it works costs one handshake, not a session.
@@ -333,7 +333,7 @@ describe("TunnelRouter — per-owner and per-pod usage", () => {
   });
 
   it("lists an owner whose relay was probed but has carried nothing", async () => {
-    const h = harness({ canaryTarget: { host: "podway.cloud", port: 443 } });
+    const h = harness({ canaryTarget: { host: "podway.io", port: 443 } });
     const probe = h.router.canary("owner1");
     h.router.fromRelay("owner1", { type: "tunnel-ready", id: h.lastOpenId() });
     await probe;

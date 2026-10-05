@@ -21,7 +21,9 @@ from local metadata, so the agent never relies on a hardcoded or drifting descri
 - **WHEN** `podway info` runs in a pod that has a preview URL
 - **THEN** it prints the owner's control-page (`cockpit:`) URL — where secrets and settings are
   managed — using the spec's `cockpitUrl` when present, and otherwise DERIVING it from the preview
-  URL, so the link is never silently omitted for an older pod whose spec predates the field
+  URL, so the link is never silently omitted for an older pod whose spec predates the field. Podway's
+  own preview roots (`podway.site`, legacy `preview.podway.cloud`) derive `podway.io`, never the
+  preview domain itself, which hosts no dashboard
 
 #### Scenario: `podway preview` reports the URL for a port
 
