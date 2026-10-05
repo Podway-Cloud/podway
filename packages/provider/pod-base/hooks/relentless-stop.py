@@ -43,7 +43,7 @@ ALLOW = 0
 # takes effect on the very next stop instead of waiting for a reboot. ~/.podway-pod-spec.json is the
 # boot-time BACKUP that init.sh copies out of /etc, and it does NOT receive those patches — reading
 # only that one made the switch look dead on a running pod.
-SPEC_LIVE = "/etc/podway/pod-spec.json"
+SPEC_LIVE = os.environ.get("PODWAY_SPEC", "/etc/podway/pod-spec.json")
 SPEC = os.path.expanduser("~/.podway-pod-spec.json")
 # A LOCAL override, checked first.
 #
@@ -74,7 +74,10 @@ MAX_CONSECUTIVE_BLOCKS = 3
 
 def _hold_enabled() -> bool:
     """The free half of relentless. OFF unless explicitly on — never inherit a wall by accident."""
-    for path, key in ((LOCAL, None), (SPEC_LIVE, "relentless"), (SPEC, "relentless")):
+    # The owner's dashboard switch (delivered in the spec) wins; LOCAL is only the pre-switch fallback
+    # (2026-09-06 stopgap) for a spec that carries no relentless key. LOCAL-first let a stale file
+    # keep the wall up after the owner switched it off (podway dev, 2026-10-05).
+    for path, key in ((SPEC_LIVE, "relentless"), (SPEC, "relentless"), (LOCAL, None)):
         try:
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)

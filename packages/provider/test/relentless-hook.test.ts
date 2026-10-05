@@ -15,6 +15,8 @@ interface Opts {
   turn?: string[];
   /** Lines of earlier turns, to prove scoping. */
   prior?: string[];
+  /** The owner's dashboard switch, as delivered in the pod spec. */
+  specHold?: boolean;
 }
 
 /**
@@ -30,6 +32,9 @@ function run(lastMessage: string, o: Opts = {}): { home: string; out: string } {
   if (o.hold !== undefined) {
     fs.writeFileSync(path.join(home, ".podway", "relentless.json"), JSON.stringify({ hold: o.hold }));
   }
+  if (o.specHold !== undefined) {
+    fs.writeFileSync(path.join(home, "spec.json"), JSON.stringify({ relentless: { hold: o.specHold, wake: false } }));
+  }
   if (o.items?.length) {
     fs.writeFileSync(
       path.join(home, ".podway", "register.md"),
@@ -44,7 +49,8 @@ function run(lastMessage: string, o: Opts = {}): { home: string; out: string } {
   const out = execFileSync("python3", [HOOK], {
     input: JSON.stringify({ last_assistant_message: lastMessage, transcript_path: t }),
     encoding: "utf8",
-    env: { ...process.env, HOME: home },
+    // Never read this machine's real /etc spec: point the live spec into the throwaway home.
+    env: { ...process.env, HOME: home, PODWAY_SPEC: path.join(home, "spec.json") },
   });
   return { home, out };
 }
@@ -57,6 +63,12 @@ const blocked = (out: string) => out.includes('"decision": "block"');
  * turns ended as plain stops, so the default flipped from allow to BLOCK-UNLESS-EARNED.
  */
 describe("relentless stop hook — a stop must be EARNED", () => {
+  it("the owner's dashboard switch (spec) beats a stale LOCAL file, both ways", () => {
+    // podway dev, 2026-10-05: switch OFF in the dashboard, a Sep-6 LOCAL hold:true kept blocking stops.
+    expect(blocked(run("All done.", { hold: true, specHold: false, items: ["open thing"] }).out)).toBe(false);
+    expect(blocked(run("All done.", { hold: false, specHold: true, items: ["open thing"] }).out)).toBe(true);
+  });
+
   it("is OFF when no config exists — a pod never inherits a wall by accident", () => {
     expect(blocked(run("Done.", { items: ["something open"] }).out)).toBe(false);
   });
@@ -111,7 +123,7 @@ describe("relentless stop hook — a stop must be EARNED", () => {
       execFileSync("python3", [HOOK], {
         input: JSON.stringify({ last_assistant_message: "Done.", transcript_path: t }),
         encoding: "utf8",
-        env: { ...process.env, HOME: home },
+        env: { ...process.env, HOME: home, PODWAY_SPEC: path.join(home, "spec.json") },
       });
     const seen = [once(), once(), once(), once(), once()];
     expect(seen.slice(0, 3).every(blocked)).toBe(true);
@@ -129,7 +141,7 @@ describe("relentless stop hook — a stop must be EARNED", () => {
     const out = execFileSync("python3", [HOOK], {
       input: JSON.stringify({ last_assistant_message: "Done.", transcript_path: t, stop_hook_active: true }),
       encoding: "utf8",
-      env: { ...process.env, HOME: home },
+      env: { ...process.env, HOME: home, PODWAY_SPEC: path.join(home, "spec.json") },
     });
     expect(blocked(out)).toBe(false);
   });
@@ -144,7 +156,7 @@ describe("relentless stop hook — a stop must be EARNED", () => {
     const out = execFileSync("python3", [HOOK], {
       input: JSON.stringify({ last_assistant_message: "Done.", transcript_path: t }),
       encoding: "utf8",
-      env: { ...process.env, HOME: home },
+      env: { ...process.env, HOME: home, PODWAY_SPEC: path.join(home, "spec.json") },
     });
     expect(blocked(out)).toBe(false);
   });
@@ -162,7 +174,7 @@ describe("relentless stop hook — a stop must be EARNED", () => {
     const out = execFileSync("python3", [HOOK], {
       input: JSON.stringify({ last_assistant_message: "Done.", transcript_path: t }),
       encoding: "utf8",
-      env: { ...process.env, HOME: home },
+      env: { ...process.env, HOME: home, PODWAY_SPEC: path.join(home, "spec.json") },
     });
     expect(blocked(out)).toBe(false);
   });

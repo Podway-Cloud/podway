@@ -28,8 +28,12 @@ else
   export PODWAY_RELENTLESS=off
   rm -rf "$etc/rules/relentless.md" "$etc/skills/relentless" \
     "$home/.claude/rules/relentless.md" "$home/.claude/skills/relentless" \
-    "$home/work/.claude/rules/relentless.md" "$home/work/.claude/skills/relentless" \
     "$home/.codex/skills/relentless"
+  # ~/work/.claude holds podway's copies ONLY on a scaffold pod (no githubRepo). On a BYO pod it is the
+  # USER'S repo — the podway repo itself tracks .claude/skills/relentless — so never delete there.
+  if ! python3 -c 'import json,sys; sys.exit(0 if json.load(open(sys.argv[1])).get("githubRepo") else 1)' "$spec" 2>/dev/null; then
+    rm -rf "$home/work/.claude/rules/relentless.md" "$home/work/.claude/skills/relentless"
+  fi
 fi
 # <<< podway:relentless-gate
 }

@@ -190,6 +190,20 @@ SHALL be removed. Changing the switch SHALL refresh the running pod's config in 
 its agents. Until 2026-10-03 the switch only disarmed Claude's hooks: Codex kept the rules and skill, and
 Claude kept the rule text.
 
+The removal SHALL NEVER touch the user's repository: on a pod with its own GitHub repo, `~/work/.claude`
+is the user's tracked content (the podway repo itself tracks `.claude/skills/relentless`), so only
+podway-owned copies are removed there — `~/work/.claude` copies only on a scaffold pod (no repo). The
+hooks SHALL read the switch from the pod spec FIRST; the legacy `~/.podway/relentless.json` file counts
+only when the spec carries no `relentless` key, so a stale local file can never override the owner.
+
+#### Scenario: Hold off on a pod with its own repo
+- **WHEN** the hold is off on a pod whose spec has a `githubRepo`
+- **THEN** files under `~/work/.claude` SHALL be left untouched
+
+#### Scenario: A stale local file disagrees with the dashboard
+- **WHEN** the spec says hold off and `~/.podway/relentless.json` says hold on
+- **THEN** the stop and session-start hooks SHALL treat relentless as OFF
+
 #### Scenario: Hold switched off
 - **WHEN** the owner switches the hold off for a pod with Claude and Codex
 - **THEN** neither agent's rules (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `.claude/rules`) nor skills SHALL contain the relentless mechanism

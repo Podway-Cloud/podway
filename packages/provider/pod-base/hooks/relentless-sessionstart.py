@@ -39,10 +39,12 @@ import os
 
 def _hold_enabled() -> bool:
     """Same gate as the Stop hook: inject the posture only when relentless HOLD is on for this pod."""
+    # Same sources and order as the Stop hook: the live spec, its boot-time copy, then the legacy
+    # LOCAL file. (The old ~/.podway/pod-spec*.json paths here never existed, so only LOCAL counted.)
     for path, key in (
+        (os.environ.get("PODWAY_SPEC", "/etc/podway/pod-spec.json"), "relentless"),
+        (os.path.expanduser("~/.podway-pod-spec.json"), "relentless"),
         (os.path.expanduser("~/.podway/relentless.json"), None),
-        (os.path.expanduser("~/.podway/pod-spec.live.json"), "relentless"),
-        (os.path.expanduser("~/.podway/pod-spec.json"), "relentless"),
     ):
         try:
             with open(path, encoding="utf-8") as fh:

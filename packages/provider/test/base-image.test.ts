@@ -1085,7 +1085,7 @@ describe("pod-base packaging ships what init.sh needs", () => {
 
 /** codex-first-class 1.2/1.3: the hold switch decides whether ANY agent keeps the relentless mechanism. */
 describe("relentless gate follows the hold switch", () => {
-  async function gate(hold: boolean | null) {
+  async function gate(hold: boolean | null, githubRepo?: string) {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "relgate-"));
     const home = path.join(dir, "home"), etc = path.join(dir, "etc");
     const planted = [
@@ -1096,7 +1096,7 @@ describe("relentless gate follows the hold switch", () => {
     const kept = path.join(home, ".codex", "skills", "handoff", "SKILL.md");
     for (const f of [...planted, kept]) { await fs.mkdir(path.dirname(f), { recursive: true }); await fs.writeFile(f, "x"); }
     const spec = path.join(dir, "spec.json");
-    await fs.writeFile(spec, JSON.stringify(hold === null ? {} : { relentless: { hold, wake: false } }));
+    await fs.writeFile(spec, JSON.stringify({ ...(hold === null ? {} : { relentless: { hold, wake: false } }), ...(githubRepo ? { githubRepo } : {}) }));
     const src = await fs.readFile(refreshLib, "utf8");
     const block = src.split(">>> podway:relentless-gate")[1].split("\n").slice(1).join("\n").split("# <<< podway:relentless-gate")[0];
     const out = execFileSync("bash", ["-c", `f(){\n${block}\n}; f; echo "$PODWAY_RELENTLESS"`], {
@@ -1113,6 +1113,12 @@ describe("relentless gate follows the hold switch", () => {
       expect(r.left).toEqual([false, false, false, false, false]);
       expect(r.keptOther).toBe(true);
     }
+  });
+  it("OFF on a BYO pod (own GitHub repo) NEVER touches ~/work — those are the user's tracked files", async () => {
+    // The podway repo itself tracks .claude/skills/relentless; the gate deleted it on podway dev (2026-10-05).
+    const r = await gate(false, "velsa/podway");
+    expect(r.mode).toBe("off");
+    expect(r.left).toEqual([false, false, false, false, true]); // ~/work/.claude/rules/relentless.md kept
   });
   it("ON keeps them", async () => {
     const r = await gate(true);
