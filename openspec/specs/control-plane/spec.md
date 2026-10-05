@@ -213,6 +213,14 @@ count against another's.
 - **THEN** their budget SHALL rise to the carded budget, and a launch that fits the higher budget
   SHALL be allowed
 
+#### Scenario: The launch wizard blocks an over-budget size and shows the way out
+
+- **WHEN** an owner picks a size that does not fit their free RAM in the launch wizard
+- **THEN** Create SHALL be disabled with the reason (the size vs. the GB free); a cardless owner on
+  the free budget, with billing on, SHALL be offered "add a card to raise your limit" with an Add card
+  button (when the carded budget would fit that size), and otherwise SHALL be offered "contact
+  support"; a size that fits SHALL stay launchable
+
 #### Scenario: Suspending frees RAM; resuming needs it back
 
 - **WHEN** an owner suspends a pod, its RAM becomes available for a new pod; and **WHEN** they later

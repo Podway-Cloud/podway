@@ -19,7 +19,7 @@ import { openSupportChat } from "@/lib/support-chat";
 import { GithubRepoField } from "@/components/github-repo-field";
 import AddCardButton from "@/components/add-card-dialog";
 import { SIGNUP_CREDIT_USD } from "@/lib/pricing-catalog";
-import { DEFAULT_POD_SIZE, POD_SIZES, POD_TIERS, maxSize, sizeAtLeast, type PodSize } from "@podway/shared/tiers";
+import { CARDED_RAM_GB, DEFAULT_POD_SIZE, POD_SIZES, POD_TIERS, maxSize, sizeAtLeast, type PodSize } from "@podway/shared/tiers";
 import type { DeclaredSecret } from "@/lib/environments";
 import type { EnvPair } from "@/lib/env-paste";
 
@@ -295,6 +295,11 @@ export default function LaunchConfigure({
   const ramCost = POD_TIERS[size].memoryGb;
   const ramFree = ram.cap - ram.used;
   const ramFit = ram.unlimited || ramCost <= ramFree;
+  // A no-card account on the free budget can raise it by adding a card (account-limits.ts) — say so
+  // at the ceiling instead of a dead end. Only when the carded budget would actually fit this size.
+  // ponytail: client reads the DEFAULT carded budget (64); a server-only PODWAY_CARDED_RAM_GB override
+  // would not show here — pass it as a prop if prod ever sets one.
+  const canRaiseWithCard = billingEnabled && !hasCard && ram.cap < CARDED_RAM_GB && ramCost <= CARDED_RAM_GB - ram.used;
   // api-key mode needs a key before launch (there's no /login to fall back on).
   const keyProvided = agentAuth !== "api-key" || agentApiKey.trim().length > 0;
   const launchable = nameFilled && requiredFilled && repoPicked && enabled && ramFit && keyProvided;
@@ -473,7 +478,7 @@ export default function LaunchConfigure({
                 {!ram.unlimited && (
                   <p className={`text-[13px] ${ramFit ? "text-muted-foreground" : "text-destructive"}`}>
                     Uses <strong>{ramCost} GB</strong> of your <strong>{ramFree} GB</strong> free.{" "}
-                    {!ramFit && (
+                    {!ramFit && !canRaiseWithCard && (
                       <>
                         Suspend a pod to free some, or{" "}
                         <button
@@ -486,7 +491,13 @@ export default function LaunchConfigure({
                         for more.
                       </>
                     )}
+                    {!ramFit && canRaiseWithCard && <>Suspend a pod to free some, or add a card to raise your limit to {CARDED_RAM_GB} GB.</>}
                   </p>
+                )}
+                {!ramFit && canRaiseWithCard && (
+                  <div className="w-fit">
+                    <AddCardButton hasCard={false} />
+                  </div>
                 )}
               </div>
             </>
@@ -821,7 +832,7 @@ export default function LaunchConfigure({
                       : !keyProvided
                         ? "Enter your API key (or switch to Subscription) to continue."
                         : !ramFit
-                          ? `This ${ramCost} GB pod won’t fit your ${ramFree} GB free — pick a smaller size, suspend a pod, or contact support for more.`
+                          ? `This ${ramCost} GB pod won’t fit your ${ramFree} GB free — pick a smaller size, suspend a pod, or ${canRaiseWithCard ? `add a card to raise your limit to ${CARDED_RAM_GB} GB` : "contact support for more"}.`
                           : "Provisioning isn’t enabled yet."}
                 </p>
               )}

@@ -7,10 +7,12 @@ export const USERS = {
   // Dedicated to the non-payment safety-net e2e: that test suspends ALL of its owner's pods, so it
   // must not share an account with any other spec.
   billing: { email: "billing@podway.test", password: "test-password-123", name: "Billing" },
+  // Dedicated to the RAM-budget e2e: it fills its own budget, so other specs' pods must not count.
+  ramcap: { email: "ramcap@podway.test", password: "test-password-123", name: "RamCap" },
 } as const;
 
 export const ADMIN_EMAILS = USERS.admin.email;
-export const PREAPPROVE_EMAILS = `${USERS.admin.email},${USERS.approved.email},${USERS.billing.email}`;
+export const PREAPPROVE_EMAILS = `${USERS.admin.email},${USERS.approved.email},${USERS.billing.email},${USERS.ramcap.email}`;
 
 /**
  * Naming defaults only — NOT a connection string.

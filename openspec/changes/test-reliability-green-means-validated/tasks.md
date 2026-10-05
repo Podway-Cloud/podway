@@ -48,9 +48,11 @@
   is reported distinctly from a clean pass.
 - [ ] 2.4 Quarantine discipline: a dated quarantine list with an expiry — a still-skipped test past
   its date fails CI (so quarantine can't rot, as the Experiments test did).
-- [ ] 2.5 New e2e — RAM-budget launch gate: a no-card user at the RAM ceiling is BLOCKED from Create
+- [x] 2.5 New e2e — RAM-budget launch gate: a no-card user at the RAM ceiling is BLOCKED from Create
   (sees the upgrade CTA); a carded user is ALLOWED. Seed `billingAccounts.hasCard`.
+  — done 2026-10-05: `apps/web/e2e/ram-budget.spec.ts` (dedicated `ramcap` user keeps the real 16 GB via the test-login-only `PODWAY_E2E_TIGHT_RAM`; XL blocked with the reason + support link, Large allowed). Seen FAILING with the gate forced open. The carded half needs Stripe, which the e2e stack lacks → covered by `account-ram-cap.test.ts`; server refusal by `account-ram-budget.test.ts`. The add-card CTA at the ceiling (billing on) was verified once by hand in Stripe TEST mode; e2e itself is billing-off, so it shows the support path.
 - [ ] 2.6 New e2e — billing add-card → create pod → charge (money-in path, fake Stripe).
+  BLOCKED on a decision (2026-10-05): the card form is Stripe Elements (js.stripe.com), which no fake can drive; the charge logic is already covered with a fake Stripe client (`billing-writes.test.ts`: subscription create, per-pod price, suspended rate, cancel). A real browser pass needs Stripe TEST keys as a CI secret (owner).
 
 ## Phase 3 — Cover the money and the other edition
 - [x] 3.1 `packages/control-plane` billing WRITE tests: `grantCredit` (ledger + mirror + idempotent),

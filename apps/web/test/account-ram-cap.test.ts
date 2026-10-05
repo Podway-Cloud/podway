@@ -54,6 +54,16 @@ describe("accountRamCapGb", () => {
     expect(await accountRamCapGb("u1", "user@example.com")).toBe(ACCOUNT_RAM_GB);
   });
 
+  it("the e2e tight-budget switch is INERT without test login (it can never apply in production)", async () => {
+    vi.stubEnv("PODWAY_E2E_TIGHT_RAM", "user@example.com=1");
+    vi.stubEnv("PODWAY_TEST_LOGIN", "");
+    expect(await accountRamCapGb("u1", "user@example.com")).toBe(ACCOUNT_RAM_GB);
+    vi.stubEnv("PODWAY_TEST_LOGIN", "1");
+    expect(await accountRamCapGb("u1", "user@example.com")).toBe(1);
+    expect(await accountRamCapGb("u2", "other@example.com")).toBe(ACCOUNT_RAM_GB); // only that account
+    vi.unstubAllEnvs();
+  });
+
   it("falls back to the free budget if the billing lookup fails", async () => {
     getAccount.mockRejectedValue(new Error("stripe down"));
     expect(await accountRamCapGb("u1", "user@example.com")).toBe(ACCOUNT_RAM_GB);

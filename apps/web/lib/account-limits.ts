@@ -17,6 +17,10 @@ import { stripeConfigured } from "@podway/control-plane";
  */
 export async function accountRamCapGb(userId: string, email: string): Promise<number> {
   if (isAdmin(email) || editionOss()) return Infinity;
+  // E2E ONLY: the suite lifts the budget for everyone (one user launches many pods), so ONE dedicated
+  // account keeps a real budget to exercise the gate in a browser. "email=GB"; inert without test login.
+  const [tightEmail, tightGb] = (process.env.PODWAY_E2E_TIGHT_RAM ?? "").split("=");
+  if (process.env.PODWAY_TEST_LOGIN === "1" && tightEmail && email === tightEmail) return Number(tightGb);
   if (!stripeConfigured()) return ACCOUNT_RAM_GB; // billing off → only the free budget exists
   const hasCard = await getBillingService()
     .getAccount(userId)

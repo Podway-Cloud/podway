@@ -3,7 +3,7 @@ import { writeFileSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { PostgreSqlContainer } from "@testcontainers/postgresql";
-import { ADMIN_EMAILS, PREAPPROVE_EMAILS } from "./users";
+import { ADMIN_EMAILS, PREAPPROVE_EMAILS, USERS } from "./users";
 
 const STATE = path.join(process.cwd(), ".e2e-state.json");
 // Ports are offset by shard so N e2e shards run on ONE box without colliding. `--shard=i/N`
@@ -65,6 +65,10 @@ export default async function globalSetup(): Promise<void> {
   // The suite launches many pods as one non-admin user across a run; a real 4-slot cap
   // would block them. Lift it (the cap logic is unit-covered in control-plane).
   process.env.PODWAY_ACCOUNT_RAM_GB = process.env.PODWAY_ACCOUNT_RAM_GB ?? "100000";
+  // Hermetic billing: a dev pod exports the owner's Stripe keys (test AND live) into every shell, and
+  // the stack inherits process.env — so a LOCAL run billed through real Stripe test mode and took
+  // paths CI never does (2026-10-05). Blank them: e2e is billing-off everywhere, like CI.
+  for (const k of Object.keys(process.env)) if (k.startsWith("STRIPE_")) delete process.env[k];
   // A resize must APPEAR to take time, or the transient progress it drives ("stopping · Ns",
   // read-only settings) collapses before it can be observed — the fake box resizes instantly.
   process.env.PODWAY_FAKE_RESIZE_MS = process.env.PODWAY_FAKE_RESIZE_MS ?? "5000";
@@ -134,6 +138,8 @@ export default async function globalSetup(): Promise<void> {
       PODWAY_FAKE_CODEX_RC: process.env.PODWAY_FAKE_CODEX_RC,
       PODWAY_FAKE_RESIZE_MS: process.env.PODWAY_FAKE_RESIZE_MS!,
       PODWAY_ACCOUNT_RAM_GB: process.env.PODWAY_ACCOUNT_RAM_GB!,
+      // …except the ram-budget spec's own account, which keeps the real no-card budget (16 GB).
+      PODWAY_E2E_TIGHT_RAM: `${USERS.ramcap.email}=16`,
       // Hand fake pods an RC link so the wizard reaches READY at once instead of
       // waiting out the 90s remote-control grace (see FakeProvider.sessionUrl).
       PODWAY_FAKE_SESSION_URL: "https://claude.ai/code/session_e2efake",
