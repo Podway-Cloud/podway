@@ -109,6 +109,10 @@ cmd_info() {
     echo "preview:  (not configured on this deployment)"
   fi
   echo "egress:   ${policy:-full}"
+  # When each reading was taken. The spec refreshes at boot and on a settings change, so a value
+  # measured earlier may already be stale; an agent compares these times before reporting it.
+  echo "spec:     updated $(date -u -r "$SPEC" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)"
+  echo "image:    built $(sed -n 's/^built_at=//p' /etc/podway/toolchain.manifest 2>/dev/null | head -1 | grep . || echo unknown)"
   # The owner's residential relay is the sanctioned egress — surface it here so an agent
   # reaching for a tunnel sees it exists (and whether it's live) without hunting.
   if [ -f "$RELAY_STATE" ]; then

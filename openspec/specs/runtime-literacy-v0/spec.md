@@ -13,6 +13,8 @@ from local metadata, so the agent never relies on a hardcoded or drifting descri
 - **WHEN** `podway info` runs in a pod
 - **THEN** it prints the slug, environment name, preview URL, what persists (`~/work`) versus what
   resets, egress policy, and the agent
+- **AND** it prints when the pod spec was last updated and when the image was built, so an agent
+  can tell a stale reading from a current one before it reports a measurement
 
 #### Scenario: `podway info` always surfaces the owner's dashboard link
 
