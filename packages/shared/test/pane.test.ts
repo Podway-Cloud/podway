@@ -86,6 +86,16 @@ describe("pane safety predicates", () => {
     expect(atBlockingGate(OAUTH_RETRY_GATE)).toBe(true);
   });
 
+  // Claude 2.1.283 AskUserQuestion, captured on test:1 (2026-10-06). Its option cursor is the same `❯`
+  // as the prompt, so typing here picked options and the draft check reported "submitted".
+  it("an open question box is a blocking gate — never type into it", () => {
+    const QUESTION = [" ☐ Pick", "", "Pick A or B?", "", "❯ 1. A", "     Option A.", "  2. B", "     Option B.",
+      "  3. Type something.", "────────────────────────────────────────", "  4. Chat about this", "",
+      "Enter to select · ↑/↓ to navigate · Esc to cancel"].join("\n");
+    expect(atBlockingGate(QUESTION)).toBe(true);
+    expect(paneAcceptsInput(QUESTION)).toBe(false);
+  });
+
   it("paneAcceptsInput is false at any gate or dead pane, true at a live prompt", () => {
     expect(paneAcceptsInput(BYPASS_GATE)).toBe(false);
     expect(paneAcceptsInput("PODWAY-AGENT-EXITED")).toBe(false);

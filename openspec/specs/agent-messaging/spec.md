@@ -141,7 +141,9 @@ with a per-run temp file: an overlap SHALL NEVER empty the inbox or drop an appe
 
 #### Scenario: Busy or shell pane defers delivery
 
-- **WHEN** a pending message exists but the recipient's session is a shell or on a blocking dialog
+- **WHEN** a pending message exists but the recipient's session is a shell or on a blocking dialog —
+  including an open question box ("Enter to select"), whose `❯` option cursor must never be read as
+  "the draft left the prompt"
 - **THEN** delivery SHALL be deferred to a later poll and nothing SHALL be injected or written
 
 ### Requirement: Pods are named to the owner the way the owner named them

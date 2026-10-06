@@ -210,6 +210,23 @@ describe("runSchedulerTick", () => {
     expect(await runSchedulerTick(o)).toEqual({ fired: false, reason: "deferred" });
   });
 
+  // afisha crawler, 2026-10-06: an open AskUserQuestion reports status "waiting" / waitingFor "input
+  // needed". Typing a run into it was lost AND its newlines picked the "(Recommended)" options — the
+  // scheduler answered the owner's questions (merges, live-data writes) on their behalf.
+  it("defers while the agent waits on the owner (question box, any waitingFor) — never types into it", async () => {
+    for (const st of [
+      { status: "waiting", waitingFor: "input needed" },
+      { status: "idle", waitingFor: "sandbox request" },
+      { status: "waiting" },
+    ]) {
+      const p = tmp();
+      writeJobs(p, [brief]);
+      const { o, injected } = opts(p, new Date("2026-07-22T08:00:30Z"), { status: () => st });
+      expect(await runSchedulerTick(o)).toEqual({ fired: false, reason: "deferred" });
+      expect(injected).toHaveLength(0);
+    }
+  });
+
   it("dead-man: alerts once for a run that started but never reported back", async () => {
     const p = tmp();
     writeJobs(p, [{ ...brief, enabled: false }]); // no job due

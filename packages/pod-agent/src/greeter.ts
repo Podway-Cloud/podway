@@ -301,9 +301,10 @@ async function waitAcceptingInput(
   return false;
 }
 
-/** The CLI's own "a modal is blocking me" flag (`waitingFor: "dialog open"`). */
+/** The CLI's own "waiting on the owner" flag — `"dialog open"`, `"input needed"` (a question box),
+ * `"sandbox request"`… ANY value means typed keys go to that UI, not the prompt. */
 function isDialogOpen(waitingFor: string | undefined): boolean {
-  return typeof waitingFor === "string" && /dialog/i.test(waitingFor);
+  return typeof waitingFor === "string" && waitingFor.length > 0;
 }
 
 export async function runGreeter(opts: GreeterOptions): Promise<GreeterResult> {

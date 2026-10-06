@@ -301,11 +301,15 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
   if (seeded) writeJson(opts.statePath, state, opts.uid, opts.gid);
   const due = dueJobs(jobs, state, now());
 
-  // Only inject when the agent can take a turn. busy/shell = working; a dialog eats
-  // keystrokes. Defer to a later tick rather than interleave.
+  // Only inject when the agent can take a turn. busy/shell = working. ANY waitingFor (or status
+  // "waiting") means the CLI is waiting on the OWNER — a question box ("input needed"), a sandbox
+  // request, a dialog — and typed keys go to that UI. Matching only /dialog/ let a run be typed into
+  // an open AskUserQuestion: the run was lost and its newlines picked the "(Recommended)" options,
+  // answering the owner's questions (merges, live-data writes) for them (afisha crawler, 2026-10-06).
   const s = status();
-  const canInject = !(s.status === "busy" || s.status === "shell") &&
-    !(typeof s.waitingFor === "string" && /dialog/i.test(s.waitingFor));
+  const canInject =
+    !(s.status === "busy" || s.status === "shell" || s.status === "waiting") &&
+    !(typeof s.waitingFor === "string" && s.waitingFor.length > 0);
 
   // 1) Fire the earliest-due job (one per tick).
   if (due.length > 0) {

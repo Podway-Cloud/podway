@@ -547,6 +547,19 @@ job's timezone; absent means every day, so a `times` job can be weekly) OR a rep
 interval; and `instructions` is optional free text describing what the job should do when it runs. The
 jobs config is user-owned; the scheduler only reads it.
 
+The scheduler SHALL type a run (or a stalled-run alert) into the agent ONLY when the agent can take a
+turn: never while it is `busy`, in a `shell`, `waiting`, or reports ANY `waitingFor` (a question box
+— "input needed" —, a sandbox request, a dialog). Typed keys go to that UI: on 2026-10-06 runs typed
+into an open AskUserQuestion were lost AND their newlines picked the "(Recommended)" options,
+answering the owner's questions (merges, live-data writes) on the owner's behalf. A deferred run
+fires on a later tick.
+
+#### Scenario: A question to the owner is never answered by the scheduler
+- **WHEN** a job is due while the agent shows an AskUserQuestion (status `waiting`, `waitingFor`
+  "input needed")
+- **THEN** the scheduler SHALL defer and type nothing, and the run SHALL fire once the question is
+  answered and the agent can take a turn
+
 #### Scenario: No config means no scheduling
 
 - **WHEN** a pod has no `~/.podway/ops-jobs.json` (or it defines no jobs)

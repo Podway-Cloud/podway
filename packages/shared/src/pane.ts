@@ -30,8 +30,10 @@ export function agentGone(paneText: string): boolean {
  * waitReady declared success, and the greeter typed into a modal whose default answer
  * was "exit". Treat a known gate as NOT ready and let it be answered/seeded, never typed at.
  */
+// "enter to select" = a selection UI (Claude's AskUserQuestion, pickers): its option cursor is the same
+// `❯` as the prompt, so typing into it picks options — it answered owners' questions (2026-10-06).
 const BLOCKING_GATE_RE =
-  /bypass permissions mode|do you want to proceed|select login method|use this api key|do you trust the files|yes, i accept|oauth error/i;
+  /bypass permissions mode|do you want to proceed|select login method|use this api key|do you trust the files|yes, i accept|oauth error|enter to select/i;
 
 /** True when the pane is showing a gate that swallows keystrokes — never type here. */
 export function atBlockingGate(paneText: string): boolean {
