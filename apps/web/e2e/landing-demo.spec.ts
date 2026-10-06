@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { pinLandingArm } from "./helpers";
 
 /**
  * The "Commute" demo film on the landing (2026-09-29). It lives in a same-origin frame right under the
@@ -6,7 +7,8 @@ import { test, expect } from "@playwright/test";
  * enough that nothing inside needs its own scrollbar, at desktop and phone widths.
  */
 for (const width of [1280, 400, 320]) {
-  test(`landing demo film loads, plays, and fits its frame at ${width}px`, async ({ page }) => {
+  test(`landing demo film loads, plays, and fits its frame at ${width}px`, async ({ page, context, baseURL }) => {
+    await pinLandingArm(context, baseURL!, "agent-computer"); // the film lives on the agent-computer arm
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
     const frameEl = page.locator('iframe[src="/landing/commute-demo.html"]');

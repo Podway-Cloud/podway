@@ -158,10 +158,36 @@ export const AGENT_COMPUTER_LANDING = {
   ...AGENT_COMPUTER_LANDING_TAXONOMY_2026_08,
   id: "landing-agent-computer-2026-08-real-home-cloud",
   label: "Landing: real home + cloud VM (sole page · A/A validation)",
-  deliveryMode: "validation" as LandingDeliveryMode,
+  deliveryMode: "historical" as LandingDeliveryMode,
   cookie: {
     visitor: "pb_landing_visitor",
     variant: "pb_landing_agent_computer_real_home_variant",
+    maxAgeSeconds: 60 * 60 * 24 * 90,
+  },
+} as const satisfies LandingExperimentDefinition;
+
+// Decision (2026-10-06, owner): the second homepage arm is the self-hosted AI admin landing, not the
+// never-served "outcomes" A/A arm. A real 50/50 A/B under a NEW id; the real-home A/A run above becomes
+// history so its assignments and events stay queryable.
+export const COMPUTER_VS_SELFHOST_LANDING = {
+  ...common,
+  id: "landing-computer-vs-selfhost-2026-10",
+  label: "Landing: agent computer vs self-hosted AI admin",
+  hypothesis:
+    "Some visitors activate more when Podway is presented as an AI admin that runs and safely upgrades their self-hosted apps, rather than as a cloud computer for their coding agent.",
+  variants: ["agent-computer", "selfhost"],
+  deliveryMode: "measured" as LandingDeliveryMode,
+  allocation: { "agent-computer": 50, selfhost: 50 },
+  fallbackVariant: "agent-computer",
+  validationVariant: "agent-computer",
+  crawlerVariant: "agent-computer",
+  observationWindow:
+    "Minimum 14 full measured days and 100 eligible exposures per variant; treat this as an operational floor, not automatic statistical proof.",
+  minimumExposuresPerVariant: 100,
+  baseline: "The agent-computer landing as served during the 2026-08 real-home A/A validation.",
+  cookie: {
+    visitor: "pb_landing_visitor",
+    variant: "pb_landing_computer_vs_selfhost_variant",
     maxAgeSeconds: 60 * 60 * 24 * 90,
   },
 } as const satisfies LandingExperimentDefinition;
@@ -197,10 +223,11 @@ export const LANDING_EXPERIMENTS = [
   AGENT_COMPUTER_LANDING_2026_08,
   AGENT_COMPUTER_LANDING_TAXONOMY_2026_08,
   AGENT_COMPUTER_LANDING,
+  COMPUTER_VS_SELFHOST_LANDING,
   SELFHOST_HOMEPAGE_CONTROL,
 ] as const satisfies readonly LandingExperimentDefinition[];
 
-export const ACTIVE_LANDING_EXPERIMENT = AGENT_COMPUTER_LANDING;
+export const ACTIVE_LANDING_EXPERIMENT = COMPUTER_VS_SELFHOST_LANDING;
 // Compatibility alias for call sites that only operate on the active acquisition experiment.
 export const LANDING_EXPERIMENT = ACTIVE_LANDING_EXPERIMENT;
 

@@ -34,8 +34,12 @@ export function middleware(req: NextRequest) {
     url.pathname = "/signin";
     url.search = "";
     const response = NextResponse.redirect(url);
-    response.cookies.delete(LANDING_EXPERIMENT.cookie.variant);
-    response.cookies.delete(LANDING_EXPERIMENT.cookie.visitor);
+    // A standalone /selfhost visitor must not be credited to whatever homepage arm they once saw — but
+    // a visitor IN the selfhost arm signs in through here too, and must keep their attribution.
+    if (req.cookies.get(LANDING_EXPERIMENT.cookie.variant)?.value !== "selfhost") {
+      response.cookies.delete(LANDING_EXPERIMENT.cookie.variant);
+      response.cookies.delete(LANDING_EXPERIMENT.cookie.visitor);
+    }
     return response;
   }
 

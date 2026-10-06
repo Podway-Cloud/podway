@@ -27,8 +27,8 @@ async function freshDb(): Promise<Database> {
 describe("landing panel store", () => {
   it("setPinnedDefault pins without changing the run status", async () => {
     const db = await freshDb();
-    const runtime = await setPinnedDefault("admin", "outcomes", LANDING_EXPERIMENT.id, db);
-    expect(runtime.pinnedVariant).toBe("outcomes");
+    const runtime = await setPinnedDefault("admin", "selfhost", LANDING_EXPERIMENT.id, db);
+    expect(runtime.pinnedVariant).toBe("selfhost");
     // The experiment is still running — setting a default must not stop it.
     expect(runtime.status).toBe("active");
     await expect(
@@ -38,18 +38,18 @@ describe("landing panel store", () => {
 
   it("setRunningStatus toggles status and stopping keeps the pinned default", async () => {
     const db = await freshDb();
-    await setPinnedDefault("admin", "outcomes", LANDING_EXPERIMENT.id, db);
+    await setPinnedDefault("admin", "selfhost", LANDING_EXPERIMENT.id, db);
 
     const stopped = await setRunningStatus("admin", false, LANDING_EXPERIMENT.id, db);
     expect(stopped.status).toBe("stopped");
     expect(stopped.stoppedAt).not.toBeNull();
     // Stopping keeps the current default — the pin is untouched.
-    expect(stopped.pinnedVariant).toBe("outcomes");
+    expect(stopped.pinnedVariant).toBe("selfhost");
 
     const restarted = await setRunningStatus("admin", true, LANDING_EXPERIMENT.id, db);
     expect(restarted.status).toBe("active");
     expect(restarted.stoppedAt).toBeNull();
-    expect(restarted.pinnedVariant).toBe("outcomes");
+    expect(restarted.pinnedVariant).toBe("selfhost");
   });
 
   it("getPanelData reports per-variant visitors/conversions and resolves the served variant", async () => {
@@ -64,7 +64,7 @@ describe("landing panel store", () => {
       db,
     );
     await recordLandingEvent(
-      { visitorId: "visitor_oc_00000000001", variant: "outcomes", type: "landing_exposure" },
+      { visitorId: "visitor_oc_00000000001", variant: "selfhost", type: "landing_exposure" },
       db,
     );
 
@@ -73,7 +73,7 @@ describe("landing panel store", () => {
     expect(panel).not.toBeNull();
     expect(panel.servedVariant).toBe(LANDING_EXPERIMENT.fallbackVariant);
     const ac = panel.rows.find((r) => r.variant === "agent-computer")!;
-    const oc = panel.rows.find((r) => r.variant === "outcomes")!;
+    const oc = panel.rows.find((r) => r.variant === "selfhost")!;
     expect(ac.visitors).toBe(1);
     expect(ac.conversions).toBe(1);
     expect(oc.visitors).toBe(1);
@@ -81,13 +81,13 @@ describe("landing panel store", () => {
     expect(panel.totalVisitors).toBe(2);
 
     // Pin outcomes as default, then stop: the served variant follows the pin.
-    await setPinnedDefault("admin", "outcomes", LANDING_EXPERIMENT.id, db);
+    await setPinnedDefault("admin", "selfhost", LANDING_EXPERIMENT.id, db);
     await setRunningStatus("admin", false, LANDING_EXPERIMENT.id, db);
     panel = (await getPanelData(LANDING_EXPERIMENT.id, db))!;
     expect(panel.status).toBe("stopped");
-    expect(panel.pinnedVariant).toBe("outcomes");
-    expect(panel.servedVariant).toBe("outcomes");
-    expect(panel.rows.find((r) => r.variant === "outcomes")!.isDefault).toBe(true);
-    expect(panel.rows.find((r) => r.variant === "outcomes")!.isControl).toBe(true);
+    expect(panel.pinnedVariant).toBe("selfhost");
+    expect(panel.servedVariant).toBe("selfhost");
+    expect(panel.rows.find((r) => r.variant === "selfhost")!.isDefault).toBe(true);
+    expect(panel.rows.find((r) => r.variant === "selfhost")!.isControl).toBe(true);
   });
 });

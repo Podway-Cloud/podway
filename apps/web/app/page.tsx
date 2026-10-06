@@ -119,7 +119,9 @@ export default async function Home() {
       </>
     );
   }
-  const landing = variant === "agent-home"
+  const landing = variant === "selfhost"
+    ? <SelfhostLanding user={user} />
+    : variant === "agent-home"
     ? <AgentHomeLanding user={user} />
     : variant === "agent-computer"
       ? <AgentComputerLanding user={user} />

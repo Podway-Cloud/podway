@@ -349,3 +349,16 @@ export async function seedReport(fp: string, summary: string, area = "cli", coun
     await c.end();
   }
 }
+
+/** Pin this browser context to one homepage A/B arm (landing-computer-vs-selfhost-2026-10), for tests
+ * that assert one landing's content; arm-neutral tests should NOT pin, so they cover both arms. */
+export async function pinLandingArm(
+  context: import("@playwright/test").BrowserContext,
+  baseURL: string,
+  arm: "agent-computer" | "selfhost",
+): Promise<void> {
+  await context.addCookies([
+    { name: "pb_landing_computer_vs_selfhost_variant", value: arm, url: baseURL },
+    { name: "pb_landing_visitor", value: "visitor_e2e0000000000000", url: baseURL },
+  ]);
+}

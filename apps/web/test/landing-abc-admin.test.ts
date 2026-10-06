@@ -22,19 +22,18 @@ afterEach(() => {
 });
 
 describe("A/B/C delivery and admin diagnostics", () => {
-  it("serves agent-computer to everyone as an A/A validation; outcomes kept but never shown", async () => {
+  it("runs a MEASURED 50/50 A/B: agent-computer vs selfhost (owner, 2026-10-06)", async () => {
     vi.stubEnv("PODWAY_LANDING_EXPERIMENT_MODE", "");
     vi.resetModules();
     const config = await import("../lib/landing-experiment-config");
     const active = config.ACTIVE_LANDING_EXPERIMENT;
-    // No measured winner is read — everyone SEES agent-computer (the validationVariant).
-    expect(active.deliveryMode).toBe("validation");
-    expect(active.validationVariant).toBe("agent-computer");
-    // A/A: 50/50 assignment across two arms; the outcomes arm's CONTENT is never served.
-    expect(active.allocation).toEqual({ "agent-computer": 50, outcomes: 50 });
-    expect(active.variants).not.toContain("agent-home");
-    expect(active.id).toBe("landing-agent-computer-2026-08-real-home-cloud");
-    expect(active.cookie.variant).toBe("pb_landing_agent_computer_real_home_variant");
+    expect(active.id).toBe("landing-computer-vs-selfhost-2026-10");
+    expect(active.deliveryMode).toBe("measured"); // each visitor SEES their assigned arm
+    expect(active.allocation).toEqual({ "agent-computer": 50, selfhost: 50 });
+    expect(active.variants).not.toContain("outcomes");
+    expect(active.cookie.variant).toBe("pb_landing_computer_vs_selfhost_variant");
+    expect(active.crawlerVariant).toBe("agent-computer"); // SEO stays on one stable page
+    expect(config.AGENT_COMPUTER_LANDING.deliveryMode).toBe("historical");
     expect(config.AGENT_COMPUTER_LANDING_TAXONOMY_2026_08.deliveryMode).toBe("historical");
     expect(config.AGENT_COMPUTER_LANDING_TAXONOMY_2026_08.id).toBe(
       "landing-agent-computer-2026-08-taxonomy",
@@ -55,6 +54,7 @@ describe("A/B/C delivery and admin diagnostics", () => {
   });
 
   it("renders all semantic variants without a binary root ternary", () => {
+    expect(rootPage).toContain('variant === "selfhost"');
     expect(rootPage).toContain('variant === "agent-home"');
     expect(rootPage).toContain('variant === "agent-computer"');
     expect(rootPage).toContain('deliveryMode === "measured"');

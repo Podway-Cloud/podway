@@ -12,10 +12,13 @@ test.describe("access gating", () => {
     // Match the CTA by DESTINATION, not its label: the headline CTA is positioning copy
     // (it has been "request alpha access" and is now "Give Claude a real home"), so asserting
     // the words makes this fail on every copy change while testing nothing about access.
-    const cta = page.locator('a[href="/signin"]').first();
+    // Either homepage arm (A/B): agent-computer links /signin, selfhost links /selfhost/signin (→ /signin).
+    const cta = page.locator('a[href="/signin"], a[href="/selfhost/signin"]').first();
     await expect(cta).toBeVisible();
     await cta.click();
-    await expect(page).toHaveURL(/\/signin/);
+    // The selfhost arm hops /selfhost/signin → 307 → /signin, which turns the client navigation into a
+    // full load (plus a cold dev compile of /signin) — slower than the 5s default, not broken.
+    await expect(page).toHaveURL(/\/signin/, { timeout: 15_000 });
   });
 
   test("landing sends an authenticated user to the dashboard", async ({ page }) => {
@@ -101,7 +104,7 @@ test.describe("access gating", () => {
     // The auto-advancing example tabs went with the outcomes landing. The reduced-motion
     // invariant that remains testable without them: nothing animates the page into a
     // different scroll position, and the CTA is still reachable after the old rotate window.
-    const cta = page.locator('a[href="/signin"]').first();
+    const cta = page.locator('a[href="/signin"], a[href="/selfhost/signin"]').first(); // either A/B arm
     await expect(cta).toBeVisible();
     await page.waitForTimeout(4500);
     await expect(cta).toBeVisible();

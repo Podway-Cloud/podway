@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login, launchPod } from "./helpers";
+import { login, launchPod, pinLandingArm } from "./helpers";
 
 test.describe("dashboard shell + cards", () => {
   test("create-a-pod page shows the marketplace gallery", async ({ page }) => {
@@ -125,12 +125,13 @@ test.describe("dashboard on mobile", () => {
 });
 
 test.describe("landing page, signed in", () => {
-  test("shows the user's avatar beside Dashboard without growing the nav row", async ({ page, browser }) => {
+  test("shows the user's avatar beside Dashboard without growing the nav row", async ({ page, browser, baseURL }) => {
     // login() signs in through the real auth API using the PAGE's request context,
     // and it rejects the call once the page has navigated to an origin
     // ("MISSING_OR_NULL_ORIGIN"). So sign in first, and take the signed-out
     // baseline from a separate clean context rather than reordering this.
     await login(page, "approved");
+    await pinLandingArm(page.context(), baseURL!, "agent-computer"); // asserts that page's nav
     await page.goto("/");
     const nav = page.getByRole("navigation", { name: /primary/i });
     const dash = nav.getByRole("link", { name: /Dashboard/ });
@@ -145,6 +146,7 @@ test.describe("landing page, signed in", () => {
     // The avatar is taller than the text and deliberately overflows its row via a
     // negative margin; what must not change is the header row's height.
     const signedOut = await browser.newContext({ baseURL: new URL(page.url()).origin });
+    await pinLandingArm(signedOut, baseURL!, "agent-computer");
     const anon = await signedOut.newPage();
     await anon.goto("/");
     const navOut = anon.getByRole("navigation", { name: /primary/i });

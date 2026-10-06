@@ -12,18 +12,21 @@ Prior experiments' assignment data and cookies SHALL remain historically distinc
 In a `validation` delivery mode the system SHALL RENDER the experiment's `validationVariant` to EVERY
 eligible visitor regardless of their assigned arm — the split validates the pipeline without a
 content difference (an A/A); only a `measured` mode renders the assigned arm. The active experiment
-(2026-08) is `landing-agent-computer-2026-08-real-home-cloud`: a two-arm A/A whose `validationVariant` is
-`agent-computer`, so every visitor sees the agent-computer landing; `outcomes` is the second arm, kept
-for a future test but never rendered; `agent-home` is retained only for history. The preceding
-`landing-agent-computer-2026-08-taxonomy` and `landing-agent-computer-2026-08` definitions SHALL
-remain registered as historical so their assignments and events stay queryable.
+(2026-10, owner decision) is `landing-computer-vs-selfhost-2026-10`: a MEASURED 50/50 A/B whose arms are
+`agent-computer` and `selfhost` — each visitor SEES their assigned arm, and the `selfhost` arm renders the
+self-hosted AI admin landing at `/`. Crawlers get `agent-computer`. The previous real-home/cloud A/A
+(`landing-agent-computer-2026-08-real-home-cloud`, whose second arm `outcomes` was never rendered) and the
+earlier `landing-agent-computer-2026-08-taxonomy` and `landing-agent-computer-2026-08` definitions SHALL
+remain registered as historical so their assignments and events stay queryable. A visitor in the
+`selfhost` arm SHALL keep their assignment through `/selfhost/signin` (it clears the assignment only for
+visitors of other arms, so a standalone `/selfhost` visit is never credited to a homepage arm).
 
 #### Scenario: New eligible visitor opens the landing page
 - **GIVEN** a signed-out human visitor has no assignment for the active experiment
 - **WHEN** the visitor requests `/`
 - **THEN** the system SHALL assign one of the active experiment's arms using the configured allocation,
-  persist that assignment, and — in validation mode — render the `validationVariant` (agent-computer)
-  regardless of the assigned arm
+  persist that assignment, and — in measured mode — render the assigned arm (`agent-computer` or the
+  `selfhost` landing); in validation mode it would render the `validationVariant` regardless of arm
 
 #### Scenario: Assigned visitor returns
 - **GIVEN** a visitor has a valid active real-home/cloud assignment

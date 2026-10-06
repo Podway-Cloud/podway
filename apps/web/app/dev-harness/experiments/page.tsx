@@ -14,7 +14,7 @@ const NAV: NavItem[] = [
 ];
 
 const MOCK: LandingPanelData = {
-  experimentId: "landing-agent-computer-2026-08-real-home-cloud",
+  experimentId: "landing-computer-vs-selfhost-2026-10",
   label: "Landing: real home + cloud VM",
   status: "active",
   deliveryMode: "measured",

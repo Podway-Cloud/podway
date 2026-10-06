@@ -22,6 +22,7 @@ import {
 import {
   LANDING_EXPERIMENT,
   AGENT_COMPUTER_LANDING_2026_08,
+  AGENT_COMPUTER_LANDING,
   AGENT_COMPUTER_LANDING_TAXONOMY_2026_08,
   JULY_LANDING_EXPERIMENT,
   AUGUST_LANDING_EXPERIMENT,
@@ -50,11 +51,11 @@ async function freshDb(): Promise<Database> {
 
 describe("landing experiment configuration", () => {
   it("has stable semantic assignment boundaries and strict allowlists", () => {
-    // Active experiment is the agent-computer A/A: 50/50 [agent-computer, outcomes].
+    // Active experiment is the measured A/B: 50/50 [agent-computer, selfhost].
     expect(chooseLandingVariant(0)).toBe("agent-computer");
     expect(chooseLandingVariant(0.49)).toBe("agent-computer");
-    expect(chooseLandingVariant(0.5)).toBe("outcomes");
-    expect(chooseLandingVariant(0.99)).toBe("outcomes");
+    expect(chooseLandingVariant(0.5)).toBe("selfhost");
+    expect(chooseLandingVariant(0.99)).toBe("selfhost");
     // agent-home is still a valid variant globally (kept for history), just not in the active split.
     expect(chooseLandingVariant(0.5, AUGUST_LANDING_EXPERIMENT)).toBe("agent-computer");
     expect(AUGUST_LANDING_EXPERIMENT.variants).toEqual([
@@ -93,12 +94,22 @@ describe("landing experiment request assignment", () => {
     expect(response.cookies.get(LANDING_EXPERIMENT.cookie.visitor)?.value).toBe("");
   });
 
+  it("/selfhost/signin keeps a selfhost-arm visitor's attribution, drops any other arm's", () => {
+    const go = (variant: string) =>
+      middleware(new NextRequest("https://podway.io/selfhost/signin", {
+        headers: { cookie: `${LANDING_EXPERIMENT.cookie.variant}=${variant}; ${LANDING_EXPERIMENT.cookie.visitor}=visitor_1234567890abcdef` },
+      }));
+    // Deleting sets an expired cookie on the response; keeping sets nothing.
+    expect(go("selfhost").cookies.get(LANDING_EXPERIMENT.cookie.variant)).toBeUndefined();
+    expect(go("agent-computer").cookies.get(LANDING_EXPERIMENT.cookie.variant)?.value).toBe("");
+  });
+
   it("assigns on the first root response and preserves a valid repeat assignment", () => {
     vi.spyOn(Math, "random").mockReturnValue(0.75);
     const first = middleware(new NextRequest("https://podway.cloud/"));
     const variant = first.cookies.get(LANDING_EXPERIMENT.cookie.variant)?.value;
     const visitor = first.cookies.get(LANDING_EXPERIMENT.cookie.visitor)?.value;
-    expect(variant).toBe("outcomes"); // 0.75 → the second A/A arm (still SERVED agent-computer)
+    expect(variant).toBe("selfhost"); // 0.75 → the second arm, selfhost (measured: it is SERVED)
     expect(isLandingVisitorId(visitor)).toBe(true);
 
     const repeat = middleware(
@@ -111,7 +122,7 @@ describe("landing experiment request assignment", () => {
     expect(repeat.cookies.getAll()).toHaveLength(0);
     expect(
       repeat.headers.get(`x-middleware-request-${LANDING_EXPERIMENT.requestHeaders.variant}`),
-    ).toBe("outcomes");
+    ).toBe("selfhost");
   });
 
   it("recovers invalid cookies, excludes crawlers, and leaves previews untouched", () => {
@@ -148,7 +159,7 @@ describe("landing experiment persistence", () => {
     const db = await freshDb();
     const input = {
       visitorId: "visitor_1234567890abcdef",
-      variant: "outcomes" as const,
+      variant: "selfhost" as const,
       type: "landing_exposure" as const,
       referrer: "https://example.com/post",
       utmSource: "newsletter",
@@ -227,8 +238,8 @@ describe("landing experiment persistence", () => {
     expect(stopped.status).toBe("stopped");
     expect(stopped.pinnedVariant).toBe("agent-computer"); // the active fallback
 
-    const pinned = await pinExperimentVariant("admin", LANDING_EXPERIMENT.id, "outcomes", db);
-    expect(pinned.pinnedVariant).toBe("outcomes");
+    const pinned = await pinExperimentVariant("admin", LANDING_EXPERIMENT.id, "selfhost", db);
+    expect(pinned.pinnedVariant).toBe("selfhost");
     await expect(pinExperimentVariant("admin", LANDING_EXPERIMENT.id, "unknown", db)).rejects.toThrow(
       /Unknown landing variant/,
     );
@@ -339,6 +350,7 @@ describe("landing experiment persistence", () => {
     expect((await listExperimentSummaries(db)).map((entry) => entry.id)).toEqual([
       SELFHOST_HOMEPAGE_CONTROL.id,
       LANDING_EXPERIMENT.id,
+      AGENT_COMPUTER_LANDING.id,
       AGENT_COMPUTER_LANDING_TAXONOMY_2026_08.id,
       AGENT_COMPUTER_LANDING_2026_08.id,
       AUGUST_LANDING_EXPERIMENT.id,
@@ -352,7 +364,7 @@ describe("landing experiment persistence", () => {
       Array.from({ length: 30 }, (_, index) => ({
         experimentId: LANDING_EXPERIMENT.id,
         visitorId: `visitor_balance_${String(index).padStart(4, "0")}`,
-        variant: "outcomes" as const,
+        variant: "selfhost" as const,
         eligible: true,
         utmSource: "launch",
         utmCampaign: "abc",
@@ -362,7 +374,7 @@ describe("landing experiment persistence", () => {
     const detail = await getExperimentDetail(LANDING_EXPERIMENT.id, db);
     expect(detail?.assignmentBalance.status).toBe("warning");
     expect(detail?.acquisition[0]).toMatchObject({
-      variant: "outcomes",
+      variant: "selfhost",
       source: "launch",
       campaign: "abc",
       visitors: 30,
