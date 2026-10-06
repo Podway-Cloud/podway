@@ -594,6 +594,14 @@ describe("IncusProvider", () => {
   });
 });
 describe("refreshSpecPermissions", () => {
+  it("re-syncs the relentless switch from the DB (the spec is otherwise preserved verbatim)", () => {
+    // podway dev, 2026-10-06: dashboard ON, but the pod kept the pre-update spec's hold:false — so the
+    // gate stripped the rules and the owner's switch silently did nothing.
+    const stale = JSON.stringify({ slug: "p1", relentless: { hold: false, wake: false } });
+    const out = JSON.parse(refreshSpecPermissions(stale, undefined, undefined, undefined, { hold: true, wake: false }));
+    expect(out.relentless).toEqual({ hold: true, wake: false });
+    expect(refreshSpecPermissions(stale, undefined)).toBe(stale); // not passed ⇒ untouched
+  });
   const stale = JSON.stringify({
     slug: "dual-bear-fb14",
     envName: "byo-project",

@@ -107,6 +107,7 @@ export function refreshSpecPermissions(
   permissions: unknown,
   name?: string | null,
   agentAuth?: string | null,
+  relentless?: { hold: boolean; wake: boolean },
 ): string {
   try {
     const spec = JSON.parse(specJson) as unknown;
@@ -143,6 +144,13 @@ export function refreshSpecPermissions(
         s.agentAuth !== agentAuth
       ) {
         s.agentAuth = agentAuth;
+        changed = true;
+      }
+      // The relentless switch, same reasoning: the dashboard (DB) is the source of truth, and a
+      // best-effort patchPodSpec that missed (pod restarting) left the preserved spec on the old value
+      // forever — podway dev kept hold:false while the owner had it ON (2026-10-06).
+      if (relentless && JSON.stringify(s.relentless) !== JSON.stringify(relentless)) {
+        s.relentless = relentless;
         changed = true;
       }
       if (healCockpitUrl(s)) changed = true;
@@ -694,6 +702,7 @@ export class IncusProvider implements SandboxProvider {
       name?: string | null;
       /** DB `pods.agentAuth`. Refreshed into the preserved spec — see refreshSpecPermissions. */
       agentAuth?: string | null;
+      relentless?: { hold: boolean; wake: boolean };
     },
   ): Promise<PodInfo> {
     const stage = (s: string) => { try { onStage?.(s); } catch { /* progress is best-effort */ } };
@@ -800,6 +809,7 @@ export class IncusProvider implements SandboxProvider {
           opts?.permissions,
           opts?.name,
           opts?.agentAuth,
+          opts?.relentless,
         );
         await this.incus.pushFile(id, "/etc/podway/pod-spec.json", Buffer.from(specToPush, "utf8"));
         // Deliver the CURRENT env .claude layer with the update. The recreate wiped
@@ -923,13 +933,13 @@ export class IncusProvider implements SandboxProvider {
    * throws. */
   async refreshConfig(
     id: string,
-    opts: { claudeFiles?: { guest_path: string; raw_value: string }[]; permissions?: unknown },
+    opts: { claudeFiles?: { guest_path: string; raw_value: string }[]; permissions?: unknown; relentless?: { hold: boolean; wake: boolean } },
   ): Promise<{ refreshed: boolean; note?: string }> {
     try {
       // Refresh the permission preset in the live spec (same freshening as updateImage).
       const cur = await this.incus.exec(id, ["cat", "/etc/podway/pod-spec.json"]);
       if (cur.exitCode === 0 && cur.stdout) {
-        const specToPush = refreshSpecPermissions(cur.stdout, opts.permissions);
+        const specToPush = refreshSpecPermissions(cur.stdout, opts.permissions, undefined, undefined, opts.relentless);
         if (specToPush !== cur.stdout)
           await this.incus.pushFile(id, "/etc/podway/pod-spec.json", Buffer.from(specToPush, "utf8"));
       }

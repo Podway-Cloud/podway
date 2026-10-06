@@ -3491,6 +3491,7 @@ export class PodService {
     const result = await provider.refreshConfig(id, {
       claudeFiles: payload.claudeFiles,
       permissions: payload.permissions,
+      relentless: { hold: rec.relentlessHold, wake: rec.relentlessWake },
     });
     // Record the delivered hash so the drift sweep treats the pod as in-sync (skip on a resolve
     // failure — we didn't actually deliver the current layer, so don't claim we did).
@@ -3565,6 +3566,7 @@ export class PodService {
     const result = await prov.refreshConfig(rec.id, {
       claudeFiles: payload.claudeFiles,
       permissions: payload.permissions,
+      relentless: { hold: rec.relentlessHold, wake: rec.relentlessWake },
     });
     // Only record the new hash once the layer was actually delivered; a false record would suppress
     // future retries. `refreshed:false` (image predates the in-pod script) still DELIVERED the bytes,
@@ -3862,7 +3864,13 @@ export class PodService {
       // DB — otherwise a dashboard rename is frozen on-pod and the Claude-app session reverts (2026-08-30).
       // agentAuth travels with the update for the same reason `name` does: the pod-spec is preserved
       // verbatim across a recreate, so the DB is the only thing that can correct a drifted value.
-      { claudeFiles, permissions, name: rec.name ?? null, agentAuth: rec.agentAuth ?? null },
+      {
+        claudeFiles,
+        permissions,
+        name: rec.name ?? null,
+        agentAuth: rec.agentAuth ?? null,
+        relentless: { hold: rec.relentlessHold, wake: rec.relentlessWake },
+      },
     ));
     const to = info.imageDigest ?? image.split("@")[1] ?? null;
     // The recreate just delivered this env's current layer — record its hash so the drift sweep

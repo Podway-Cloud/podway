@@ -204,6 +204,15 @@ only when the spec carries no `relentless` key, so a stale local file can never 
 - **WHEN** the spec says hold off and `~/.podway/relentless.json` says hold on
 - **THEN** the stop and session-start hooks SHALL treat relentless as OFF
 
+The pod's copy of the switch SHALL be re-synced from the database on every image update and every
+config refresh (including the drift sweep), so a live push that missed — e.g. the pod was restarting —
+can never leave the pod on a stale value. (podway dev kept `hold:false` across an update while the
+owner had it ON, 2026-10-06.)
+
+#### Scenario: A missed live push is healed on the next update or refresh
+- **WHEN** the dashboard says hold ON but the pod's spec still says OFF
+- **THEN** the next image update or config refresh SHALL write hold ON into the pod's spec
+
 #### Scenario: Hold switched off
 - **WHEN** the owner switches the hold off for a pod with Claude and Codex
 - **THEN** neither agent's rules (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `.claude/rules`) nor skills SHALL contain the relentless mechanism

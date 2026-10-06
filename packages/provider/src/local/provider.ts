@@ -350,12 +350,12 @@ export class LocalProvider implements SandboxProvider {
    * refresh script. Never throws. */
   async refreshConfig(
     id: string,
-    opts: { claudeFiles?: { guest_path: string; raw_value: string }[]; permissions?: unknown },
+    opts: { claudeFiles?: { guest_path: string; raw_value: string }[]; permissions?: unknown; relentless?: { hold: boolean; wake: boolean } },
   ): Promise<{ refreshed: boolean; note?: string }> {
     try {
       const cur = await this.exec(id, ["cat", "/etc/podway/pod-spec.json"]);
       if (cur.exitCode === 0 && cur.stdout) {
-        const specToPush = refreshSpecPermissions(cur.stdout, opts.permissions);
+        const specToPush = refreshSpecPermissions(cur.stdout, opts.permissions, undefined, undefined, opts.relentless);
         if (specToPush !== cur.stdout)
           await this.writeFile(id, "/etc/podway/pod-spec.json", specToPush);
       }
@@ -646,7 +646,7 @@ export class LocalProvider implements SandboxProvider {
     id: string,
     image: string,
     onStage?: UpdateStage,
-    opts?: { claudeFiles?: { guest_path: string; raw_value: string }[]; permissions?: unknown },
+    opts?: { claudeFiles?: { guest_path: string; raw_value: string }[]; permissions?: unknown; relentless?: { hold: boolean; wake: boolean } },
   ): Promise<PodInfo> {
     // Self-host image update = recreate on the new pod-base, REUSING the /home/dev volume so the
     // pod's work, agent login, secrets vault decryption, and gh token all survive. The container
@@ -724,7 +724,7 @@ export class LocalProvider implements SandboxProvider {
     }
     for (const f of opts?.claudeFiles ?? []) await this.writeFileB64(id, f.guest_path, f.raw_value);
     if (preservedSpec) {
-      await this.writeFileB64(id, "/etc/podway/pod-spec.json", b64(refreshSpecPermissions(preservedSpec, opts?.permissions)));
+      await this.writeFileB64(id, "/etc/podway/pod-spec.json", b64(refreshSpecPermissions(preservedSpec, opts?.permissions, undefined, undefined, opts?.relentless)));
     }
     return this.getPod(id);
   }
