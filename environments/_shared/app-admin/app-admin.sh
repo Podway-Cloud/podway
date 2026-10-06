@@ -72,8 +72,18 @@ db_dump() { # -> writes the dump to $1
 db_restore() { # <- restores from $1
   case "$DB_TYPE" in
     none) : ;;
-    postgres) $DC exec -T "$DB_SERVICE" pg_restore -U "$DB_USER" -d "$DB_NAME" --clean --if-exists --no-owner < "$1" >/dev/null 2>&1 || true ;;
-    mysql) $DC exec -T "$DB_SERVICE" sh -c "exec mysql -u$DB_USER $DB_NAME" < "$1" >/dev/null 2>&1 || true ;;
+    # Rebuild the database from scratch, then load the dump. `pg_restore --clean` dropped only objects
+    # IN the dump, so tables/columns a failed release's migration ADDED survived the "rollback" — the app
+    # looked healthy, then the next upgrade died on "already exists" (proved on Umami 3.1→3.3,
+    # 2026-10-06). Errors are no longer swallowed: a failed restore must surface as MANUAL ATTENTION.
+    postgres)
+      $DC exec -T "$DB_SERVICE" psql -U "$DB_USER" -d postgres -v ON_ERROR_STOP=1 -q \
+        -c "select pg_terminate_backend(pid) from pg_stat_activity where datname = '$DB_NAME' and pid <> pg_backend_pid()" \
+        -c "drop database if exists \"$DB_NAME\"" -c "create database \"$DB_NAME\" owner \"$DB_USER\"" >/dev/null || return 1
+      $DC exec -T "$DB_SERVICE" pg_restore -U "$DB_USER" -d "$DB_NAME" --no-owner --exit-on-error < "$1" >/dev/null || return 1 ;;
+    mysql)
+      $DC exec -T "$DB_SERVICE" sh -c "exec mysql -u$DB_USER -e 'drop database if exists \`$DB_NAME\`; create database \`$DB_NAME\`'" >/dev/null || return 1
+      $DC exec -T "$DB_SERVICE" sh -c "exec mysql -u$DB_USER $DB_NAME" < "$1" >/dev/null || return 1 ;;
   esac
 }
 
@@ -123,9 +133,15 @@ do_snapshot() { # -> prints the snapshot dir
 do_restore() { # <snapshot-dir> — restore code(tag)+data(DB+volumes)+key atomically
   local s="$1"; [ -d "$s" ] || { echo "no such snapshot: $s" >&2; exit 1; }
   cp "$s/env" "$DIR/.env"; check_key || exit $?
-  if [ "$DB_TYPE" != none ]; then $DC up -d "$DB_SERVICE"; db_ready; [ -f "$s/db.dump" ] && db_restore "$s/db.dump"; fi
+  # Stop EVERY app container first: the failed release (and any sidecar on its image, e.g. Twenty's
+  # worker) must not keep writing while its data is being replaced underneath it.
+  $DC stop >/dev/null 2>&1 || true
+  if [ "$DB_TYPE" != none ]; then
+    $DC up -d "$DB_SERVICE" && db_ready || return 1
+    if [ -f "$s/db.dump" ]; then db_restore "$s/db.dump" || { echo "!! database restore FAILED from $s/db.dump" >&2; return 1; }; fi
+  fi
   vol_tar load "$s"
-  $DC up -d "$APP_SERVICE"
+  $DC up -d   # all services, so a sidecar on the app image comes back on the OLD tag too
 }
 
 cmd="${1:-status}"
@@ -152,7 +168,7 @@ case "$cmd" in
   status)   $DC ps --format '{{.Service}} {{.Status}}'; echo "image: $(grep "^${APP_IMAGE_VAR}=" .env)" ;;
   snapshot) s=$(do_snapshot); echo "snapshot -> $s ($(du -sh "$s" | cut -f1))" ;;
   check-key) check_key && echo "KEY OK" ;;
-  restore)  do_restore "$2"; health && echo "RESTORED healthy from $2" || { echo "RESTORE UNHEALTHY" >&2; exit 1; } ;;
+  restore)  do_restore "$2" && health && echo "RESTORED healthy from $2" || { echo "RESTORE UNHEALTHY" >&2; exit 1; } ;;
   safe-upgrade)
     target="$2"; old="$(grep "^${APP_IMAGE_VAR}=" .env | cut -d= -f2)"
     check_key || exit $?
@@ -161,11 +177,11 @@ case "$cmd" in
     if ! sed -i "s|^${APP_IMAGE_VAR}=.*|${APP_IMAGE_VAR}=$target|" .env || ! $DC pull "$APP_SERVICE" 2>/dev/null; then
       echo "!! pull failed for $target — aborting, nothing changed"; sed -i "s|^${APP_IMAGE_VAR}=.*|${APP_IMAGE_VAR}=$old|" .env; exit 2
     fi
-    $DC up -d "$APP_SERVICE"
+    $DC up -d   # every service on the new tag (a sidecar sharing the image, e.g. Twenty's worker, too)
     if health; then echo "++ UPGRADE OK: $target is healthy"; exit 0
     else
-      echo "!! $target did NOT come up healthy — AUTO-ROLLBACK to $old"; do_restore "$snap"
-      if health; then echo "<< ROLLED BACK to $old, healthy — stack intact"; exit 3
+      echo "!! $target did NOT come up healthy — AUTO-ROLLBACK to $old"
+      if do_restore "$snap" && health; then echo "<< ROLLED BACK to $old, healthy — stack intact"; exit 3
       else echo "XX rollback also unhealthy — MANUAL ATTENTION (snapshot: $snap)" >&2; exit 4; fi
     fi ;;
   *) echo "usage: $0 {deploy|status|snapshot|check-key|safe-upgrade <tag>|restore <snap>}" >&2; exit 1 ;;

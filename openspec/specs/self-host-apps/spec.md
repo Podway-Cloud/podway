@@ -29,6 +29,21 @@ after, and AUTO-ROLLBACK both the app version and its data if the new version is
 SHALL refuse any upgrade or restore that would change or drop the app's encryption key, since that
 would silently brick stored credentials.
 
+A restore SHALL put the data back EXACTLY as snapshotted: it stops every app container first (the
+failed release and any sidecar on its image must not write during the restore), REBUILDS the database
+from the dump (dropping objects a failed migration added — `pg_restore --clean` alone left them, so the
+next upgrade died on "already exists"), restores the volumes, then starts ALL services on the old tag.
+An upgrade likewise moves ALL services sharing the image (e.g. Twenty's worker), not only the main one.
+A restore error SHALL surface as MANUAL ATTENTION, never as "stack intact". Proven on real migrations
+(2026-10-06): Twenty v2.44.0→v2.45.6, Umami 3.1.0→3.3.1, Gitea 1.27.3→28.0.0 — the new release migrated
+the data, never passed health, and the rollback left the data identical to the snapshot
+(`scripts/incus/app-smoke.sh` REAL-ROLLBACK mode).
+
+#### Scenario: A release that breaks after migrating is fully undone
+- **WHEN** a new release migrates the data and then fails its health probe
+- **THEN** the engine rolls back to the previous release and the data SHALL match the pre-upgrade
+  snapshot exactly — no tables, columns or files from the failed release remain
+
 #### Scenario: A bad upgrade rolls back automatically
 - **WHEN** a `safe-upgrade` to a new version fails its post-upgrade health probe
 - **THEN** the engine restores the pre-upgrade snapshot (code AND data) and the app is healthy again
