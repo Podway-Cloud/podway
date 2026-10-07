@@ -50,6 +50,30 @@ test.describe("cockpit", () => {
     }
   });
 
+  test("the stuck tab bar touches the top of the scroll area — no gap for content to show through", async ({ page }) => {
+    // Owner report 2026-10-07: on desktop the stuck bar sat 28px below the top and scrolled content
+    // showed through the gap. Cause: md:pt-7 on the scrollport (<main>) adds to every sticky `top`.
+    // Short window so even the e2e pod's Settings panel scrolls far enough for the bar to stick.
+    await page.setViewportSize({ width: 1280, height: 420 });
+    await login(page, "approved");
+    const slug = await launchPod(page);
+    await page.goto(`/dashboard/pods/${slug}`);
+    await page.getByRole("tab", { name: /settings/i }).click({ timeout: 25_000 });
+    await page.evaluate(() => {
+      const m = document.querySelector("main");
+      if (m) m.scrollTop = m.scrollHeight;
+    });
+    await page.waitForTimeout(400);
+    const gap = await page.evaluate(() => {
+      const m = document.querySelector("main")!;
+      if (m.scrollHeight - m.clientHeight < 300) return `page too short to stick: ${m.scrollHeight}/${m.clientHeight}`;
+      const main = m.getBoundingClientRect();
+      const bar = document.querySelector('[role="tablist"]')!.closest(".sticky")!.getBoundingClientRect();
+      return Math.round(bar.top - main.top);
+    });
+    expect(gap, `stuck tab bar sits ${gap}px below the top of the scroll area`).toBe(0);
+  });
+
   test("a healthy pod shows no health strip", async ({ page }) => {
     await login(page, "approved");
     const slug = await launchPod(page);
