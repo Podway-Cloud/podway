@@ -4,14 +4,29 @@
 Defines the public landing page: an outcome-led narrative with distinct sections, rotating illustrative build examples, a starter catalog, and subscription positioning, presented truthfully without overstating unavailable capabilities. It ensures the page is responsive, respects reduced-motion and keyboard navigation, carries proper metadata, and emits interaction analytics that degrade gracefully when no backend is present.
 ## Requirements
 ### Requirement: Stable self-host landing
-The public site SHALL expose a self-host-focused landing at `/selfhost` with its own canonical
-metadata. The page SHALL present Claude as the operator, Podway as the persistent computer and
-prepared operating environment, official Claude desktop and mobile apps as the normal interface,
-and the visitor's existing Claude Pro or Max subscription as the agent subscription.
-
-The page SHALL distinguish Podway Cloud from the self-hosted edition, link the latter to the public
-Podway source repository, and qualify Podway as early alpha. Its availability at `/selfhost` SHALL NOT
+The public site SHALL expose an app-hosting landing at `/selfhost` with its own canonical
+metadata. It SHALL explain that supported open-source apps run in dedicated, always-on Podway
+Cloud pods, while the visitor uses an AI admin in Claude with their own Pro or Max subscription.
+The page SHALL pair the headline "Self-host anything. Your AI admin runs it." with copy and a FAQ
+that identify Podway's cloud as the hosting location. Its availability at `/selfhost` SHALL NOT
 depend on whether administrators also promote it to `/`.
+All FAQ questions and answers SHALL be visible in a static Q&A layout without collapse controls.
+The example Claude conversation SHALL type the requests and admin replies in order once it is
+visible, then leave the complete transcript on screen. Reduced-motion visitors SHALL see the
+complete transcript without animation.
+
+The page SHALL explain the sign-in and review steps before launch beside the supported app catalog.
+Its primary hosting calls to action, full-catalog link, and pricing "Pick an app" links SHALL open
+the Apps tab of Create a pod, preserving that destination through sign-in.
+Supported app cards SHALL lead with each app's use, a starting hosting price derived from its
+minimum pod size, and a named service it can replace. They SHALL NOT show a competing price as a
+like-for-like comparison or add a redundant badge or setup label to every card. The self-host
+landing SHALL identify these cards as examples and link to the full supported-app catalog. It SHALL
+use a shared, limited typography scale across sections; only its chat example MAY
+use a distinct monospace face.
+The page SHALL explain where apps run and
+qualify maintenance promises to setup, backups, requested upgrades, problem investigation, and
+recovery after an upgraded app fails its health check.
 
 The route SHALL resolve authentication at request time so returning cloud users see their account
 and dashboard actions rather than an anonymously cached page. In the OSS edition, `/selfhost` SHALL
@@ -19,21 +34,16 @@ redirect to the dashboard instead of exposing cloud marketing metadata on the ow
 When the page is promoted to `/`, the root title, description, canonical URL, Open Graph, and Twitter
 metadata SHALL describe the self-host experience rendered in the body.
 
-After the operating contract and before the hosting choice, the page SHALL show an attributable
-horizontal feed of public self-host maintenance reports for the apps in the supported catalog. Each
-report SHALL name its public author and platform, link to the original GitHub issue or Reddit
-thread, pause while a visitor interacts with it, and become a manually scrollable snap row when
-reduced motion is requested.
-
-Immediately after the supported-app catalog, the page SHALL present the product's operating
-contract: upstream release and security monitoring, automatic application of updates that pass
-clone-based testing, owner approval for risky or breaking changes, and one-click return to the
-last-good state. This contract is the implementation target for the self-hosted AI-admin product.
+Before the supported-app catalog, the page SHALL show source-linked public maintenance reports
+about supported apps. Immediately after the catalog, a features section SHALL cover app setup,
+problem investigation, credential handling, and backup and recovery after a failed upgrade. Its
+included-features list SHALL appear in this section before pricing. It SHALL NOT imply unattended
+upstream monitoring, automatic updates, or that every possible change is reversible.
 
 #### Scenario: Visitor opens the secondary self-host landing
 - **WHEN** a visitor opens `/selfhost`
-- **THEN** the page SHALL render the self-host positioning, supported-app outcomes, hosting choices,
-  early-alpha qualification, Claude subscription message, and Cloud and self-host calls to action
+- **THEN** the page SHALL render the cloud-hosted app offer, supported-app outcomes and starting
+  prices, the launch path, maintenance boundaries, Claude subscription message, and a hosting call to action
 
 #### Scenario: Homepage promotion is disabled
 - **GIVEN** an administrator has chosen Keep only at `/selfhost`
@@ -57,15 +67,15 @@ last-good state. This contract is the implementation target for the self-hosted 
 - **THEN** the root metadata and rendered body SHALL both describe the self-host experience while the
   canonical URL remains `https://podway.io/`
 
-#### Scenario: Visitor evaluates operational trust
+#### Scenario: Visitor evaluates admin features
 - **WHEN** a visitor finishes the supported-app catalog
-- **THEN** the page SHALL explain the monitoring, safe-patching, approval, and rollback contract
-  before showing maintenance reports and hosting choices
+- **THEN** the page SHALL explain setup, troubleshooting, private credentials and upgrade
+  recovery, then list included features before showing hosting prices
 
 #### Scenario: Visitor evaluates the hidden cost of self-hosting
-- **WHEN** a visitor moves from the operating contract toward the hosting choice
-- **THEN** the page SHALL show source-linked reports about the supported apps from real self-hosters
-  in a horizontal feed without inventing identities or presenting the reporters as Podway customers
+- **WHEN** a visitor moves from the hero toward the app catalog
+- **THEN** the page SHALL show source-linked reports about the supported apps without presenting
+  the reporters as Podway customers
 
 ### Requirement: A signed-in visitor is shown the way back to their machines
 

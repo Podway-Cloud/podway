@@ -19,6 +19,7 @@ const SIZE_ONLY_ENV = "byo-project";
  * - `app` is validated against the catalog; unknown/absent falls back to the normal catalog —
  *   NEVER an error page, and NEVER a launch on its own (a pod is only ever created by an
  *   explicit click in the wizard).
+ * - `tab=apps` selects the Apps tab when falling back to the catalog, including after sign-in.
  * - Unauthenticated → sign-in first, carrying `app`+`ref` via the sign-in flow's OWN
  *   round-tripped state: `next=/start?app=…&ref=…` becomes better-auth's `callbackURL`, which
  *   is what GitHub's OAuth `state` round-trips back — so the selection survives the redirect
@@ -30,10 +31,11 @@ const SIZE_ONLY_ENV = "byo-project";
 export default async function StartPage({
   searchParams,
 }: {
-  searchParams: Promise<{ app?: string; ref?: string; name?: string; size?: string }>;
+  searchParams: Promise<{ app?: string; ref?: string; name?: string; size?: string; tab?: string }>;
 }) {
-  const { app, ref: rawRef, name: rawName, size: rawSize } = await searchParams;
+  const { app, ref: rawRef, name: rawName, size: rawSize, tab: rawTab } = await searchParams;
   const ref = sanitizeRef(rawRef);
+  const tab = rawTab === "apps" ? "apps" : null;
   // Optional pod NAME the link can preset (e.g. /start?app=n8n&name=Acme%20automations). Light
   // sanitize only — the wizard + launchPod validate it; absent → the wizard's "my <app>" default.
   const name = rawName?.trim().replace(/\s+/g, " ").slice(0, 60) || undefined;
@@ -49,6 +51,7 @@ export default async function StartPage({
     if (ref) qp.set("ref", ref);
     if (name) qp.set("name", name);
     if (size) qp.set("size", size);
+    if (tab) qp.set("tab", tab);
     const next = `/start${qp.size ? `?${qp.toString()}` : ""}`;
     redirect(`/signin?next=${encodeURIComponent(next)}`);
   }
@@ -63,7 +66,7 @@ export default async function StartPage({
   // catalog (unchanged). Unknown app → catalog (spec: unknown app falls back safely).
   const envSlug = app || (size ? SIZE_ONLY_ENV : undefined);
   const detail = envSlug ? await getEnvironmentDetail(envSlug) : null;
-  if (!detail) redirect("/dashboard/create");
+  if (!detail) redirect(tab === "apps" ? "/dashboard/create?tab=apps" : "/dashboard/create");
 
   // Hand off to the existing prefilled-wizard route. `from=deeplink` marks this as a deep-link
   // create so the wizard pre-generates a name and the pod's post-create moment shows the 2-card

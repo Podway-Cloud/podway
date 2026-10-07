@@ -8,7 +8,7 @@ import { test, expect } from "@playwright/test";
 const COOKIE = "pb_landing_computer_vs_selfhost_variant";
 
 for (const [variant, heading] of [
-  ["selfhost", /Self-host the tools you need/],
+  ["selfhost", /Self-host anything/],
   ["agent-computer", /always-on computer/],
 ] as const) {
   test(`the ${variant} arm is served at /`, async ({ page, context, baseURL }) => {

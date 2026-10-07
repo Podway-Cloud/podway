@@ -66,6 +66,22 @@ test.describe("deep-link onboarding (/start)", () => {
     expect(await accountRef(USERS.approved.email)).toBe("e2e-unknown");
   });
 
+  test("a landing app-catalog link keeps the Apps tab through sign-in", async ({ page }) => {
+    await page.goto("/start?tab=apps&ref=e2e-app-catalog");
+    await page.waitForURL(/\/signin\?next=/);
+    const next = new URL(page.url()).searchParams.get("next");
+    expect(next).toBeTruthy();
+    const carried = new URL(next!, "http://localhost");
+    expect(carried.pathname).toBe("/start");
+    expect(carried.searchParams.get("tab")).toBe("apps");
+    expect(carried.searchParams.get("ref")).toBe("e2e-app-catalog");
+
+    await login(page, "approved");
+    await page.goto(next!);
+    await page.waitForURL(/\/dashboard\/create\?tab=apps$/);
+    await expect(page.getByRole("tab", { name: "Apps" })).toHaveAttribute("data-state", "active");
+  });
+
   test("authed deep link opens the wizard prefilled — app selected, name pre-generated, Create not auto-submitted", async ({
     page,
   }) => {

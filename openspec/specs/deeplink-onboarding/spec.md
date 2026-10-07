@@ -12,6 +12,8 @@ app by slug; `ref` is an opaque attribution source. Visiting `/start`:
 
 - SHALL validate `app` against the catalog; an unknown/absent `app` SHALL fall back to the normal
   catalog rather than error or launch anything.
+- SHALL accept `tab=apps` for catalog links, preserve it through sign-in, and open the Apps tab
+  when no valid app or size launches a prefilled wizard. Other tab values SHALL be ignored.
 - SHALL route an already-authenticated user to the create wizard PREFILLED for `app`, and an
   unauthenticated user to sign-in first (carrying the selection — see the signin-experience delta).
 - SHALL NEVER create a pod on its own. A pod is created only by an explicit user action.
@@ -26,6 +28,11 @@ app by slug; `ref` is an opaque attribution source. Visiting `/start`:
 
 - **WHEN** `/start?app=does-not-exist` is opened
 - **THEN** the user SHALL land on the normal catalog with no error page and no pod created
+
+#### Scenario: App catalog link survives sign-in
+
+- **WHEN** a visitor opens `/start?tab=apps&ref=selfhost-landing` and signs in
+- **THEN** Create a pod SHALL open with the Apps tab active and no pod created
 
 ### Requirement: A deep link MAY preselect a pod size, including a size-only (no-app) launch
 

@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-const title = "Self-host without becoming the sysadmin";
-const socialTitle = `Podway — ${title}`;
+const title = "Host open-source apps with an AI admin";
+const socialTitle = `Podway: ${title}`;
 const description =
-  "Self-host supported open-source tools with an AI admin you work with through the official Claude apps.";
+  "Run supported open-source apps in Podway's always-on cloud pods. Ask your AI admin in Claude for setup, backups, upgrades and help investigating problems.";
 
 export function selfhostLandingMetadata(url: string): Metadata {
   return {
@@ -48,7 +48,7 @@ export function selfhostLandingStructuredData(url: string) {
       {
         "@type": "SoftwareApplication",
         "@id": `${url}#software-application`,
-        name: "Podway Self-host",
+        name: "Podway App Hosting",
         applicationCategory: "DeveloperApplication",
         url,
         description,
