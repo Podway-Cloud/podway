@@ -8,6 +8,7 @@ import { PasteCodeInput } from "@/components/paste-code-input";
 import { qk } from "@/lib/query-keys";
 import { getAgentStates, getPodAuthUrl, reconnectAgent, sendAgentSigninCode } from "@/lib/actions";
 import { signinDone, signinValue } from "@/lib/agent-signin-flow";
+import { SESSION_INTERRUPT_WARNING } from "@/lib/pod-copy";
 import { CopyCodeButton } from "@/components/copy-code-button";
 import { Button } from "@/components/ui/button";
 
@@ -181,7 +182,7 @@ export default function ClaudeSigninWizard({
       )}
       <p className={`${embedded ? "" : "mt-3 "}text-[13.5px] text-muted-foreground`}>
         {mode === "reconnect"
-          ? `Your sign-in expired or was signed out. Reconnect to keep driving ${providerLabel} from your devices.`
+          ? `Reconnecting signs ${providerLabel} out and starts a fresh sign-in. ${SESSION_INTERRUPT_WARNING}`
           : `Sign in to your ${providerLabel} account so you can drive this pod from the ${providerLabel} app or browser.`}
       </p>
 

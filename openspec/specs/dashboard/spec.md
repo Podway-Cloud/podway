@@ -953,14 +953,15 @@ The cockpit's re-auth affordance (both the "expiring soon" prompt on a still-val
 "Reconnect" action on an expired one) SHALL route by the pod's Claude auth MODE. A setup-token pod
 SHALL open the RENEW wizard — minting a fresh ~1-year token WITHOUT signing the agent out or
 interrupting the session — and its still-valid confirm SHALL NOT carry the session-interrupt warning.
-A subscription pod SHALL open the RECONNECT wizard, a full session-interrupting re-login, confirmed
-first. Only an explicit setup-token mode renews; an unset or subscription mode reconnects.
+A subscription pod SHALL open the RECONNECT wizard, a full session-interrupting re-login, directly
+(no confirm dialog); the wizard itself states the session interrupt. Only an explicit setup-token mode
+renews; an unset or subscription mode reconnects.
 
 - **WHEN** the owner triggers re-auth for `claude-code` on a setup-token pod
 - **THEN** the non-destructive renew wizard SHALL open, labelled "Renew", with no session-interrupt warning
 
 - **WHEN** the owner triggers re-auth on a subscription pod
-- **THEN** the reconnect wizard SHALL open, labelled "Reconnect", behind the session-interrupt confirm
+- **THEN** the reconnect wizard SHALL open directly, labelled "Reconnect", stating the session interrupt
 
 #### Scenario: The pasted code is validated against the LIVE agents, not stale stored config
 
@@ -1987,8 +1988,9 @@ possible. While it is STILL VALID but within the expiring-soon window, the dashb
 ~Nd — reconnect soon in the Control tab"; the Control tab MUST therefore actually offer a reconnect for
 that state, not only once the login has already expired. Because a reconnect is a full re-login that
 INTERRUPTS the running session (a refresh token cannot be extended past its hard expiry without signing
-in again), the action SHALL be OPTIONAL and CONFIRMED — never an instant sign-out of a working agent —
-with the confirmation stating the login still works and that the session is interrupted. The affordance
+in again), the action SHALL be OPTIONAL and SHALL open the full-page reconnect wizard directly — no
+separate confirm dialog (owner call, 2026-10-07: it was a redundant extra click). The wizard SHALL state
+that reconnecting signs the agent out and interrupts running tasks. The affordance
 SHALL NOT appear for an agent whose session is managed by T3.
 
 #### Scenario: The dashboard warning has a matching Control-tab action
@@ -1998,12 +2000,11 @@ SHALL NOT appear for an agent whose session is managed by T3.
 - **THEN** it SHALL show an optional "Reconnect" for that agent — so the dashboard's "reconnect soon in
   the Control tab" is never a dead end
 
-#### Scenario: Reconnecting an expiring login is confirmed, not instant
+#### Scenario: Reconnecting an expiring login goes straight to the wizard
 
 - **WHEN** the owner triggers that reconnect
-- **THEN** a confirmation SHALL appear first, stating the login still works and that reconnecting
-  interrupts the current session; only on confirm does the re-login begin. Cancel leaves the working
-  agent untouched.
+- **THEN** the reconnect wizard SHALL open with no confirm dialog first, and SHALL state that
+  reconnecting interrupts running tasks while files stay safe
 
 ### Requirement: The Control tab exposes actionable Claude RC recovery
 

@@ -137,7 +137,7 @@ test.describe("cockpit", () => {
     await expect(page.getByTestId("health-strip")).toHaveCount(0, { timeout: 25_000 });
   });
 
-  test("a signed-in-but-EXPIRING login offers a confirm-gated Reconnect in the Control tab", async ({
+  test("a signed-in-but-EXPIRING login offers a Reconnect that opens the wizard directly", async ({
     page,
   }) => {
     await login(page, "approved");
@@ -151,18 +151,12 @@ test.describe("cockpit", () => {
     const reconnect = page.getByRole("button", { name: /reconnect claude/i });
     await expect(reconnect).toBeVisible({ timeout: 25_000 });
 
-    // It's confirm-gated (a reconnect interrupts the session), so a click opens the dialog — it does
-    // NOT immediately sign the working agent out.
+    // No confirm dialog (owner call, 2026-10-07): the click goes straight into the reconnect wizard,
+    // which carries the session-interrupt warning itself.
     await reconnect.click();
-    const dialog = page.getByRole("alertdialog");
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText(/still works/i);
-    await expect(dialog, "the session-interrupt warning must be shown").toContainText(/interrupted/i);
-
-    // Cancel leaves the signed-in agent exactly as it was.
-    await dialog.getByRole("button", { name: /cancel/i }).click();
-    await expect(dialog).toBeHidden();
-    await expect(reconnect).toBeVisible();
+    await expect(page).toHaveURL(/wiz=reconnect(:|%3A)claude-code/, { timeout: 15_000 });
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await expect(page.getByText(/running tasks are interrupted/i), "the session-interrupt warning must be shown").toBeVisible();
   });
 
   test("the reconnect wizard stays open on a still-authed agent (does not bounce to the cockpit)", async ({

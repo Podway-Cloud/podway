@@ -320,32 +320,14 @@ export default function AgentCards({
     return left > 0 && left < EXPIRING_SOON_MS ? left : null;
   };
 
-  /** Reconnect a login that is expiring but STILL VALID — optional, so it's confirmed first (it's a full
-   * re-login that interrupts the session; there's no way to extend a refresh token past its hard expiry).
-   * Both agents route through the one full-page sign-in wizard. */
-  const reconnectExpiring = async (id: string) => {
-    const left = expiringInMs(id);
-    const days = left != null ? Math.max(1, Math.round(left / (24 * 60 * 60 * 1000))) : null;
-    const inN = days != null ? ` for ~${days} more day${days === 1 ? "" : "s"}` : "";
-    // A setup-token pod renews NON-destructively — mint a fresh ~1-year token, no forced sign-out — so
-    // it skips the session-interrupt warning and opens the renew wizard, not the reconnect wizard (§5.1).
+  /** Reconnect a login that is expiring but STILL VALID. No confirm (owner call, 2026-10-07): the click
+   * goes straight to the one full-page sign-in wizard, which states the session interrupt itself. A
+   * setup-token pod renews NON-destructively instead (fresh ~1-year token, no sign-out) — §5.1. */
+  const reconnectExpiring = (id: string) => {
     if (id === "claude-code" && externalControl && claudeReauthMode(agentAuth) === "renew" && onRenewToken) {
-      const ok = await confirm({
-        title: `Renew ${label(id)}'s login now?`,
-        message: `${label(id)}'s 1-year login still works${inN}. Renewing mints a fresh token now — it does NOT sign the agent out or interrupt the session.`,
-        confirmLabel: "Renew login",
-      });
-      if (!ok) return;
       onRenewToken();
       return;
     }
-    const ok = await confirm({
-      title: `Reconnect ${label(id)} now?`,
-      message: `${label(id)}'s login still works${inN}. Reconnecting signs it out and starts a fresh sign-in now — do this when it's convenient, before the login expires.`,
-      warning: SESSION_INTERRUPT_WARNING,
-      confirmLabel: `Reconnect ${label(id)}`,
-    });
-    if (!ok) return;
     onSignin(id, "reconnect");
   };
 
@@ -545,7 +527,7 @@ export default function AgentCards({
             />
           )}
           {!managed && expiringInMs(id) != null && (
-            // The login still WORKS but hard-expires soon. An optional, confirm-gated reconnect so the
+            // The login still WORKS but hard-expires soon. An optional reconnect (straight into the wizard) so the
             // dashboard's "reconnect soon in the Control tab" ribbon actually has an action here — the
             // gap an owner hit on a signed-in-but-expiring pod (2026-08-26).
             <div className="flex flex-col gap-2 rounded-lg border border-warning/30 bg-warning/[0.06] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between">
@@ -557,7 +539,7 @@ export default function AgentCards({
                 size="sm"
                 variant="outline"
                 className="shrink-0 self-start border-warning/40 text-warning hover:bg-warning/10 hover:text-warning sm:self-auto"
-                onClick={() => void reconnectExpiring(id)}
+                onClick={() => reconnectExpiring(id)}
               >
                 Reconnect {name}…
               </Button>
