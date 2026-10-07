@@ -11,7 +11,7 @@ import type {
   SandboxProvider,
 } from "@podway/provider";
 import { GatewayServer } from "../src/server.js";
-import { mintBridgeToken } from "@podway/auth/bridge-token";
+import { mintBridgeToken, verifyBridgeToken } from "@podway/auth/bridge-token";
 
 const info = (id: string, status: PodStatus): PodInfo => ({
   id,
@@ -159,7 +159,7 @@ async function seed(id: string, ownerId: string, over: Partial<PodRecord> = {}) 
 /** HTTP request to the gateway with a preview Host header. */
 function previewGet(
   slug: string,
-  opts: { path?: string; user?: string; accept?: string } = {},
+  opts: { path?: string; user?: string; accept?: string; cookie?: string } = {},
 ): Promise<{ status: number; body: string; location?: string; contentType?: string; retryAfter?: string; setCookie?: string[] }> {
   return new Promise((resolve, reject) => {
     const req = http.request(
@@ -171,6 +171,7 @@ function previewGet(
           host: `${slug}.preview.test`,
           ...(opts.user ? { "x-podway-user": opts.user } : {}),
           ...(opts.accept ? { accept: opts.accept } : {}),
+          ...(opts.cookie ? { cookie: opts.cookie } : {}),
         },
       },
       (res) => {
@@ -319,6 +320,36 @@ describe("preview proxy", () => {
       expect(cookie).toMatch(/Partitioned/i);
       expect(cookie).not.toMatch(/SameSite=Lax/i);
       expect(cookie).toMatch(/Secure/i); // required for SameSite=None
+    } finally {
+      if (prev === undefined) delete process.env.BETTER_AUTH_SECRET;
+      else process.env.BETTER_AUTH_SECRET = prev;
+    }
+  });
+
+  it("sliding preview session: a near-expiry pw_preview gets a fresh hour; a fresh one is left alone", async () => {
+    const prev = process.env.BETTER_AUTH_SECRET;
+    const secret = (process.env.BETTER_AUTH_SECRET = "test-secret-for-sliding-0000000000000");
+    try {
+      await seed("brave-otter-4f2a", "u1");
+      const tok = (ttlMs: number, podId = "brave-otter-4f2a") =>
+        mintBridgeToken({ userId: "u1", podId, purpose: "preview", now: Date.now(), ttlMs, secret });
+      const get = (t: string) => previewGet("brave-otter-4f2a", { user: "u1", cookie: `pw_preview=${encodeURIComponent(t)}` });
+
+      // 10 min left → the proxied response carries a renewed cookie whose token lasts ~1 hour.
+      const near = await get(tok(10 * 60_000));
+      expect(near.status).toBe(200);
+      const c = (near.setCookie ?? []).find((x) => x.startsWith("pw_preview="));
+      expect(c, "near-expiry session was not renewed").toBeTruthy();
+      expect(c).toMatch(/SameSite=None/i);
+      expect(c).toMatch(/Partitioned/i);
+      const v = verifyBridgeToken(decodeURIComponent(c!.split(";")[0]!.slice("pw_preview=".length)), { now: Date.now(), secret });
+      expect(v?.podId).toBe("brave-otter-4f2a");
+      expect(v!.exp - Date.now()).toBeGreaterThan(55 * 60_000);
+
+      // 50 min left → no renewal (no cookie churn on every request).
+      expect(((await get(tok(50 * 60_000))).setCookie ?? []).join(";")).not.toContain("pw_preview=");
+      // A token for ANOTHER pod is never renewed here.
+      expect(((await get(tok(10 * 60_000, "other-pod-0000"))).setCookie ?? []).join(";")).not.toContain("pw_preview=");
     } finally {
       if (prev === undefined) delete process.env.BETTER_AUTH_SECRET;
       else process.env.BETTER_AUTH_SECRET = prev;

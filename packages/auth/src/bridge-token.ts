@@ -65,7 +65,7 @@ export function mintBridgeToken(args: {
 export function verifyBridgeToken(
   token: string,
   args: { now: number; secret: string },
-): { userId: string; podId: string; purpose: BridgePurpose } | null {
+): { userId: string; podId: string; purpose: BridgePurpose; exp: number } | null {
   const { now, secret } = args;
   if (!secret) return null;
   try {
@@ -87,7 +87,7 @@ export function verifyBridgeToken(
       return null;
     }
     if (now > p.exp) return null;
-    return { userId: p.u, podId: p.pod, purpose: p.p };
+    return { userId: p.u, podId: p.pod, purpose: p.p, exp: p.exp };
   } catch {
     return null; // tampered / wrong key / malformed
   }

@@ -30,11 +30,22 @@ opening it makes the preview host top-level, while the same preview is broken in
 
 The cookie SHALL remain host-only (no `Domain`), so it never reaches the parent domain.
 
+The session SHALL slide: when a proxied preview request carries a valid session for that pod with less
+than 30 minutes left, the response SHALL set a fresh 1-hour cookie. A hard 1-hour expiry broke every
+open page's own fetch/XHR with 401 "owner-only" (a reload re-authenticates, an in-page request cannot),
+so a dashboard tab showed all zeros (2026-10-07). Ownership SHALL still be checked on every request.
+
 #### Scenario: The owner opens a private preview in the cockpit
 
 - **WHEN** the cockpit embeds an owner-only preview
 - **THEN** the preview session cookie SHALL be sent with the frame's requests, and the preview SHALL
   render as it does when opened directly
+
+#### Scenario: An open preview page keeps working past one hour
+
+- **GIVEN** an owner-only preview page that keeps making its own requests
+- **WHEN** its session has less than 30 minutes left
+- **THEN** the next response SHALL renew the cookie, so the page's requests keep succeeding
 
 ### Requirement: A failed update never leaves the pod powered off
 

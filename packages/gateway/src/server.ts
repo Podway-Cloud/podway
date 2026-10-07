@@ -8,7 +8,7 @@ import { ControlError } from "@podway/control-plane";
 import { createLogger, type Logger } from "@podway/shared/log";
 import { attachHeartbeat, type HeartbeatSocket } from "@podway/shared/heartbeat";
 import { isAgentMessage, type AgentMessage } from "@podway/shared/protocol";
-import { verifyBridgeToken, PREVIEW_SESSION_COOKIE, BRIDGE_TOKEN_PARAM } from "@podway/auth/bridge-token";
+import { mintBridgeToken, verifyBridgeToken, PREVIEW_SESSION_COOKIE, BRIDGE_TOKEN_PARAM } from "@podway/auth/bridge-token";
 import type { GatewayConfig } from "./config.js";
 
 /** Parse a proxied agent frame, or null. Used only to observe (activity +
@@ -76,6 +76,37 @@ export function extractCodexDeviceCode(cleanBuf: string): string | null {
  * ownership, wakes the pod, and proxies the WebSocket to the pod's (unauthenticated,
  * private-network) pod-agent. Also runs the control-plane idle policy on a timer.
  */
+/** The preview-session cookie (see consumePreviewHandshake for why SameSite=None + Partitioned). */
+function previewSessionCookie(token: string): string {
+  return `${PREVIEW_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=3600`;
+}
+
+const PREVIEW_SESSION_MS = 60 * 60_000;
+const PREVIEW_RENEW_UNDER_MS = 30 * 60_000;
+
+/** Sliding preview session: a request carrying a VALID pw_preview token for THIS pod with < 30 min
+ * left gets a fresh 1-hour cookie on its response. Without it the session died at a hard 1 hour —
+ * a page reload re-authenticated, but an open page's own fetch/XHR got 401 "owner-only" forever
+ * (GTM dashboard showed all zeros, 2026-10-07). Ownership is still checked on every request. */
+export function renewedPreviewCookie(
+  cookieHeader: string | undefined,
+  slug: string,
+  now: number,
+  secret: string,
+): string | null {
+  if (!cookieHeader || !secret) return null;
+  for (const part of cookieHeader.split(";")) {
+    const eq = part.indexOf("=");
+    if (eq < 0 || part.slice(0, eq).trim() !== PREVIEW_SESSION_COOKIE) continue;
+    const v = verifyBridgeToken(decodeURIComponent(part.slice(eq + 1).trim()), { now, secret });
+    if (!v || v.purpose !== "preview" || v.podId !== slug || v.exp - now >= PREVIEW_RENEW_UNDER_MS) return null;
+    return previewSessionCookie(
+      mintBridgeToken({ userId: v.userId, podId: slug, purpose: "preview", now, ttlMs: PREVIEW_SESSION_MS, secret }),
+    );
+  }
+  return null;
+}
+
 export class GatewayServer {
   private readonly http: http.Server;
   private readonly wss: WebSocketServer;
@@ -954,9 +985,7 @@ export class GatewayServer {
       // third-party cookies by default, so None ALONE would still be dropped. Partitioned keys the
       // cookie to the top-level site, so it works in the cockpit's frame while remaining useless for
       // cross-site tracking — it cannot be read from any other embedding site.
-      const cookie =
-        `${PREVIEW_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; ` +
-        `SameSite=None; Partitioned; Max-Age=3600`;
+      const cookie = previewSessionCookie(token);
       res.writeHead(302, { "Set-Cookie": cookie, Location: clean });
     } else {
       res.writeHead(302, { Location: clean });
@@ -1050,6 +1079,11 @@ export class GatewayServer {
               .trim();
             if (kept) headers["content-security-policy"] = kept;
             else delete headers["content-security-policy"];
+          }
+          const renew = renewedPreviewCookie(req.headers.cookie, slug, Date.now(), process.env.BETTER_AUTH_SECRET ?? "");
+          if (renew) {
+            const prev = headers["set-cookie"];
+            headers["set-cookie"] = [...(Array.isArray(prev) ? prev : prev ? [prev] : []), renew];
           }
           res.writeHead(pres.statusCode ?? 502, headers);
           pres.pipe(res);

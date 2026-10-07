@@ -5,12 +5,13 @@ const SECRET = "test-better-auth-secret-000000000000";
 const now = 1_800_000_000_000;
 
 describe("bridge-token", () => {
-  it("round-trips a valid token (identity + pod + purpose)", () => {
+  it("round-trips a valid token (identity + pod + purpose + expiry)", () => {
     const t = mintBridgeToken({ userId: "u1", podId: "pod-a", purpose: "terminal", now, secret: SECRET });
     expect(verifyBridgeToken(t, { now, secret: SECRET })).toEqual({
       userId: "u1",
       podId: "pod-a",
       purpose: "terminal",
+      exp: now + 120_000, // default TTL; the gateway's sliding preview session reads it
     });
   });
 
