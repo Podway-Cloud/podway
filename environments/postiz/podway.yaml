@@ -93,7 +93,11 @@ kickoff: |
     `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <tag>` — it snapshots, pulls, health-checks and
     AUTO-ROLLS-BACK code AND data if the new version is unhealthy. Apply only upgrades you class as SAFE;
     a Postiz major bump can include a DB migration — snapshot + read the release notes first.
-  - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
+  - RESTORE: if anything is unhealthy, OR the owner reports a quiet break after an upgrade (app up, a
+    feature broken), restore the pre-upgrade snapshot: `bin/app-admin.sh restore <snapshot-dir>`. It
+    saves the CURRENT state as a fresh snapshot first (newer engines do this themselves; if yours does
+    not print "current state saved first", run `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot` before
+    restoring). Tell the owner data written since the upgrade is kept in that fresh snapshot.
 
   STEERING POSTIZ FROM THE TERMINAL (post without the UI): `bin/postiz-cli.sh <cmd>` wraps the official
   `postiz` CLI and points it at THIS pod's Postiz. On first use it installs the CLI and AUTO-MINTS a

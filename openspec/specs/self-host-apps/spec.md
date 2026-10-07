@@ -39,6 +39,16 @@ A restore error SHALL surface as MANUAL ATTENTION, never as "stack intact". Prov
 the data, never passed health, and the rollback left the data identical to the snapshot
 (`scripts/incus/app-smoke.sh` REAL-ROLLBACK mode).
 
+An ON-DEMAND restore (`app-admin.sh restore <snapshot>`, e.g. for a QUIET break found days after an
+upgrade, when the app stayed healthy) SHALL first snapshot the CURRENT state, so data written since the
+older snapshot is never lost for good — the owner can restore that newer snapshot back (2026-10-07).
+The automatic rollback inside `safe-upgrade` does not take this extra snapshot.
+
+#### Scenario: Restoring an old snapshot keeps the newer data recoverable
+- **WHEN** an owner asks the admin to restore the pre-upgrade snapshot after new data was written
+- **THEN** the engine SHALL save the current state as a new snapshot first, restore the old one, and
+  say where the saved state is
+
 #### Scenario: A release that breaks after migrating is fully undone
 - **WHEN** a new release migrates the data and then fails its health probe
 - **THEN** the engine rolls back to the previous release and the data SHALL match the pre-upgrade

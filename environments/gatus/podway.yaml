@@ -64,7 +64,11 @@ kickoff: |
   - UPGRADES: NEVER just `docker compose pull`. Use
     `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <tag>` — it snapshots, pulls, health-checks and
     AUTO-ROLLS-BACK code AND data if the new version is unhealthy. Apply only upgrades you class as SAFE.
-  - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
+  - RESTORE: if anything is unhealthy, OR the owner reports a quiet break after an upgrade (app up, a
+    feature broken), restore the pre-upgrade snapshot: `bin/app-admin.sh restore <snapshot-dir>`. It
+    saves the CURRENT state as a fresh snapshot first (newer engines do this themselves; if yours does
+    not print "current state saved first", run `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot` before
+    restoring). Tell the owner data written since the upgrade is kept in that fresh snapshot.
 
   END EVERY TURN ORIENTED: one line — "Gatus: <up/updating> · data: <backed-up when> · next: <thing>".
   Lead; only pause at real forks (a risky upgrade, deleting data, exposing the app publicly).

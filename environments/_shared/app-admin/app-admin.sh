@@ -123,7 +123,10 @@ vol_tar() { # $1=action(save|load) $2=snapshot-dir : tar each APP_DATA_VOLUMES
 }
 
 do_snapshot() { # -> prints the snapshot dir
-  local ts s; ts="$(date -u +%Y%m%dT%H%M%SZ)"; s="$SNAP_ROOT/$ts"; mkdir -p "$s"
+  # A NEW dir every time: two snapshots in the same second (e.g. the pre-restore save) used to land in
+  # the SAME dir and silently overwrite the older one (2026-10-07). Append -2, -3 … on a clash.
+  local ts s n=1; ts="$(date -u +%Y%m%dT%H%M%SZ)"; s="$SNAP_ROOT/$ts"; mkdir -p "$SNAP_ROOT"
+  while ! mkdir "$s" 2>/dev/null; do n=$((n + 1)); s="$SNAP_ROOT/$ts-$n"; done
   [ "$DB_TYPE" = none ] || db_dump "$s/db.dump"
   vol_tar save "$s"
   cp "$DIR/.env" "$s/env"   # carries the encryption key + the exact image tag
@@ -168,7 +171,13 @@ case "$cmd" in
   status)   $DC ps --format '{{.Service}} {{.Status}}'; echo "image: $(grep "^${APP_IMAGE_VAR}=" .env)" ;;
   snapshot) s=$(do_snapshot); echo "snapshot -> $s ($(du -sh "$s" | cut -f1))" ;;
   check-key) check_key && echo "KEY OK" ;;
-  restore)  do_restore "$2" && health && echo "RESTORED healthy from $2" || { echo "RESTORE UNHEALTHY" >&2; exit 1; } ;;
+  restore)
+    # On-demand restore (e.g. a QUIET break found days after an upgrade) goes back in time, so data
+    # written since that snapshot would be lost. Save the CURRENT state first, so nothing is gone for
+    # good and the owner can decide what to keep. (safe-upgrade's own rollback calls do_restore directly.)
+    [ -n "${2:-}" ] && [ -d "$2" ] || { echo "usage: $0 restore <snapshot-dir> (see: ls $SNAP_ROOT)" >&2; exit 1; }
+    pre=$(do_snapshot); echo ">> current state saved first: $pre"
+    do_restore "$2" && health && echo "RESTORED healthy from $2 (the state before this restore is in $pre)" || { echo "RESTORE UNHEALTHY (the state before this restore is in $pre)" >&2; exit 1; } ;;
   safe-upgrade)
     target="$2"; old="$(grep "^${APP_IMAGE_VAR}=" .env | cut -d= -f2)"
     check_key || exit $?

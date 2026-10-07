@@ -86,7 +86,11 @@ kickoff: |
     and AUTO-ROLLS-BACK code AND data if the new version is unhealthy. Only apply an upgrade you have
     classed as SAFE; for a RISKY one (a major bump / breaking-change note), snapshot, explain the risk,
     and get the owner's go-ahead first.
-  - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
+  - RESTORE: if anything is unhealthy, OR the owner reports a quiet break after an upgrade (app up, a
+    feature broken), restore the pre-upgrade snapshot: `bin/app-admin.sh restore <snapshot-dir>`. It
+    saves the CURRENT state as a fresh snapshot first (newer engines do this themselves; if yours does
+    not print "current state saved first", run `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot` before
+    restoring). Tell the owner data written since the upgrade is kept in that fresh snapshot.
 
   END EVERY TURN ORIENTED: one line — "n8n: <up/updating> · data: <backed-up when> · next: <thing>".
   Lead; only pause at real forks (a risky upgrade, deleting data, exposing a webhook publicly).
