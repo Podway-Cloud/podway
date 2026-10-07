@@ -17,7 +17,7 @@ import {
   type AgentAuth,
 } from "./boot.js";
 import { parseOomKills } from "./oom.js";
-import { attributeRestartToOom, composeResumeNudge } from "./incident-nudge.js";
+import { attributeRestartToOom, composeResumeNudge, openInboxCount, withUnreadMessages } from "./incident-nudge.js";
 
 const log = createLogger("pod-agent");
 
@@ -27,6 +27,14 @@ const log = createLogger("pod-agent");
  * to read dmesg/uptime/spec falls back to the plain nudge, never blocking boot.
  */
 function resumeNudge(): string {
+  const unread = openInboxCount(
+    process.env.PODWAY_MSG_INBOX ?? "/home/dev/.podway/msg-inbox.jsonl",
+    process.env.PODWAY_MSG_DONE ?? "/home/dev/.podway/msg-done",
+  );
+  return withUnreadMessages(oomResumeNudge(), unread);
+}
+
+function oomResumeNudge(): string {
   try {
     const dmesg = execFileSync("dmesg", { encoding: "utf8", maxBuffer: 8_000_000 });
     const uptimeSec = Number(readFileSync("/proc/uptime", "utf8").split(" ")[0]) || 0;

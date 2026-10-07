@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { attributeRestartToOom, composeResumeNudge, OOM_RECENCY_SEC } from "../src/incident-nudge.js";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { attributeRestartToOom, composeResumeNudge, OOM_RECENCY_SEC, openInboxCount, withUnreadMessages } from "../src/incident-nudge.js";
 import type { OomKill } from "../src/oom.js";
 
 const isAgent = (c: string) => /claude|codex/i.test(c);
@@ -59,5 +62,31 @@ describe("composeResumeNudge", () => {
 
   it("OOM_RECENCY_SEC is a sane default", () => {
     expect(OOM_RECENCY_SEC).toBeGreaterThan(60);
+  });
+});
+
+describe("unread messages on resume", () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "inbox-"));
+  const inbox = path.join(dir, "msg-inbox.jsonl");
+  const done = path.join(dir, "msg-done");
+
+  it("counts inbox ids not in msg-done, ignoring blank/partial lines and duplicates", () => {
+    writeFileSync(inbox, ['{"id":"a"}', '{"id":"b"}', '{"id":"b"}', "", '{"id":"c"', '{"id":"d"}'].join("\n"));
+    writeFileSync(done, "a\n");
+    expect(openInboxCount(inbox, done)).toBe(2); // b, d
+  });
+
+  it("treats a missing msg-done as nothing read, and a missing inbox as 0", () => {
+    expect(openInboxCount(inbox, path.join(dir, "nope"))).toBe(3);
+    expect(openInboxCount(path.join(dir, "nope"), done)).toBe(0);
+  });
+
+  it("appends one line only when something is unread", () => {
+    expect(withUnreadMessages(BASE, 0)).toBe(BASE);
+    const out = withUnreadMessages(BASE, 2);
+    expect(out.startsWith(BASE)).toBe(true);
+    expect(out).toContain("2 unread messages");
+    expect(out).toContain("podway msg inbox");
+    expect(out).not.toContain("\n");
   });
 });

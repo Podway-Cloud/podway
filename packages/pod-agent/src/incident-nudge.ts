@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { OomKill } from "./oom.js";
 
 /**
@@ -64,4 +65,40 @@ export function composeResumeNudge(
     ? `Podway system notice: this pod keeps running out of memory — the agent has been OOM-killed and restarted more than once. Please tell the owner and recommend resizing to a larger compute tier to stop it${link}.`
     : `Podway system notice: this pod just restarted because it ran out of memory — the agent was OOM-killed. Please tell the owner this happened; if it recurs, a larger compute tier will fix it${link}.`;
   return `${notice} ${base}`;
+}
+
+/**
+ * Unread pod messages: inbox ids not listed in msg-done — the same rule as `podway msg inbox`.
+ * A message that lands just before an update restart is in the inbox but the agent never read it
+ * (podway GTM, 2026-10-07), and nothing re-wakes it after the restart. Missing/corrupt files → 0.
+ */
+export function openInboxCount(inboxPath: string, donePath: string): number {
+  let lines: string[];
+  try {
+    lines = readFileSync(inboxPath, "utf8").split("\n");
+  } catch {
+    return 0;
+  }
+  let done = new Set<string>();
+  try {
+    done = new Set(readFileSync(donePath, "utf8").split("\n").map((s) => s.trim()).filter(Boolean));
+  } catch {
+    /* no msg-done yet → nothing read */
+  }
+  const open = new Set<string>();
+  for (const l of lines) {
+    try {
+      const id = (JSON.parse(l) as { id?: unknown }).id;
+      if (typeof id === "string" && !done.has(id)) open.add(id);
+    } catch {
+      /* blank or partial line */
+    }
+  }
+  return open.size;
+}
+
+/** Append the unread-messages line to the resume nudge (one line — the greeter types it). */
+export function withUnreadMessages(nudge: string, open: number): string {
+  if (open <= 0) return nudge;
+  return `${nudge} Podway: you have ${open} unread message${open === 1 ? "" : "s"} from your other pods — run \`podway msg inbox\` to read ${open === 1 ? "it" : "them"}.`;
 }

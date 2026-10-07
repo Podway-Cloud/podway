@@ -65,6 +65,9 @@ On a restart the resumed agent SHALL be given a turn ("Resuming — where are we
 speaks instead of sitting silent in a session the owner sees as empty. This nudge SHALL be delivered
 regardless of whether the environment declares a kickoff — a pod with NO kickoff MUST still receive it
 on restart (it previously got the handoff note but no resume turn, and resumed silently).
+When the pod's message inbox holds messages not yet marked done (the same rule as `podway msg inbox`),
+the nudge SHALL also say how many and to run `podway msg inbox`: a message that lands just before an
+update restart is otherwise never read, because nothing re-wakes the agent for it (2026-10-07).
 
 #### Scenario: Restart with prior work
 
@@ -75,6 +78,11 @@ on restart (it previously got the handoff note but no resume turn, and resumed s
 
 - **WHEN** a pod that declares no kickoff restarts after having been greeted before
 - **THEN** it SHALL still receive the "Resuming — where are we?" turn, not resume silently
+
+#### Scenario: Unread messages are named on resume
+
+- **WHEN** a pod restarts with 2 inbox messages not marked done
+- **THEN** the resume turn SHALL say there are 2 unread messages and to run `podway msg inbox`
 
 #### Scenario: Genuine first boot
 
