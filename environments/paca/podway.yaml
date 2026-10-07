@@ -1,0 +1,97 @@
+apiVersion: podway/v0
+name: paca
+
+# APP (the "Apps" tab): a self-hosted OSS app Podway DEPLOYS and KEEPS UPDATED for the user. The pod
+# runs the app with `docker compose` (Docker is baked into the cloud pod-base image); the agent is its
+# always-on admin. Hand-written env (multi-service stack, like Postiz/Twenty).
+kind: app
+# Core stack only (no agent-runner) — minSize confirmed by the full app-smoke.
+minSize: mini
+
+metadata:
+  title: "Paca"
+  # Short line adapted from the project's own README (github.com/Paca-AI/paca).
+  description: >-
+    An AI-native project board where humans and AI agents work as one Scrum team.
+  descriptionLong: >-
+    Paca is an open-source, self-hosted alternative to Jira, Trello, ClickUp and Monday, built for Scrum teams where humans and AI agents collaborate on the same board, sprints and goals. Your pod's own Claude can join the board as a teammate through Paca's MCP server. Your projects and data stay on your own server.
+  author: podway
+  sourceUrl: https://github.com/Paca-AI/paca
+  siteUrl: https://paca-ai.org
+  tags: [self-host, oss, project-management, scrum, ai-agents]
+
+base:
+  devcontainer: .devcontainer/devcontainer.json
+
+agents: [claude-code, codex]
+shared: [universal]
+
+# First-party, trusted env: the agent runs docker compose + the maintenance engine unprompted.
+permissions:
+  mode: bypassPermissions
+
+# Paca pulls its own container images and plugins; the agent fetches the Paca MCP package from npm.
+network:
+  policy: full
+
+lifecycle: always-on
+
+# Paca is served on the pod's preview (:3000). Private by default — it is YOUR team's board, and it
+# has its own login. The owner can flip the preview public per pod to invite teammates.
+preview: private
+
+# All secrets are GENERATED per-pod at setup into ~/work/.env — never committed, never a value the user
+# must paste. MAIN_URL is the pod's preview URL (from `podway preview`) so uploads and realtime resolve;
+# a scratch pod without one falls back to plain-http localhost (and so non-secure cookies).
+setup:
+  - >-
+    if [ ! -f .env ]; then
+    URL="$(podway preview 2>/dev/null | grep -oE 'https://[^ )]+' | head -1)"; [ -z "$URL" ] && URL="http://localhost:3000";
+    case "$URL" in https://*) SECURE=true;; *) SECURE=false;; esac;
+    printf 'PACA_VERSION=%s\nMAIN_URL=%s\nCOOKIE_SECURE=%s\nDB_PASSWORD=%s\nJWT_SECRET=%s\nADMIN_PASSWORD=%s\nENCRYPTION_KEY=%s\nSTORAGE_ACCESS_KEY_ID=%s\nSTORAGE_SECRET_ACCESS_KEY=%s\nAGENT_API_KEY=%s\nINTERNAL_API_KEY=%s\n'
+    "0.18.6" "$URL" "$SECURE" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$(openssl rand -hex 12)" "$(openssl rand -hex 32)" "$(openssl rand -hex 10)" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env;
+    chmod 600 .env; fi
+  - chmod +x bin/app-admin.sh
+  - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
+
+kickoff: |
+  You are the always-on ADMIN for this person's own Paca instance (an AI-native Scrum board), deployed
+  on THIS pod with `docker compose` and served on the pod's preview (port 3000). Keep it running, keep
+  its data safe, and keep it up to date WITHOUT ever breaking it.
+
+  What is already true when you start (the env's setup ran at first boot):
+  - Docker is installed from the pod image; its data-root is on /home/dev, so all data (the Postgres DB,
+    uploaded files in RustFS, installed plugins) survives a pod restart AND an image update. The stack
+    is ~/work/compose.yaml (postgres, valkey, rustfs, api, web, realtime, gateway) with
+    `restart: unless-stopped`. The Caddy gateway (~/work/caddy/Caddyfile, upstream's file) is the only
+    published port.
+  - The stack is TRIMMED: Paca's own `agent-runner` (its LLM agents in Docker-in-Docker sandboxes) is
+    deliberately NOT installed. YOU are the board's AI teammate, through Paca's MCP server (below).
+  - Secrets live in ~/work/.env — never commit them. MAIN_URL there is this pod's preview URL; if the
+    pod's URL ever changes, update MAIN_URL and redeploy.
+  - The maintenance engine is ~/work/bin/app-admin.sh. Always run it with `APP_ADMIN_DIR=~/work`.
+
+  First turn:
+  1. Confirm health: `APP_ADMIN_DIR=~/work bin/app-admin.sh status` and open the preview. If Paca is
+     up, tell the owner it is live and give them the preview link.
+  2. Give the owner the first sign-in ONCE, in this chat: username `admin`, password = ADMIN_PASSWORD
+     from ~/work/.env. Tell them to change it in Paca's settings after signing in.
+  3. Offer to join the board as their AI teammate: after they sign in, they create an API key in Paca
+     (Settings → API Keys) and add it as the pod secret PACA_API_KEY — run
+     `podway secrets request PACA_API_KEY "Paca API key so I can work on your board"` and hand them the
+     link it prints. Once `source <(podway secrets env)` shows it, add the MCP server:
+     `claude mcp add paca -e PACA_API_KEY="$PACA_API_KEY" -e PACA_API_URL=http://localhost:3000 -- npx -y @paca-ai/paca-mcp`
+     (the gateway forwards /api/* to the API). Then you can read and update projects, sprints and tasks.
+
+  Ongoing duties:
+  - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot` (dumps the Paca
+    DB + the file and plugin volumes + the version).
+  - UPGRADES: NEVER just `docker compose pull`. Use
+    `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <version>` (e.g. `0.18.7` — ONE version moves
+    api, web and realtime together). It snapshots, pulls, health-checks and AUTO-ROLLS-BACK code AND
+    data if the new version is unhealthy. Paca moves fast (0.x): read the release notes first, and
+    treat a minor bump as possibly breaking.
+  - If anything is unhealthy, restore the latest snapshot: `bin/app-admin.sh restore <snapshot-dir>`.
+
+  END EVERY TURN ORIENTED: one line — "Paca: <up/updating> · data: <backed-up when> · next: <thing>".
+  Lead; only pause at real forks (a risky upgrade, deleting data, exposing the board publicly).

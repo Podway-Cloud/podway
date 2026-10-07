@@ -42,7 +42,14 @@ WORK=/home/dev/work
   || . "$(dirname "$0")/refresh-common.sh" 2>/dev/null \
   || { echo "podway: FATAL refresh-common.sh not found — pod-base packaging bug (make-payload must ship it); aborting boot" >&2; exit 1; }
 
-chown -R dev:dev /home/dev 2>/dev/null || true
+# Give dev its home — EXCEPT Docker's data-root (~/.docker-data): a recursive chown there re-owned
+# every image layer and volume to uid 1000 on EVERY boot, so a non-root container (Paca's RustFS,
+# uid 10001) lost access to its own volume after a restart, and app pods paid a full-tree chown per boot.
+chown_home() {
+  chown dev:dev /home/dev 2>/dev/null || true
+  find /home/dev -mindepth 1 -maxdepth 1 ! -name .docker-data -exec chown -R dev:dev {} + 2>/dev/null || true
+}
+chown_home
 mkdir -p "$WORK" /home/dev/.claude
 # mkdir ran as root AFTER the chown above, so these NEW dirs are root-owned — and
 # ~/work being root-owned means dev (uid 1000) can't create .next / build output
@@ -633,7 +640,7 @@ else
     # (settings.json is now written by the every-boot podway:settings-refresh block above,
     # not here — a seed-once write froze the preset on existing pods.)
   fi
-  chown -R dev:dev /home/dev 2>/dev/null || true
+  chown_home
   touch "$MARKER"
   chown dev:dev "$MARKER" 2>/dev/null || true
   echo "podway: seed complete"

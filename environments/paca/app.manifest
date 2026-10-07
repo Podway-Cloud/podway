@@ -1,0 +1,14 @@
+# Paca per-app config for the shared app-admin engine (environments/_shared/app-admin).
+APP_PROJECT=paca
+APP_SERVICE=api
+# ONE version drives api + web + realtime (compose: pacaai/paca-<svc>:${PACA_VERSION}), so a
+# safe-upgrade moves all three together: `safe-upgrade 0.18.7`, not an image ref.
+APP_IMAGE_VAR=PACA_VERSION
+# Through the gateway: proves Caddy + the Go API (+ its DB) are all up, not just a static page.
+APP_HEALTH_URL=http://localhost:3000/api/healthz
+APP_HEALTH_RETRIES=60
+DB_TYPE=postgres
+DB_SERVICE=postgres
+DB_USER=paca
+DB_NAME=paca
+APP_DATA_VOLUMES="rustfs_data backend_plugins frontend_plugins mcp_plugins skills_plugins"

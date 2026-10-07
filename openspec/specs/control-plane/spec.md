@@ -191,7 +191,7 @@ is free for another pod (and resuming it needs it back). error/gone pods hold no
 The budget SHALL depend on whether the account has a card on file, because a carded account pays per
 pod beyond its free credit and so must not be hard-blocked at the free-tier ceiling:
 
-- **No card** (or Stripe not configured): the free-tier budget (`ACCOUNT_RAM_GB`, default 16 GB).
+- **No card** (or Stripe not configured): the free-tier budget (`ACCOUNT_RAM_GB`, code default 16 GB). **Cloud prod sets `PODWAY_ACCOUNT_RAM_GB=1`** (owner, 2026-10-07, with open sign-up): a no-card account can run ONE Mini; a card unlocks the carded budget. Without it, a stranger could run 16 GB free for the ~7-day dunning window. **Campaign-lead pass:** a no-card account whose first-touch `ref` starts with `email-` gets 2 GB (one Small) instead (`apps/web/lib/account-limits.ts`); the ref comes from a public link, so it is spoofable — owner accepted.
 - **Card on file:** the higher carded budget (`CARDED_RAM_GB`, default 64 GB) — a generous ceiling
   that still guards against a runaway bill from a mistake, not a hard product limit.
 - **Admin or self-host:** unbounded.

@@ -1,4 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Run with PROD's free budget (PODWAY_ACCOUNT_RAM_GB=1, one Mini) so the lead pass is visible.
+vi.hoisted(() => {
+  process.env.PODWAY_ACCOUNT_RAM_GB = "1";
+});
 import { ACCOUNT_RAM_GB, CARDED_RAM_GB } from "@podway/shared/tiers";
 
 /**
@@ -13,11 +18,13 @@ const isAdmin = vi.fn<(email: string) => boolean>();
 const editionOss = vi.fn<() => boolean>();
 const stripeConfigured = vi.fn<() => boolean>();
 const getAccount = vi.fn<() => Promise<{ hasCard: boolean }>>();
+const getAccountRef = vi.fn<() => Promise<string | null>>();
 
 vi.mock("@/lib/access-rules", () => ({ isAdmin: (e: string) => isAdmin(e) }));
 vi.mock("@/lib/session", () => ({ editionOss: () => editionOss() }));
 vi.mock("@/lib/pod-service", () => ({ getBillingService: () => ({ getAccount }) }));
 vi.mock("@podway/control-plane", () => ({ stripeConfigured: () => stripeConfigured() }));
+vi.mock("@/lib/attribution", () => ({ getAccountRef: () => getAccountRef() }));
 
 const { accountRamCapGb } = await import("@/lib/account-limits");
 
@@ -27,6 +34,18 @@ describe("accountRamCapGb", () => {
     editionOss.mockReturnValue(false);
     stripeConfigured.mockReturnValue(true);
     getAccount.mockResolvedValue({ hasCard: false });
+    getAccountRef.mockResolvedValue(null);
+  });
+
+  it("gives a no-card campaign lead (ref email-*) room for one Small, and nobody else", async () => {
+    getAccountRef.mockResolvedValue("email-miron");
+    expect(ACCOUNT_RAM_GB).toBe(1);
+    expect(await accountRamCapGb("u1", "lead@example.com")).toBe(2);
+    getAccountRef.mockResolvedValue("selfhost-landing");
+    expect(await accountRamCapGb("u1", "user@example.com")).toBe(ACCOUNT_RAM_GB);
+    getAccount.mockResolvedValue({ hasCard: true });
+    getAccountRef.mockResolvedValue("email-miron");
+    expect(await accountRamCapGb("u1", "lead@example.com")).toBe(CARDED_RAM_GB); // a card still wins
   });
 
   it("is unbounded for an admin", async () => {

@@ -324,6 +324,18 @@ existing pods; 2026-07-28 seed-once audit.)
 - **WHEN** a `CLAUDE.md` exists but no hash marker does (a pre-marker pod)
 - **THEN** the file SHALL NOT be modified — ambiguous provenance is treated as the user's
 
+### Requirement: Boot gives dev its home but never touches Docker's data
+Every boot SHALL give `dev` ownership of `/home/dev` EXCEPT Docker's data-root (`~/.docker-data`).
+Container image layers and volumes keep the owners their containers set; a recursive chown there
+re-owned them to uid 1000 on every boot, so a container running as its own user (Paca's RustFS,
+uid 10001) lost access to its volume after a restart (2026-10-07), and app pods paid a full-tree
+chown per boot.
+
+#### Scenario: A non-root app container survives a restart
+- **GIVEN** an app container that runs as uid 10001 and owns its volume
+- **WHEN** the pod restarts
+- **THEN** the volume SHALL still belong to uid 10001 and the app SHALL come back healthy
+
 ### Requirement: Boot health is checked and recorded
 
 After boot, the pod SHALL verify (in the background, never delaying or failing the boot) that a

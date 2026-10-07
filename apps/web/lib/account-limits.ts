@@ -5,6 +5,13 @@ import { isAdmin } from "./access-rules";
 import { editionOss } from "./session";
 import { getBillingService } from "./pod-service";
 import { stripeConfigured } from "@podway/control-plane";
+import { getAccountRef } from "./attribution";
+
+/** Campaign-lead pass (owner, 2026-10-07): a no-card account whose first-touch ref starts with this
+ * may run ONE Small (2 GB) instead of one Mini. ponytail: the ref comes from a public link, so anyone
+ * who types ?ref=email-… gets it too — owner accepted; switch to a verified lead-email list if abused. */
+export const LEAD_REF_PREFIX = "email-";
+export const LEAD_RAM_GB = 2;
 
 /**
  * The account's pod-RAM budget (GB) — the ceiling on total running-pod RAM.
@@ -26,5 +33,7 @@ export async function accountRamCapGb(userId: string, email: string): Promise<nu
     .getAccount(userId)
     .then((a) => a.hasCard)
     .catch(() => false);
-  return hasCard ? CARDED_RAM_GB : ACCOUNT_RAM_GB;
+  if (hasCard) return CARDED_RAM_GB;
+  const ref = await getAccountRef(userId).catch(() => null);
+  return ref?.startsWith(LEAD_REF_PREFIX) ? Math.max(ACCOUNT_RAM_GB, LEAD_RAM_GB) : ACCOUNT_RAM_GB;
 }
