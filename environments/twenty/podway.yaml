@@ -44,7 +44,7 @@ setup:
     if [ ! -f .env ]; then
     URL="$(podway preview 2>/dev/null | grep -o 'https://[^ )]*' | head -1)"; [ -z "$URL" ] && URL="http://localhost:3000";
     printf 'TWENTY_IMAGE=%s\nDB_PASSWORD=%s\nAPP_SECRET=%s\nMAIN_URL=%s\n'
-    "twentycrm/twenty:latest" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$URL" > .env;
+    "twentycrm/twenty:v2.45.6" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$URL" > .env;
     chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy

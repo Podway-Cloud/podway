@@ -39,7 +39,7 @@ preview: private
 
 setup:
   - >-
-    if [ ! -f .env ]; then printf 'VAULTWARDEN_IMAGE=%s\n' "vaultwarden/server:latest" > .env; chmod 600 .env; fi
+    if [ ! -f .env ]; then printf 'VAULTWARDEN_IMAGE=%s\n' "vaultwarden/server:1.37.4" > .env; chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
 

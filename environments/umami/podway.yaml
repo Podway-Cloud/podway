@@ -40,7 +40,7 @@ preview: private
 
 setup:
   - >-
-    if [ ! -f .env ]; then printf 'UMAMI_IMAGE=%s\nDB_PASSWORD=%s\nAPP_SECRET=%s\n' "ghcr.io/umami-software/umami:postgresql-latest" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > .env; chmod 600 .env; fi
+    if [ ! -f .env ]; then printf 'UMAMI_IMAGE=%s\nDB_PASSWORD=%s\nAPP_SECRET=%s\n' "ghcr.io/umami-software/umami:3.4.0" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" > .env; chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
 

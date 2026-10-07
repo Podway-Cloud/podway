@@ -54,6 +54,18 @@ the data, never passed health, and the rollback left the data identical to the s
   the one pinned on first deploy
 - **THEN** the engine refuses the operation rather than proceed
 
+### Requirement: A landing-lineup app installs an exact, tested version
+
+Every app on the self-host landing lineup (`apps/web/app/selfhost/selfhost-lineup.ts`) SHALL install an
+EXACT image tag — never `latest` or a moving alias — so the version a pod runs is known, a new install
+never jumps a major version the day it is released, and "big jumps wait for you" holds. A version bump
+is a reviewed change to the env's `podway.yaml`, smoke-tested (`scripts/incus/app-smoke.sh`) before it
+lands. Guarded by `apps/web/test/selfhost-lineup.test.ts`.
+
+#### Scenario: A lineup app cannot drift back to latest
+- **WHEN** a lineup app's install default is changed to a `latest` tag
+- **THEN** the lineup test SHALL fail
+
 ### Requirement: App data survives restart AND image-update
 
 Everything an app owns — compose file, config, encryption key, and container data volumes — SHALL live

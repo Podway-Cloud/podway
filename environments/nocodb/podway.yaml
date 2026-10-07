@@ -39,7 +39,7 @@ preview: private
 
 setup:
   - >-
-    if [ ! -f .env ]; then printf 'NOCODB_IMAGE=%s\n' "nocodb/nocodb:latest" > .env; chmod 600 .env; fi
+    if [ ! -f .env ]; then printf 'NOCODB_IMAGE=%s\n' "nocodb/nocodb:2026.09.1" > .env; chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
 

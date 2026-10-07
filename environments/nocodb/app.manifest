@@ -3,7 +3,7 @@ APP_PROJECT=nocodb
 APP_SERVICE=nocodb
 APP_IMAGE_VAR=NOCODB_IMAGE
 # Health hits a backend/DB-aware endpoint (not a static page) so a dead backend or DB outage is caught,
-# not masked. Verified 200-on-healthy by app-smoke 2026-09-23.
-APP_HEALTH_URL=http://localhost:3000/api/health
+# not masked. Verified 200-on-healthy by app-smoke 2026-09-23; /api/health was removed upstream by 2026.09 — /api/v1/health since 2026-10-07.
+APP_HEALTH_URL=http://localhost:3000/api/v1/health
 DB_TYPE=none
 APP_DATA_VOLUMES="data"

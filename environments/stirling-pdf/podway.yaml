@@ -39,7 +39,7 @@ preview: private
 
 setup:
   - >-
-    if [ ! -f .env ]; then printf 'STIRLING_PDF_IMAGE=%s\n' "stirlingtools/stirling-pdf:latest" > .env; chmod 600 .env; fi
+    if [ ! -f .env ]; then printf 'STIRLING_PDF_IMAGE=%s\n' "stirlingtools/stirling-pdf:3.1.0" > .env; chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
 

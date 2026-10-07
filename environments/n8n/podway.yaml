@@ -55,7 +55,7 @@ setup:
   - >-
     if [ ! -f .env ]; then
     printf 'N8N_IMAGE=%s\nN8N_ENCRYPTION_KEY=%s\nDB_PASSWORD=%s\n'
-    "docker.n8n.io/n8nio/n8n:latest" "$(openssl rand -hex 32)" "$(openssl rand -hex 24)" > .env;
+    "docker.n8n.io/n8nio/n8n:2.42.4" "$(openssl rand -hex 32)" "$(openssl rand -hex 24)" > .env;
     chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy

@@ -38,7 +38,7 @@ preview: private
 
 setup:
   - >-
-    if [ ! -f .env ]; then printf 'METABASE_IMAGE=%s\n' "metabase/metabase:latest" > .env; chmod 600 .env; fi
+    if [ ! -f .env ]; then printf 'METABASE_IMAGE=%s\n' "metabase/metabase:v0.63.19.3" > .env; chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
 
