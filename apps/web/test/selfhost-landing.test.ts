@@ -14,10 +14,6 @@ const landing = readFileSync(
   "utf8",
 );
 const root = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
-const controls = readFileSync(
-  new URL("../components/experiment-controls.tsx", import.meta.url),
-  "utf8",
-);
 
 describe("self-host landing and homepage promotion", () => {
   it("keeps the self-host page stable and separate from acquisition measurement", () => {
@@ -47,15 +43,12 @@ describe("self-host landing and homepage promotion", () => {
     expect(isLandingVariant("selfhost")).toBe(true);
   });
 
-  it("can replace only the root landing through an audited admin control", () => {
+  // The admin switch itself ("One landing only → Self-host") is behavior-tested in homepage-traffic.test.ts.
+  it("can serve the self-host landing at the root", () => {
     expect(root).toContain("isSelfhostHomepageEnabled");
     expect(root).toContain("<SelfhostLanding");
     expect(root).toContain("export async function generateMetadata");
     expect(root).toContain('selfhostLandingMetadata("https://podway.io/")');
-    expect(controls).toContain("Show on homepage");
-    expect(controls).toContain("Keep only at /selfhost");
-    expect(controls).toContain("clearLandingHomepageOverride");
-    expect(controls).toContain("The acquisition experiment and its measurements stay unchanged.");
   });
 
   it("keeps the account and app-specific launch paths", () => {

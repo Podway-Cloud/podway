@@ -85,7 +85,7 @@ describe("unread messages on resume", () => {
     expect(withUnreadMessages(BASE, 0)).toBe(BASE);
     const out = withUnreadMessages(BASE, 2);
     expect(out.startsWith(BASE)).toBe(true);
-    expect(out).toContain("2 unread messages");
+    expect(out).toContain("2 open messages");
     expect(out).toContain("podway msg inbox");
     expect(out).not.toContain("\n");
   });

@@ -171,6 +171,31 @@ export async function sendEmail(to: string, subject: string, content: EmailConte
  * Later links carrying an AES-encrypted, unforgeable action token (see admin/quick); this function just
  * mails the URLs the caller minted.
  */
+/** Open sign-up: tell the operator a new account was created (already approved). Its campaign `ref`
+ * and the app it came for are on /admin/users once they open their link. */
+export async function sendNewAccountEmail(
+  to: string,
+  account: { name?: string | null; email: string },
+  deps: EmailDeps = {},
+): Promise<void> {
+  const who = (account.name ?? "").trim() || account.email;
+  await sendEmail(
+    to,
+    `New Podway account: ${who}`,
+    {
+      name: null,
+      heading: "New account",
+      paragraphs: [
+        `${who} just signed up. They are in already — no approval needed.`,
+        `Name: ${account.name || "(none)"} · Email: ${account.email}`,
+      ],
+      button: { label: "See all users", url: "https://podway.io/admin/users" },
+      footer: "You're getting this because sign-ups are open and you asked to be notified.",
+    },
+    deps,
+  );
+}
+
 export async function sendNewRequestEmail(
   to: string,
   requester: { name?: string | null; email: string },
@@ -201,7 +226,14 @@ export async function sendNewRequestEmail(
  * Tell an APPROVED user they're in — the email the /pending page promises. Copy of record:
  * docs/strategy/alpha-invite-copy.md §1 (keep in sync).
  */
-export async function sendApprovalEmail(u: { name?: string | null; email: string }, deps: EmailDeps = {}): Promise<void> {
+/** `startPath`: the /start link (app + ref) they signed up through — the button returns them there, so
+ * they land in the wizard with their app picked instead of the bare dashboard. */
+export async function sendApprovalEmail(
+  u: { name?: string | null; email: string },
+  deps: EmailDeps = {},
+  startPath?: string | null,
+): Promise<void> {
+  const url = startPath?.startsWith("/start") ? `https://podway.io${startPath}` : "https://podway.io/signin";
   await sendEmail(
     u.email,
     "You're in — your Podway spot is live",
@@ -213,7 +245,7 @@ export async function sendApprovalEmail(u: { name?: string | null; email: string
         "Launch your first environment. It takes about a minute to reach a working project.",
         "You're one of a small first group, so I'll actually read what you send back. Reply to this email with anything — a bug, a rough edge, an idea, or just what you built.",
       ],
-      button: { label: "Launch your first pod", url: "https://podway.io/signin" },
+      button: { label: "Launch your first pod", url },
       footer: "You're getting this because you asked for access to Podway.",
     },
     deps,

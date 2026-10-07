@@ -128,6 +128,9 @@ export default async function globalSetup(): Promise<void> {
       PODWAY_DB: "pg",
       DATABASE_URL: url,
       PODWAY_TEST_LOGIN: "1",
+      // Prod has open sign-up (approved at creation); keep the approval QUEUE on here so the
+      // /pending gate + admin-approve specs still exercise it.
+      PODWAY_SIGNUP_REVIEW: "1",
       PODWAY_FAKE_PROVIDER: "1",
       // Render the preview card, so the cockpit e2e sees the REAL layout (it is a
       // big part of the page's height, and scroll behaviour depends on it).

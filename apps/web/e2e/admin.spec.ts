@@ -34,6 +34,30 @@ test.describe("admin access requests", () => {
     await ctx.close();
   });
 
+  test("a campaign link survives the approval wait: approved applicant resumes in the wizard with the app", async ({ browser, page }) => {
+    const applicant = `campaign-${Date.now()}@podway.test`;
+    const ctx = await browser.newContext();
+    const applicantPage = await ctx.newPage();
+    const res = await applicantPage.request.post("/api/auth/sign-up/email", {
+      data: { email: applicant, password: "test-password-123", name: "Campaign" },
+    });
+    expect(res.ok()).toBeTruthy();
+    // Unapproved: the campaign link waits on /pending (not a dead end at the bare dashboard later).
+    await applicantPage.goto("/start?app=umami&ref=email-e2e");
+    await expect(applicantPage).toHaveURL(/\/pending/);
+
+    await login(page, "admin");
+    await page.goto("/admin");
+    const row = page.locator("li", { hasText: applicant });
+    await row.getByRole("button", { name: /^approve$/i }).click();
+    await expect(row).toHaveCount(0, { timeout: 10_000 });
+
+    // Back on /pending after approval → straight into the wizard with Umami picked and the ref kept.
+    await applicantPage.goto("/pending");
+    await expect(applicantPage).toHaveURL(/\/dashboard\/pods\/new\?.*env=umami.*ref=email-e2e/, { timeout: 15_000 });
+    await ctx.close();
+  });
+
   test("a non-admin is denied every backoffice route", async ({ page }) => {
     await login(page, "approved");
     for (const route of ["/admin", "/admin/fleet"]) {

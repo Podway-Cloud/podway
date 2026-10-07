@@ -100,5 +100,6 @@ export function openInboxCount(inboxPath: string, donePath: string): number {
 /** Append the unread-messages line to the resume nudge (one line — the greeter types it). */
 export function withUnreadMessages(nudge: string, open: number): string {
   if (open <= 0) return nudge;
-  return `${nudge} Podway: you have ${open} unread message${open === 1 ? "" : "s"} from your other pods — run \`podway msg inbox\` to read ${open === 1 ? "it" : "them"}.`;
+  // "open", not "unread": the count is every message not marked done, old ones included (test:1, 2026-10-07).
+  return `${nudge} Podway: your inbox has ${open} open message${open === 1 ? "" : "s"} from your other pods — run \`podway msg inbox\`, then mark handled ones done.`;
 }

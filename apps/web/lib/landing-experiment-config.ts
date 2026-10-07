@@ -278,11 +278,13 @@ export function isLandingVisitorId(value: unknown): value is string {
 export function chooseLandingVariant(
   randomValue: number,
   definition: LandingExperimentDefinition = ACTIVE_LANDING_EXPERIMENT,
+  // The live split from the admin (landing_experiment_runs.weights); the coded allocation otherwise.
+  allocation: Readonly<Partial<Record<LandingVariant, number>>> = definition.allocation,
 ): LandingVariant {
   const bounded = Math.min(Math.max(randomValue, 0), 0.999999999999);
   let cumulative = 0;
   for (const variant of definition.variants) {
-    cumulative += (definition.allocation[variant] ?? 0) / 100;
+    cumulative += (allocation[variant] ?? 0) / 100;
     if (bounded < cumulative) return variant;
   }
   return definition.variants.at(-1) ?? definition.fallbackVariant;

@@ -31,7 +31,7 @@ export async function GET(req: Request): Promise<Response> {
   }
   const db = createAppDb();
   const [u] = await db
-    .select({ email: userTable.email, name: userTable.name, approved: userTable.approved })
+    .select({ email: userTable.email, name: userTable.name, approved: userTable.approved, pendingStart: userTable.pendingStart })
     .from(userTable)
     .where(eq(userTable.id, v.userId));
   if (!u) return page("Not found", "That access request no longer exists.");
@@ -40,7 +40,7 @@ export async function GET(req: Request): Promise<Response> {
     const wasApproved = u.approved;
     await db.update(userTable).set({ approved: true, deferredAt: null }).where(eq(userTable.id, v.userId));
     // Send the "you're in" email only on the real transition (a re-click must not re-spam them).
-    if (!wasApproved) await sendApprovalEmail({ name: u.name, email: u.email }).catch(() => undefined);
+    if (!wasApproved) await sendApprovalEmail({ name: u.name, email: u.email }, {}, u.pendingStart).catch(() => undefined);
     return page(
       "Approved ✓",
       `${u.name || u.email} is approved${wasApproved ? " (already was)" : " and has been emailed their invite"}.`,

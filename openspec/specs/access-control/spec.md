@@ -7,6 +7,26 @@ Gates the product to approved users during private alpha: accounts start unappro
 
 A user SHALL have a persisted `approved` flag, defaulting to not-approved on account creation.
 
+**Open sign-up (cloud default since 2026-10-07, owner: "let everyone in, notify me"):** a new cloud
+account SHALL be created already approved, and the operator SHALL get a "New account" email instead of
+the approve/later request email. `PODWAY_SIGNUP_REVIEW=1` restores the approval queue described below
+(the e2e suite runs with it on). Self-host is unaffected (its single owner is approved by the OSS path).
+
+**A campaign link survives the queue:** when an UNAPPROVED account opens `/start?app=…&ref=…`, the
+link SHALL be saved on the account (`pending_start`) and the user sent to `/pending`. On approval, both
+the `/pending` page and the "you're in" email SHALL return them to that link, so they land in the
+launch wizard with the app picked and the `ref` kept.
+
+#### Scenario: Open sign-up approves at creation
+- **GIVEN** the cloud edition without `PODWAY_SIGNUP_REVIEW=1`
+- **WHEN** a new account is created
+- **THEN** it SHALL be approved at once and the operator SHALL get a "New account" email
+
+#### Scenario: Approval returns the user to their campaign link
+- **GIVEN** the approval queue is on and an unapproved user opened `/start?app=umami&ref=email-x`
+- **WHEN** they are approved and open `/pending` (or the "you're in" email)
+- **THEN** they SHALL land in the launch wizard with Umami picked and the ref kept
+
 #### Scenario: New accounts start unapproved
 
 - **WHEN** a new user account is created

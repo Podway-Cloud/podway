@@ -74,23 +74,42 @@ test.describe("admin backoffice pages", () => {
     await expect(page.getByText(/No relays connected/i)).toBeVisible();
   });
 
-  test("Experiments admin renders and opens a detail page", async ({ page }) => {
+  test("Homepage traffic: an admin changes the split and a NEW visitor follows it", async ({ page, browser }) => {
     await login(page, "admin");
     await page.goto("/admin/experiments");
-    // Anchor on the page's own h1 (the panel always renders it, or the route 404s), waited generously
-    // because this admin route cold-compiles on first hit under CI/shard load.
-    await expect(page.getByRole("heading", { name: "Landing experiments" })).toBeVisible({ timeout: 20_000 });
-    // Open a specific experiment's detail via an href-based link, NOT a label. The old test looked for
-    // an "Open experiment" link; #290 renamed those links ("Edit" / "start a new experiment") and
-    // silently broke it — matching on the href instead survives a future rename. (The sidebar nav's
-    // "/admin/experiments" has no trailing segment, so it isn't matched.)
-    const detail = page.locator('a[href^="/admin/experiments/"]').first();
-    await expect(detail).toBeVisible({ timeout: 20_000 });
-    await detail.click();
-    await expect(page).toHaveURL(/\/admin\/experiments\/.+/, { timeout: 20_000 });
-    // The detail's controls card renders. Its title is control-type dependent ("Visibility" for a
-    // homepage-promotion experiment, "Runtime and controls" otherwise), so match either.
-    await expect(page.getByText(/Runtime and controls|Visibility/i).first()).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("heading", { name: "Homepage landing" })).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId("traffic-live")).toContainText("Split test");
+
+    // A SPLIT change (not "one landing"): visitors who already have an arm cookie — e.g. the
+    // landing-ab spec running in parallel — keep their landing, so this cannot disturb them.
+    const save = page.getByRole("button", { name: /save change/i });
+    const apply = async (pct: string) => {
+      // Real input, retried until hydrated: End = 100% on the slider; the "50 / 50" preset otherwise.
+      await expect(async () => {
+        if (pct === "100") await page.getByTestId("traffic-slider").press("End");
+        else await page.getByRole("button", { name: `${100 - Number(pct)} / ${pct}` }).click();
+        await expect(save).toBeEnabled({ timeout: 1_000 });
+      }).toPass({ timeout: 20_000 });
+      await save.click();
+      await page.getByRole("alertdialog").getByRole("button", { name: /apply now/i }).click();
+      await expect(page.getByTestId("traffic-live")).toContainText(`${100 - Number(pct)}% Agent computer · ${pct}% Self-host`, { timeout: 15_000 });
+    };
+    await apply("100");
+    await expect(page.getByTestId("traffic-log")).toContainText("Split 0% Agent computer · 100% Self-host");
+
+    // The middleware caches the split for ≤15s, so a fresh visitor may need one more try.
+    await expect(async () => {
+      const visitor = await browser.newContext();
+      try {
+        const v = await visitor.newPage();
+        await v.goto("/");
+        await expect(v.getByRole("heading", { level: 1 })).toHaveText(/Self-host anything/, { timeout: 5_000 });
+      } finally {
+        await visitor.close();
+      }
+    }).toPass({ timeout: 40_000 });
+
+    await apply("50"); // restore the default split for the rest of the suite
   });
 
   test("Fetch memory states its boundary and empty state", async ({ page }) => {

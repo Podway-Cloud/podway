@@ -33,3 +33,19 @@ export async function getAccountRef(userId: string): Promise<string | null> {
     .where(eq(userTable.id, userId));
   return rows[0]?.ref ?? null;
 }
+
+/** Remember the /start link (app + ref) an UNAPPROVED account came in through, so approval returns them
+ * to it. Latest link wins (they may click a newer campaign link while waiting). Only /start paths. */
+export async function savePendingStart(userId: string, startPath: string): Promise<void> {
+  if (!startPath.startsWith("/start") || startPath.length > 500) return;
+  await createAppDb().update(userTable).set({ pendingStart: startPath }).where(eq(userTable.id, userId));
+}
+
+/** Where an approved account should resume: its saved /start link, if any. */
+export async function getPendingStart(userId: string): Promise<string | null> {
+  const [row] = await createAppDb()
+    .select({ pendingStart: userTable.pendingStart })
+    .from(userTable)
+    .where(eq(userTable.id, userId));
+  return row?.pendingStart?.startsWith("/start") ? row.pendingStart : null;
+}

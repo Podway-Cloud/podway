@@ -149,9 +149,10 @@ SHALL accept only allowlisted experiment identifiers, variants, and event names.
 Each landing experiment SHALL define its immutable identifier, semantic variant subset, allocation,
 delivery mode, validation variant, canonical crawler variant, analysis window, and metric
 definitions in a server-controlled registry. Exactly one definition SHALL be active for new public
-assignment and event attribution. Runtime state SHALL allow an authorized administrator to stop
-the active experiment or pin one of its configured variants. Historical definitions and data SHALL
-remain read-only and inspectable.
+assignment and event attribution. Runtime state SHALL hold the active experiment's live traffic split
+(variant → percent) and a "one landing for everyone" mode, set only through the homepage traffic
+control below. The coded allocation is the default split when none is saved. Historical definitions
+and data SHALL remain read-only.
 
 #### Scenario: August experiment runs validation mode
 - **GIVEN** the active definition uses A/A/A validation mode
@@ -164,122 +165,57 @@ remain read-only and inspectable.
 - **WHEN** an assigned visitor requests `/`
 - **THEN** root rendering SHALL serve that visitor's assigned semantic variant
 
-#### Scenario: Administrator stops the active experiment
-- **GIVEN** an authorized administrator stops the active landing experiment
+#### Scenario: One landing for everyone
+- **GIVEN** an administrator set the homepage to one landing
 - **WHEN** a visitor requests `/`
-- **THEN** the pinned or configured fallback variant SHALL render without enrolling a new
-  participant and existing measurements SHALL remain available
-
-#### Scenario: Historical experiment is requested
-- **GIVEN** the July definition exists in the registry
-- **WHEN** an administrator opens its detail page
-- **THEN** the July allocation, variants, runtime, events, and audit history SHALL render without
-  permitting new mutations
+- **THEN** that landing SHALL render for every visitor, a new visitor SHALL get no variant cookie
+  (so a later split assigns them fairly), and existing measurements SHALL remain available
 
 #### Scenario: Variant changes materially
-- **GIVEN** headline, narrative, offer, proof, allocation, or variant set changes after August
+- **GIVEN** headline, narrative, offer, proof, or variant set changes after August
   measurement begins
 - **WHEN** operators publish that change as a new test
 - **THEN** the system SHALL use another experiment identifier so observations are not combined
 
-### Requirement: Admin experiment overview
-The admin dashboard SHALL expose an experiments overview restricted by existing admin access
-control. It SHALL list every registered historical and active experiment with status, configured
-allocation, delivery mode, runtime pin, start/stop times, eligible visitor count, exposure count,
-declared primary metric, and whether mutation controls are available.
+### Requirement: One homepage traffic control
+`/admin/experiments` (admin-only, cloud-only) SHALL be ONE page that states what `/` serves now and
+offers ONE control with two modes (owner redesign, 2026-10-07; it replaced Set default / Turn on-off /
+Stop / Pin / Promote and the per-experiment detail page):
+- **Split test**: a percent per landing (slider + presets), saved to the run's `weights`.
+- **One landing only**: every visitor sees the chosen landing (`status` stopped + `pinned_variant`).
+Nothing changes until Save; a confirm states the before → after and what happens to visitors and
+results. The middleware (Node runtime) reads the live split, cached ≤15s, and falls back to the coded
+allocation if the database cannot be read. Visitors are sticky: a returning visitor keeps their
+landing in split mode; only new visitors follow a new split.
 
-#### Scenario: Administrator opens the experiments overview
-- **GIVEN** an authorized administrator is signed in
-- **WHEN** the administrator opens `/admin/experiments`
-- **THEN** the page SHALL list both July and August definitions with their own immutable metadata
-  and measured results
+#### Scenario: Changing the split
+- **WHEN** an admin saves a 30/70 split
+- **THEN** new visitors are assigned 30/70, returning visitors keep their landing, and a new results
+  period starts
 
-#### Scenario: Non-administrator requests experiment administration
+#### Scenario: Switching to one landing and back
+- **WHEN** an admin saves "One landing only: Self-host", then later saves a split again
+- **THEN** every visitor sees Self-host meanwhile; the split's weights are kept, and saving the split
+  again resumes it with a new results period
+
+#### Scenario: Non-administrator
 - **GIVEN** a signed-out or non-admin visitor
-- **WHEN** the visitor requests an experiment admin route or action
-- **THEN** the existing admin access control SHALL deny access without exposing experiment data
-
-### Requirement: Admin experiment detail and funnel
-The admin dashboard SHALL expose a definition-driven detail view with preview links and per-variant
-counts, rates, and Wilson 95% intervals for eligible exposure, primary CTA, completed sign-in, pod
-creation, agent connection, and first project open. It SHALL also show per-variant bounded
-referrer/UTM breakdowns, assignment balance against configured allocation, sample progress,
-duplicate/exclusion health, ingestion failures, rejected-event counts, and a sanitized recent event
-stream. It SHALL describe validation, exploratory, and insufficient-evidence states without
-automatically declaring a winner.
-
-#### Scenario: Administrator evaluates three variants
-- **GIVEN** an authorized administrator opens the August experiment
-- **WHEN** experiment data exists
-- **THEN** the page SHALL render all three configured variants, their allocation, preview links,
-  raw funnel numerators and denominators, rates, intervals, and sample progress
-
-#### Scenario: Assignment balance is materially unexpected
-- **GIVEN** sufficient August assignments exist to evaluate configured allocation
-- **WHEN** observed assignment counts differ materially from the declared weights
-- **THEN** the detail page SHALL display an assignment-balance warning for instrumentation review
-
-#### Scenario: Experiment has little or validation-only data
-- **GIVEN** the experiment has insufficient measured exposure or remains in validation mode
-- **WHEN** the detail page renders
-- **THEN** it SHALL show an explicit state that prevents interpreting displayed rates as a winner
-
-#### Scenario: Administrator inspects recent events
-- **GIVEN** experiment events have been recorded
-- **WHEN** the administrator views the sanitized event stream
-- **THEN** events SHALL omit or mask anonymous identifiers, raw IP addresses, and arbitrary
-  payloads while retaining time, variant, event type, bounded item, and attribution state
+- **WHEN** they request the page or call its action
+- **THEN** access SHALL be denied before any write
 
 ### Requirement: Guarded and audited admin controls
-Experiment definitions SHALL be read-only in the admin dashboard. Confirmed Stop and Pin actions
-SHALL be available only for the active definition, SHALL validate against that definition's
-declared variants, and SHALL write the administrator, action, prior state, resulting state, and
-timestamp to an immutable audit record.
+Every homepage traffic change SHALL validate against the active definition (only its variants; whole
+percents summing to 100) and SHALL update the run and insert one `traffic` audit row (administrator,
+prior and resulting status, pin and weights, timestamp) in ONE statement; an unchanged save is a no-op.
+The page SHALL show these rows as a plain-words change log, newest first.
 
-The self-host homepage promotion SHALL be an independently mutable control in the same admin area,
-not a variant added to the active acquisition experiment. It SHALL allow an administrator to show
-the self-host landing at `/` or remove that promotion while leaving `/selfhost` available, and both
-changes SHALL be audited without altering acquisition assignments or measurements.
+When an anonymous visitor starts sign-in from the self-host landing, the site SHALL clear
+active-acquisition attribution cookies before the sign-in flow so a self-host conversion cannot appear
+without an acquisition exposure.
 
-Promotion and removal SHALL mutate the runtime state and insert its audit row atomically. A failed
-audit write SHALL leave the prior homepage state unchanged. When an anonymous visitor starts sign-in
-from the self-host landing, the site SHALL clear active-acquisition attribution cookies before the
-sign-in flow so a self-host conversion cannot appear without an acquisition exposure.
-
-#### Scenario: Administrator stops the active experiment
-- **GIVEN** an authorized administrator is viewing the active experiment
-- **WHEN** the administrator confirms Stop
-- **THEN** new enrollment SHALL cease, the fallback or existing pin SHALL become the canonical
-  variant, and an audit record SHALL be written
-
-#### Scenario: Administrator attempts to mutate a historical experiment
-- **GIVEN** an authorized administrator is viewing the historical July experiment
-- **WHEN** the administrator attempts a Stop or Pin action
-- **THEN** the server SHALL reject the mutation without changing runtime state or writing a success
-  audit record
-
-#### Scenario: Administrator attempts to pin an invalid variant
-- **GIVEN** an authorized administrator submits a variant not declared by the active definition
-- **WHEN** the server validates the action
-- **THEN** the action SHALL be rejected without changing runtime state or writing a success audit
-  record
-
-#### Scenario: Administrator promotes the self-host landing
-- **GIVEN** the self-host landing is available only at `/selfhost`
-- **WHEN** an administrator confirms Show on homepage
-- **THEN** `/` SHALL render the self-host landing, the acquisition experiment SHALL remain unchanged,
-  and an audit record SHALL identify the administrator and resulting promotion state
-
-#### Scenario: Administrator removes the self-host homepage promotion
-- **GIVEN** the self-host landing currently renders at `/`
-- **WHEN** an administrator confirms Keep only at `/selfhost`
-- **THEN** the acquisition landing SHALL return at `/`, `/selfhost` SHALL remain available, and an
-  audit record SHALL identify the administrator and restored state
-
-#### Scenario: Homepage audit write fails
-- **GIVEN** the current homepage state is known
-- **WHEN** a promotion or removal cannot insert its audit record
-- **THEN** the homepage state SHALL remain unchanged and the action SHALL report failure
+#### Scenario: Invalid split
+- **WHEN** an admin submits weights that use another experiment's landing or do not sum to 100
+- **THEN** the change SHALL be rejected without changing runtime state or writing an audit row
 
 #### Scenario: Self-host visitor starts sign-in
 - **GIVEN** an anonymous visitor is viewing the self-host landing at `/selfhost` or promoted at `/`
@@ -288,65 +224,20 @@ sign-in flow so a self-host conversion cannot appear without an acquisition expo
   later sign-in and activation events are not attributed to the acquisition experiment
 
 
-### Requirement: The admin panel states what serves `/` right now
-The landing-experiments admin page SHALL show, as a single live-state line, whether an A/B experiment
-is running (with the variant split and goal) or a single default landing is serving `/`, so an
-operator sees the current state without reading a table.
+### Requirement: Results per period, with a plain verdict
+Each saved split SHALL start a new results period. A period's cohort SHALL be the visitors whose FIRST
+homepage exposure fell in it, and only their sign-ins (the primary metric) and pod creations count —
+so numbers from different splits never mix and a returning visitor never moves between periods. The
+page SHALL show the current period's visitors, sign-ups, conversion and pods per landing, the uplift
+of the second landing versus the first (the control), and one plain verdict: "Too early", "Not decided
+yet" (with confidence and roughly how many more visitors reach 95%), or a winner at ≥95% confidence.
+Earlier periods SHALL stay available, collapsed.
 
-#### Scenario: An experiment is running
-- **WHEN** the operator opens the panel while the experiment status is `active`
-- **THEN** the live-state line names the running split, the goal metric, and the visitor count
+#### Scenario: A sign-up after the split changed
+- **GIVEN** a visitor first saw the homepage in period 1
+- **WHEN** they sign in during period 2
+- **THEN** the sign-up SHALL count in period 1, not period 2
 
-#### Scenario: No experiment is running
-- **WHEN** the status is `stopped`
-- **THEN** the live-state line says which single landing serves `/` and that all traffic goes to it
-
-### Requirement: An operator can set the default landing
-The panel SHALL let an operator choose which landing variant is the default served at `/`, taking
-effect without a deploy. The default is recorded as the experiment run's pinned variant; the served
-variant is resolved server-side from that state, so no client redirect is involved.
-
-#### Scenario: Setting a new default
-- **WHEN** the operator sets a non-default landing as the default
-- **THEN** that variant is pinned, `/` resolves to it server-side, and the panel marks it as default
-
-#### Scenario: The current default is not offered as a set target
-- **WHEN** a landing is already the default
-- **THEN** its control reads "current default" and is not actionable
-
-### Requirement: An operator can start and stop the running experiment
-The panel SHALL let an operator toggle the running experiment on or off and stop it, writing only the
-run status. Stopping keeps the current default serving `/`.
-
-#### Scenario: Stopping an experiment
-- **WHEN** the operator stops a running experiment
-- **THEN** the status becomes `stopped`, traffic stops splitting, and the current default serves `/`
-
-### Requirement: An operator can promote a winner
-When results exist, the panel SHALL offer to promote a chosen variant: in one action it becomes the
-default and the experiment ends.
-
-#### Scenario: Promoting the leader
-- **WHEN** the operator promotes a variant to default
-- **THEN** that variant is pinned as default AND the experiment status becomes `stopped`
-
-### Requirement: The split and goal are read-only in the panel
-The experiment's traffic split (allocation) and goal metric SHALL be shown read-only, sourced from the
-frozen experiment definition, with an affordance to start a NEW experiment to change them — because a
-change to allocation or goal requires a new experiment identifier for statistical validity and to
-avoid resetting the SEO entity signal. The panel MUST NOT let an operator edit allocation or goal in
-place.
-
-#### Scenario: Viewing the split and goal
-- **WHEN** the operator views the experiment zone
-- **THEN** the current split and goal are displayed but not editable, with a path to start a new
-  experiment
-
-### Requirement: Results report uplift and confidence against the control
-The results zone SHALL list each variant's visitors, conversions, and conversion rate, and for
-non-control variants an uplift and a confidence versus the control (the current default), computed
-from the recorded events. A winner is only called safe at 95% confidence or above.
-
-#### Scenario: A leading variant below the confidence bar
-- **WHEN** a variant leads on conversion rate but confidence is under 95%
-- **THEN** the panel shows the lead and uplift but does not present it as a safe call
+#### Scenario: A leading landing below the confidence bar
+- **WHEN** a landing leads on conversion but confidence is under 95%
+- **THEN** the verdict SHALL say "Not decided yet" and SHALL NOT present it as a winner

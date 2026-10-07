@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createNeonDb, createAppDb, schema } from "@podway/db";
-import { notifySignup, sendNewRequestEmail } from "./notify.js";
+import { notifySignup, sendNewAccountEmail, sendNewRequestEmail } from "./notify.js";
 import { mintActionToken } from "./action-token.js";
 
 export * from "./notify.js";
@@ -30,6 +30,8 @@ export interface AuthEnv {
   PODWAY_TEST_LOGIN?: string;
   /** "oss" ⇒ the self-host edition: email+password login (no GitHub OAuth). */
   PODWAY_EDITION?: string;
+  /** "1" restores the cloud sign-up approval queue (default: open sign-up). */
+  PODWAY_SIGNUP_REVIEW?: string;
 }
 
 export type Auth = ReturnType<typeof createAuth>;
@@ -52,6 +54,12 @@ export function ossTrustedOrigins(headers?: Headers): string[] {
   if (!host) return [];
   const proto = (headers.get("x-forwarded-proto") ?? "http").split(",")[0].trim() || "http";
   return [`${proto}://${host}`];
+}
+
+/** Cloud sign-up is OPEN (approved at creation) unless PODWAY_SIGNUP_REVIEW=1 restores the queue.
+ * Self-host has no queue at all (its single owner is approved by the OSS path). */
+export function isOpenSignup(env: AuthEnv): boolean {
+  return !isOssEdition(env) && env.PODWAY_SIGNUP_REVIEW !== "1";
 }
 
 export function isAuthConfigured(env: AuthEnv): boolean {
@@ -86,6 +94,10 @@ export function createAuth(env: AuthEnv) {
   // Email+password is the login for OSS (the owner) and for e2e; both have no SMTP, so a created
   // account is trusted-verified (see the create.before hook below).
   const emailPassword = testLogin || oss;
+  // Open sign-up (owner, 2026-10-07: "let everyone in, notify me"): cloud accounts are approved at
+  // creation and the operator gets a "new account" email. PODWAY_SIGNUP_REVIEW=1 restores the
+  // approval queue (the e2e suite sets it to keep exercising the gate).
+  const openSignup = isOpenSignup(env);
   // Trusted origins for better-auth's CSRF origin check. Explicit TRUSTED_ORIGINS wins. Otherwise,
   // OSS is served on an UNKNOWABLE origin (the owner's VPS IP, a domain, or localhost:8080), so
   // trust the request's OWN host: a legit same-origin request has Origin == Host and passes; a
@@ -148,9 +160,10 @@ export function createAuth(env: AuthEnv) {
           // Email+password sign-up (e2e or the OSS owner) has no SMTP to verify against, so a
           // created account is trusted-verified — otherwise verified-email gates would reject the
           // owner on a self-host box that can't send mail.
-          ...(emailPassword
+          ...(emailPassword || openSignup
             ? {
                 before: async (user: Record<string, unknown>) => {
+                  if (!emailPassword) return { data: { ...user, approved: true } };
                   // OSS is single-owner: refuse a second account. The guard is "does an owner
                   // credential already exist" — false for the legitimate first-run sign-up (no
                   // credential yet), true for any later attempt. Immune to a stray no-credential
@@ -160,7 +173,7 @@ export function createAuth(env: AuthEnv) {
                   }
                   // OSS: the created account IS the owner — approve it so it doesn't land on
                   // /pending (the cloud invite gate is meaningless single-tenant).
-                  return { data: { ...user, emailVerified: true, ...(oss ? { approved: true } : {}) } };
+                  return { data: { ...user, emailVerified: true, ...(oss || openSignup ? { approved: true } : {}) } };
                 },
               }
             : {}),
@@ -174,7 +187,9 @@ export function createAuth(env: AuthEnv) {
             const adminEmail =
               process.env.PODWAY_ADMIN_NOTIFY_EMAIL ||
               process.env.ADMIN_EMAILS?.split(",")[0]?.trim();
-            if (adminEmail) {
+            if (adminEmail && openSignup) {
+              await sendNewAccountEmail(adminEmail, { name: created.name, email: created.email });
+            } else if (adminEmail) {
               const base = (process.env.PODWAY_PUBLIC_URL || "https://podway.io").replace(/\/+$/, "");
               const link = (a: "approve" | "later"): string =>
                 `${base}/admin/quick?t=${encodeURIComponent(mintActionToken(a, created.id, Date.now()))}`;

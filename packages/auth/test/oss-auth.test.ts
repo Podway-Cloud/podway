@@ -103,3 +103,12 @@ describe("OSS owner helpers (single-tenant)", () => {
     expect(await ownerCredentialExists(db)).toBe(false);
   });
 });
+
+describe("open sign-up (owner, 2026-10-07: 'let everyone in, notify me')", () => {
+  it("approves cloud sign-ups at creation unless the review queue is switched back on", async () => {
+    const { isOpenSignup } = await import("../src/index.js");
+    expect(isOpenSignup({})).toBe(true); // cloud default: open
+    expect(isOpenSignup({ PODWAY_SIGNUP_REVIEW: "1" })).toBe(false); // queue restored
+    expect(isOpenSignup({ PODWAY_EDITION: "oss" })).toBe(false); // self-host: no queue concept
+  });
+});

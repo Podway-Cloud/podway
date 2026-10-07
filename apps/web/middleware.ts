@@ -7,6 +7,7 @@ import {
   isLandingVisitorId,
   isVariantForExperiment,
 } from "@/lib/landing-experiment-config";
+import { getHomepageTrafficCached } from "@/lib/homepage-traffic";
 
 const LANDING_EXPERIMENT = ACTIVE_LANDING_EXPERIMENT;
 
@@ -16,7 +17,7 @@ const LANDING_EXPERIMENT = ACTIVE_LANDING_EXPERIMENT;
  * `.podway.cloud` cookie, so a `www` visit can't produce `INVALID_ORIGIN` at
  * sign-in. 308 preserves method/body for any non-GET that slips through.
  */
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const apex = canonicalRedirectHost(req.headers.get("host"));
   if (apex) {
     const url = req.nextUrl.clone();
@@ -58,9 +59,15 @@ export function middleware(req: NextRequest) {
 
   const storedVariant = req.cookies.get(LANDING_EXPERIMENT.cookie.variant)?.value;
   const storedVisitor = req.cookies.get(LANDING_EXPERIMENT.cookie.visitor)?.value;
+  // The admin's live traffic (cached ≤15s; null on a DB error → the coded split). In "one landing"
+  // mode a NEW visitor gets that landing but NO variant cookie, so switching back to a split assigns
+  // them fairly; a returning visitor's cookie is kept (page.tsx serves the one landing regardless).
+  const traffic = await getHomepageTrafficCached();
+  const sticky = isVariantForExperiment(LANDING_EXPERIMENT, storedVariant);
+  const oneLanding = traffic?.mode === "one" ? traffic.one : null;
   const variant = isVariantForExperiment(LANDING_EXPERIMENT, storedVariant)
     ? storedVariant
-    : chooseLandingVariant(Math.random(), LANDING_EXPERIMENT);
+    : oneLanding ?? chooseLandingVariant(Math.random(), LANDING_EXPERIMENT, traffic?.weights);
   const visitorId = isLandingVisitorId(storedVisitor) ? storedVisitor : crypto.randomUUID();
 
   requestHeaders.set(LANDING_EXPERIMENT.requestHeaders.variant, variant);
@@ -74,7 +81,7 @@ export function middleware(req: NextRequest) {
     path: "/",
     maxAge: LANDING_EXPERIMENT.cookie.maxAgeSeconds,
   };
-  if (!isVariantForExperiment(LANDING_EXPERIMENT, storedVariant)) {
+  if (!sticky && !oneLanding) {
     response.cookies.set(LANDING_EXPERIMENT.cookie.variant, variant, cookieOptions);
   }
   if (!isLandingVisitorId(storedVisitor)) {
@@ -85,5 +92,7 @@ export function middleware(req: NextRequest) {
 
 // Run on everything except Next internals and static assets.
 export const config = {
+  // Node runtime (stable in Next 15.5): the live split is read from the DB (lib/homepage-traffic.ts).
+  runtime: "nodejs",
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.[\\w]+$).*)"],
 };

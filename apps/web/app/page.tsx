@@ -134,7 +134,7 @@ export default async function Home() {
           __html: JSON.stringify(acquisitionJsonLd).replace(/</g, "\\u003c"),
         }}
       />
-      <LandingExperimentExposure />
+      <LandingExperimentExposure variant={variant} />
       {landing}
     </>
   );

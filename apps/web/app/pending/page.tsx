@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { currentUserAllowed } from "@/lib/access";
+import { getPendingStart } from "@/lib/attribution";
 import SignOutButton from "../dashboard/sign-out-button";
 import { linkCurrentLandingAttribution } from "@/lib/landing-experiment-attribution";
 
@@ -8,7 +9,8 @@ export const dynamic = "force-dynamic";
 export default async function Pending() {
   const { user, allowed } = await currentUserAllowed();
   if (!user) redirect("/signin");
-  if (allowed) redirect("/dashboard");
+  // Approved while waiting: resume the campaign link they came in through (app + ref), else the dashboard.
+  if (allowed) redirect((await getPendingStart(user.id)) ?? "/dashboard");
   await linkCurrentLandingAttribution(user.id);
   return (
     <main className="center">

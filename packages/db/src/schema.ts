@@ -44,6 +44,8 @@ export const user = pgTable("user", {
   // is the attribution model. Opaque, length-capped, charset-restricted text (see lib/ref.ts in
   // apps/web) — stored verbatim, never rendered as trusted markup. Null = no known source.
   ref: text("ref"),
+  /** The /start link (app + ref) an unapproved account arrived with; approval sends them back to it. */
+  pendingStart: text("pending_start"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -399,6 +401,11 @@ export const landingExperimentRuns = pgTable(
     rejectedEvents: integer("rejected_events").notNull().default(0),
     duplicateEvents: integer("duplicate_events").notNull().default(0),
     ingestionFailures: integer("ingestion_failures").notNull().default(0),
+    /** Runtime traffic split (variant → percent, sums to 100). NULL = the coded allocation. */
+    weights: jsonb("weights").$type<Partial<Record<LandingExperimentVariant, number>>>(),
+    /** Results period: bumped by every saved split, so numbers from different splits never mix. */
+    period: integer("period").notNull().default(1),
+    periodStartedAt: timestamp("period_started_at"),
     updatedBy: text("updated_by").references(() => user.id, { onDelete: "set null" }),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -475,18 +482,20 @@ export const landingExperimentAudit = pgTable(
     actorUserId: text("actor_user_id")
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
-    action: text("action").$type<"stop" | "pin" | "unpin">().notNull(),
+    action: text("action").$type<"stop" | "pin" | "unpin" | "traffic">().notNull(),
     previousStatus: text("previous_status")
       .$type<LandingExperimentRuntimeStatus>()
       .notNull(),
     previousPinnedVariant: text("previous_pinned_variant").$type<LandingExperimentVariant>(),
     nextStatus: text("next_status").$type<LandingExperimentRuntimeStatus>().notNull(),
     nextPinnedVariant: text("next_pinned_variant").$type<LandingExperimentVariant>(),
+    previousWeights: jsonb("previous_weights").$type<Partial<Record<LandingExperimentVariant, number>>>(),
+    nextWeights: jsonb("next_weights").$type<Partial<Record<LandingExperimentVariant, number>>>(),
     at: timestamp("at").notNull().defaultNow(),
   },
   (t) => [
     index("landing_audit_experiment_at_idx").on(t.experimentId, t.at),
-    check("landing_audit_action_check", sql`${t.action} in ('stop', 'pin', 'unpin')`),
+    check("landing_audit_action_check", sql`${t.action} in ('stop', 'pin', 'unpin', 'traffic')`),
     check(
       "landing_audit_status_check",
       sql`${t.previousStatus} in ('active', 'stopped') and ${t.nextStatus} in ('active', 'stopped')`,

@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser, editionOss } from "@/lib/session";
 import { getEnvironmentDetail } from "@/lib/environments";
-import { recordFirstTouchRef } from "@/lib/attribution";
+import { recordFirstTouchRef, savePendingStart } from "@/lib/attribution";
+import { currentUserAllowed } from "@/lib/access";
 import { sanitizeRef } from "@podway/shared";
 import { POD_SIZES } from "@podway/shared/tiers";
 
@@ -44,22 +45,29 @@ export default async function StartPage({
   // at this size" (the default-landing pricing cards).
   const size = (POD_SIZES as readonly string[]).includes(rawSize ?? "") ? rawSize : undefined;
 
+  const qp = new URLSearchParams();
+  if (app) qp.set("app", app);
+  if (ref) qp.set("ref", ref);
+  if (name) qp.set("name", name);
+  if (size) qp.set("size", size);
+  if (tab) qp.set("tab", tab);
+  const startPath = `/start${qp.size ? `?${qp.toString()}` : ""}`;
+
   const user = await getCurrentUser();
-  if (!user) {
-    const qp = new URLSearchParams();
-    if (app) qp.set("app", app);
-    if (ref) qp.set("ref", ref);
-    if (name) qp.set("name", name);
-    if (size) qp.set("size", size);
-    if (tab) qp.set("tab", tab);
-    const next = `/start${qp.size ? `?${qp.toString()}` : ""}`;
-    redirect(`/signin?next=${encodeURIComponent(next)}`);
-  }
+  if (!user) redirect(`/signin?next=${encodeURIComponent(startPath)}`);
 
   // First-touch attribution: cloud growth concept only — self-host has no affiliate/attribution
   // surface (edition-parity). Set-once, never overwritten (recordFirstTouchRef).
   if (!editionOss() && ref) {
     await recordFirstTouchRef(user.id, ref);
+  }
+
+  // Cloud invite gate: an account still waiting for approval keeps THIS link (app + ref) on the
+  // account, so approval — the /pending page and the "you're in" email — brings them back here with
+  // their app picked, instead of the bare dashboard (GTM campaign links, 2026-10-07).
+  if (!editionOss() && !(await currentUserAllowed()).allowed) {
+    await savePendingStart(user.id, startPath);
+    redirect("/pending");
   }
 
   // `app` wins; otherwise a size-only link launches the blank workspace at that size. Neither → the
@@ -73,9 +81,9 @@ export default async function StartPage({
   // walkthrough instead of the default coach-mark tour; `ref` (if any) carries through so
   // launchPod can tag THIS pod with the session's active source (may be fresher than the
   // account's first-touch ref).
-  const qp = new URLSearchParams({ env: detail.name, from: "deeplink" });
-  if (ref) qp.set("ref", ref);
-  if (name) qp.set("name", name);
-  if (size) qp.set("size", size);
-  redirect(`/dashboard/pods/new?${qp.toString()}`);
+  const wizard = new URLSearchParams({ env: detail.name, from: "deeplink" });
+  if (ref) wizard.set("ref", ref);
+  if (name) wizard.set("name", name);
+  if (size) wizard.set("size", size);
+  redirect(`/dashboard/pods/new?${wizard.toString()}`);
 }

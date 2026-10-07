@@ -2,14 +2,6 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { wilsonInterval } from "../lib/landing-experiment-store";
 
-const detailPage = readFileSync(
-  new URL("../app/admin/experiments/[id]/page.tsx", import.meta.url),
-  "utf8",
-);
-const controls = readFileSync(
-  new URL("../components/experiment-controls.tsx", import.meta.url),
-  "utf8",
-);
 const rootPage = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 const migration = readFileSync(
   new URL("../../../packages/db/drizzle/0033_expand_landing_variants.sql", import.meta.url),
@@ -58,16 +50,6 @@ describe("A/B/C delivery and admin diagnostics", () => {
     expect(rootPage).toContain('variant === "agent-home"');
     expect(rootPage).toContain('variant === "agent-computer"');
     expect(rootPage).toContain('deliveryMode === "measured"');
-  });
-
-  it("uses definition-driven controls, previews, progress, intervals, and balance state", () => {
-    expect(controls).toContain("variants.map");
-    expect(controls).toContain("Historical definition");
-    expect(detailPage).toContain("Variant previews");
-    expect(detailPage).toContain("Operational sample progress");
-    expect(detailPage).toContain("Assignment-balance warning");
-    expect(detailPage).toContain("Acquisition by variant");
-    expect(detailPage).not.toContain("50 / 50");
   });
 
   it("computes bounded Wilson intervals and preserves the zero-data state", () => {

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login } from "./helpers";
+import { login, pinLandingArm } from "./helpers";
 
 test.describe("access gating", () => {
   test("anonymous is redirected from gated pages to sign-in", async ({ page }) => {
@@ -21,8 +21,11 @@ test.describe("access gating", () => {
     await expect(page).toHaveURL(/\/signin/, { timeout: 15_000 });
   });
 
-  test("landing sends an authenticated user to the dashboard", async ({ page }) => {
-    await login(page, "approved");
+  test("landing sends an authenticated user to the dashboard", async ({ page, context, baseURL }) => {
+    // The agent-computer landing's CTA becomes "Open dashboard" when signed in; the self-host landing's
+    // stays "Start hosting an app" — pin the arm, or this fails whenever the split picks self-host.
+    await login(page, "approved"); // first: a cookie set before the auth calls trips the CSRF origin check
+    await pinLandingArm(context, baseURL!, "agent-computer");
     await page.goto("/");
     const cta = page.getByRole("link", { name: /open dashboard/i }).first();
     await expect(cta).toBeVisible();

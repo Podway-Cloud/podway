@@ -1,52 +1,61 @@
 import DashboardShell, { type NavItem } from "@/components/dashboard-shell";
 import DashboardPage from "@/components/dashboard-page";
 import ExperimentsPanel from "@/components/experiments-panel";
-import type { LandingPanelData } from "@/lib/landing-experiment-store";
+import { ACTIVE_LANDING_EXPERIMENT } from "@/lib/landing-experiment-config";
+import type { HomepageTraffic } from "@/lib/homepage-traffic";
+import type { ChangeLogEntry, PeriodResult } from "@/lib/homepage-traffic-report";
 
 /**
- * DEV-ONLY. Renders the landing-experiments panel with MOCK data (a running A/B test with a
- * clear winner) so the four-zone layout can be screenshotted without a DB or admin login.
- * Uses the REAL panel + client controls. Not linked anywhere; returns null in production.
+ * DEV-ONLY. Renders the homepage traffic panel with MOCK data (a 50/50 split, one earlier period)
+ * so it can be screenshotted without a DB or admin login. Uses the REAL panel + client control
+ * (Save would fail here — there is no DB). Not linked anywhere; returns null in production.
  */
 const NAV: NavItem[] = [
   { href: "/admin", label: "Access requests", icon: "UserCheck", exact: true },
   { href: "/admin/experiments", label: "Experiments", icon: "ChartNoAxesCombined" },
 ];
 
-const MOCK: LandingPanelData = {
-  experimentId: "landing-computer-vs-selfhost-2026-10",
-  label: "Landing: real home + cloud VM",
-  status: "active",
-  deliveryMode: "measured",
-  pinnedVariant: "outcomes",
-  fallbackVariant: "outcomes",
-  servedVariant: "outcomes",
-  variants: ["outcomes", "agent-computer", "agent-home"],
-  allocation: { outcomes: 34, "agent-computer": 33, "agent-home": 33 },
-  primaryMetric: "signin_completed",
-  totalVisitors: 15_350,
-  rows: [
-    { variant: "outcomes", visitors: 5200, conversions: 468, isControl: true, isDefault: true },
-    { variant: "agent-computer", visitors: 5100, conversions: 612, isControl: false, isDefault: false },
-    { variant: "agent-home", visitors: 5050, conversions: 505, isControl: false, isDefault: false },
-  ],
+const P2 = new Date("2026-10-06T12:40:00Z");
+const TRAFFIC: HomepageTraffic = {
+  mode: "split",
+  weights: { "agent-computer": 50, selfhost: 50 },
+  one: null,
+  period: 2,
+  periodStartedAt: P2,
 };
+const RESULTS: PeriodResult[] = [
+  {
+    period: 2,
+    start: P2,
+    end: null,
+    weights: { "agent-computer": 50, selfhost: 50 },
+    rows: [
+      { variant: "agent-computer", visitors: 1204, signups: 31, pods: 9 },
+      { variant: "selfhost", visitors: 1188, signups: 44, pods: 15 },
+    ],
+  },
+  {
+    period: 1,
+    start: new Date("2026-10-05T09:10:00Z"),
+    end: P2,
+    weights: { "agent-computer": 100, selfhost: 0 },
+    rows: [
+      { variant: "agent-computer", visitors: 402, signups: 9, pods: 3 },
+      { variant: "selfhost", visitors: 0, signups: 0, pods: 0 },
+    ],
+  },
+];
+const LOG: ChangeLogEntry[] = [
+  { at: P2, who: "Alex Morgan", what: "Split 50% Agent computer · 50% Self-host — new results period" },
+  { at: new Date("2026-10-05T09:10:00Z"), who: "Alex Morgan", what: "Only Agent computer — split paused" },
+];
 
 export default function ExperimentsPanelHarness() {
   if (process.env.NODE_ENV === "production") return null;
   return (
     <DashboardShell userName="Alex Morgan" userId="demo" nav={NAV} homeHref="/admin">
-      <DashboardPage
-        title="Landing experiments"
-        intro="Choose what serves /, run the A/B test, and promote a winner."
-        wide
-        actions={
-          <span className="inline-flex items-center rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10.5px] font-medium text-success">
-            Running
-          </span>
-        }
-      >
-        <ExperimentsPanel data={MOCK} />
+      <DashboardPage title="Homepage landing" intro="What visitors see at podway.io, and how each landing converts." wide>
+        <ExperimentsPanel definition={ACTIVE_LANDING_EXPERIMENT} traffic={TRAFFIC} results={RESULTS} log={LOG} />
       </DashboardPage>
     </DashboardShell>
   );

@@ -79,14 +79,14 @@ describe("landing experiment configuration", () => {
   });
 });
 
-describe("landing experiment request assignment", () => {
-  it("clears acquisition attribution before self-host visitors sign in", () => {
+describe("landing experiment request assignment", async () => {
+  it("clears acquisition attribution before self-host visitors sign in", async () => {
     const request = new NextRequest("https://podway.cloud/selfhost/signin", {
       headers: {
         cookie: `${LANDING_EXPERIMENT.cookie.variant}=agent-computer; ${LANDING_EXPERIMENT.cookie.visitor}=visitor_1234567890abcdef`,
       },
     });
-    const response = middleware(request);
+    const response = await middleware(request);
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe("https://podway.cloud/signin");
@@ -94,25 +94,25 @@ describe("landing experiment request assignment", () => {
     expect(response.cookies.get(LANDING_EXPERIMENT.cookie.visitor)?.value).toBe("");
   });
 
-  it("/selfhost/signin keeps a selfhost-arm visitor's attribution, drops any other arm's", () => {
+  it("/selfhost/signin keeps a selfhost-arm visitor's attribution, drops any other arm's", async () => {
     const go = (variant: string) =>
       middleware(new NextRequest("https://podway.io/selfhost/signin", {
         headers: { cookie: `${LANDING_EXPERIMENT.cookie.variant}=${variant}; ${LANDING_EXPERIMENT.cookie.visitor}=visitor_1234567890abcdef` },
       }));
     // Deleting sets an expired cookie on the response; keeping sets nothing.
-    expect(go("selfhost").cookies.get(LANDING_EXPERIMENT.cookie.variant)).toBeUndefined();
-    expect(go("agent-computer").cookies.get(LANDING_EXPERIMENT.cookie.variant)?.value).toBe("");
+    expect((await go("selfhost")).cookies.get(LANDING_EXPERIMENT.cookie.variant)).toBeUndefined();
+    expect((await go("agent-computer")).cookies.get(LANDING_EXPERIMENT.cookie.variant)?.value).toBe("");
   });
 
-  it("assigns on the first root response and preserves a valid repeat assignment", () => {
+  it("assigns on the first root response and preserves a valid repeat assignment", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0.75);
-    const first = middleware(new NextRequest("https://podway.cloud/"));
+    const first = await middleware(new NextRequest("https://podway.cloud/"));
     const variant = first.cookies.get(LANDING_EXPERIMENT.cookie.variant)?.value;
     const visitor = first.cookies.get(LANDING_EXPERIMENT.cookie.visitor)?.value;
     expect(variant).toBe("selfhost"); // 0.75 → the second arm, selfhost (measured: it is SERVED)
     expect(isLandingVisitorId(visitor)).toBe(true);
 
-    const repeat = middleware(
+    const repeat = await middleware(
       new NextRequest("https://podway.cloud/", {
         headers: {
           cookie: `${LANDING_EXPERIMENT.cookie.variant}=${variant}; ${LANDING_EXPERIMENT.cookie.visitor}=${visitor}`,
@@ -125,9 +125,9 @@ describe("landing experiment request assignment", () => {
     ).toBe("selfhost");
   });
 
-  it("recovers invalid cookies, excludes crawlers, and leaves previews untouched", () => {
+  it("recovers invalid cookies, excludes crawlers, and leaves previews untouched", async () => {
     vi.spyOn(Math, "random").mockReturnValue(0.25);
-    const recovered = middleware(
+    const recovered = await middleware(
       new NextRequest("https://podway.cloud/", {
         headers: { cookie: `${LANDING_EXPERIMENT.cookie.variant}=v2; pb_landing_visitor=bad` },
       }),
@@ -137,7 +137,7 @@ describe("landing experiment request assignment", () => {
       isLandingVisitorId(recovered.cookies.get(LANDING_EXPERIMENT.cookie.visitor)?.value),
     ).toBe(true);
 
-    const crawler = middleware(
+    const crawler = await middleware(
       new NextRequest("https://podway.cloud/", {
         headers: { "user-agent": "Mozilla/5.0 Googlebot/2.1" },
       }),
@@ -147,7 +147,7 @@ describe("landing experiment request assignment", () => {
       crawler.headers.get(`x-middleware-request-${LANDING_EXPERIMENT.requestHeaders.eligible}`),
     ).toBe("0");
 
-    const preview = middleware(
+    const preview = await middleware(
       new NextRequest("https://podway.cloud/preview/landing/agent-computer"),
     );
     expect(preview.cookies.getAll()).toHaveLength(0);
