@@ -3,6 +3,7 @@ import { requireAdmin, listUsersDetailed } from "@/lib/access";
 import DashboardPage from "@/components/dashboard-page";
 import AdminUserRow from "@/components/admin-user-row";
 import { FREE_POD_OFFERS } from "@podway/shared";
+import AdminSigninCell from "@/components/admin-signin-cell";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,7 @@ export default async function UsersPage() {
           <thead className="border-b border-border/60 bg-surface-1">
             <tr>
               <th className={th}>User</th>
+              <th className={th}>Sign-in</th>
               <th className={th}>Ref</th>
               <th className={th}>Free pod</th>
               <th className={th}>Registered</th>
@@ -76,6 +78,9 @@ export default async function UsersPage() {
                   </div>
                   <div className="text-[11.5px] text-muted-foreground">{u.email}</div>
                   </Link>
+                </td>
+                <td className={td}>
+                  <AdminSigninCell u={u} />
                 </td>
                 <td className={`${td} font-mono text-[11.5px] text-muted-foreground`}>
                   <span className="block max-w-[160px] truncate" title={u.ref ?? undefined}>{u.ref ?? "—"}</span>
@@ -114,7 +119,7 @@ export default async function UsersPage() {
       </div>
       <p className="text-[12px] text-muted-foreground">
         Login count + last IP come from active sessions (sessions before 2026-10-08 stored no IP). Ref is the
-        account&rsquo;s first-touch link. Click a user for details and their pods. Revoke removes access AND suspends the user&rsquo;s running pods (data kept).
+        account&rsquo;s first-touch link. A GitHub sign-in shows the account&rsquo;s age and public repos, in amber when it is new (&lt;30 days) or empty. Click a user for details and their pods. Revoke removes access AND suspends the user&rsquo;s running pods (data kept).
       </p>
     </DashboardPage>
   );

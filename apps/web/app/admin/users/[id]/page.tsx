@@ -5,6 +5,7 @@ import { getFleet } from "@/lib/fleet";
 import { getBillingService } from "@/lib/pod-service";
 import DashboardPage from "@/components/dashboard-page";
 import AdminUserRow from "@/components/admin-user-row";
+import AdminSigninCell from "@/components/admin-signin-cell";
 import AdminPodsTable, { POD_SORT_KEYS, type PodSortKey } from "@/components/admin-pods-table";
 import { FREE_POD_OFFERS } from "@podway/shared";
 
@@ -36,6 +37,7 @@ export default async function AdminUserPage({
 
   const facts: [string, React.ReactNode][] = [
     ["Email", u.email],
+    ["Sign-in", <AdminSigninCell key="si" u={u} />],
     ["Access", u.approved ? "approved" : <span className="text-destructive">revoked</span>],
     ["Registered", when(u.createdAt)],
     ["Came from (ref)", <span key="ref" className="font-mono">{u.ref ?? "—"}</span>],

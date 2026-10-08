@@ -1,7 +1,8 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { createAppDb, user as userTable, session as sessionTable, pods as podsTable, billingAccounts } from "@podway/db";
+import { createAppDb, user as userTable, session as sessionTable, pods as podsTable, billingAccounts, account as accountTable } from "@podway/db";
+import { githubProfile, githubLooksThin, type GithubProfile } from "./github-profile";
 import { withDbRetry } from "@podway/auth";
 import { getCurrentUser, editionOss, type CurrentUser } from "./session";
 import { isAdmin, isPreapproved } from "./access-rules";
@@ -107,6 +108,10 @@ export interface AdminUserDetail extends AdminUser {
   freeOfferSince: string | null;
   /** A card is on file (billing). */
   hasCard: boolean;
+  /** How they sign in ("github", "google", …). */
+  providers: string[];
+  /** GitHub sign-ups: public account age + repos (abuse signal), null when unknown. */
+  github: (GithubProfile & { thin: boolean }) | null;
 }
 
 /**
@@ -116,7 +121,7 @@ export interface AdminUserDetail extends AdminUser {
  */
 export async function listUsersDetailed(): Promise<AdminUserDetail[]> {
   const db = createAppDb();
-  const [users, sessions, pods, cards] = await Promise.all([
+  const [users, sessions, pods, cards, accounts] = await Promise.all([
     db.select().from(userTable),
     db
       .select({
@@ -128,7 +133,14 @@ export async function listUsersDetailed(): Promise<AdminUserDetail[]> {
       .from(sessionTable),
     db.select({ ownerId: podsTable.ownerId }).from(podsTable),
     db.select({ ownerId: billingAccounts.ownerId, hasCard: billingAccounts.hasCard }).from(billingAccounts),
+    db.select({ userId: accountTable.userId, providerId: accountTable.providerId, accountId: accountTable.accountId }).from(accountTable),
   ]);
+  // GitHub profile per GitHub sign-up (cached a day in github-profile.ts). ponytail: one parallel burst
+  // on a cold cache — fine at today's user count; batch/persist it if users reach the thousands.
+  const ghIdOf = new Map(accounts.filter((a) => a.providerId === "github").map((a) => [a.userId, a.accountId]));
+  const ghProfiles = new Map(
+    await Promise.all([...ghIdOf].map(async ([uid, gid]) => [uid, await githubProfile(gid)] as const)),
+  );
   const carded = new Set(cards.filter((c) => c.hasCard).map((c) => c.ownerId));
 
   const byUser = new Map<string, typeof sessions>();
@@ -161,6 +173,11 @@ export async function listUsersDetailed(): Promise<AdminUserDetail[]> {
         freeOffer: u.freeOffer,
         freeOfferSince: u.freeOfferSince ? u.freeOfferSince.toISOString() : null,
         hasCard: carded.has(u.id),
+        providers: [...new Set(accounts.filter((a) => a.userId === u.id).map((a) => a.providerId))],
+        github: (() => {
+          const p = ghProfiles.get(u.id);
+          return p ? { ...p, thin: githubLooksThin(p) } : null;
+        })(),
       };
     })
     .sort(
