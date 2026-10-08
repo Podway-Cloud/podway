@@ -38,4 +38,11 @@ describe("POST /api/radar/ingest", () => {
     expect(await ok.json()).toMatchObject({ ok: true, accepted: 1, dropped: 0 });
     expect(saveRadarFeed).toHaveBeenCalledTimes(1);
   });
+
+  it("names why each dropped item was dropped", async () => {
+    const two = JSON.parse(feed);
+    two.items.push({ ...two.items[0], slug: "umami", opened: "2026-10-06T10:00:00Z", issue_number: "1" });
+    const res = await (await post(JSON.stringify(two), `Bearer ${TOKEN}`)).json();
+    expect(res).toMatchObject({ accepted: 1, dropped: 1, reasons: ["item 1 (umami): bad issueNumber, opened"] });
+  });
 });

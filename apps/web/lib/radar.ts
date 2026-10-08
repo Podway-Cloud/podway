@@ -33,14 +33,17 @@ const optStr = (v: unknown, max: number): string | null => (v == null ? null : s
 /** Validate the GTM pod's radar-public.json (its snake_case shape). Strict: an item that is not a public
  * GitHub issue link, or has an over-long field, is dropped — the pages render this verbatim. Null when
  * the envelope itself is wrong. */
-export function parseRadarFeed(raw: unknown): RadarFeed | null {
+export function parseRadarFeed(raw: unknown, rejects?: string[]): RadarFeed | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   const updated = day(o.updated);
   if (!updated || !Array.isArray(o.items) || o.items.length > MAX_ITEMS) return null;
   const items: RadarItem[] = [];
-  for (const r of o.items as Record<string, unknown>[]) {
-    if (!r || typeof r !== "object") continue;
+  for (const [i, r] of (o.items as Record<string, unknown>[]).entries()) {
+    if (!r || typeof r !== "object") {
+      rejects?.push(`item ${i}: not an object`);
+      continue;
+    }
     const issueUrl = str(r.issue_url, 300);
     const item = {
       app: str(r.app, 60),
@@ -55,8 +58,15 @@ export function parseRadarFeed(raw: unknown): RadarFeed | null {
       fromVersion: optStr(r.from_version, 40),
       toVersion: optStr(r.to_version, 40),
     };
-    if (Object.entries(item).some(([k, v]) => v === null && k !== "fromVersion" && k !== "toVersion")) continue;
-    if (!/^[a-z0-9-]+$/.test(item.slug!)) continue;
+    // Name each bad field so the sender can fix its feed (GTM: 23 of 37 dropped with no reason, 2026-10-08).
+    const bad = Object.entries(item)
+      .filter(([k, v]) => v === null && k !== "fromVersion" && k !== "toVersion")
+      .map(([k]) => k);
+    if (item.slug && !/^[a-z0-9-]+$/.test(item.slug)) bad.push("slug");
+    if (bad.length) {
+      rejects?.push(`item ${i} (${typeof r.slug === "string" ? r.slug.slice(0, 60) : "?"}): bad ${bad.join(", ")}`);
+      continue;
+    }
     items.push(item as RadarItem);
   }
   const num = (v: unknown, d: number) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v < 10_000 ? v : d);

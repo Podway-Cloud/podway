@@ -10,7 +10,7 @@ import styles from "@/app/selfhost/selfhost-landing.module.css";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Open-source app hosting with an AI admin · Podway",
+  title: "Open-source app hosting with an AI admin",
   description:
     "Run n8n, Umami, Twenty, Ghost and more in your own cloud pod. A snapshot before every upgrade, automatic rollback, and an AI admin you steer from Claude. From $4/month per app.",
   alternates: { canonical: "https://podway.io/apps" },

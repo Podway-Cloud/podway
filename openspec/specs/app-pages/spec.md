@@ -21,7 +21,7 @@ The GTM pod SHALL post its daily radar JSON to `POST /api/radar/ingest` with `Au
 $RADAR_INGEST_TOKEN`; a missing, wrong, or short (<32 chars) configured token SHALL refuse with 401 and
 write nothing. The feed SHALL be validated before it is stored: an item whose link is not a
 `https://github.com/<owner>/<repo>/issues/<n>` URL, whose slug is not kebab-case, or whose text is over
-its limit SHALL be dropped; a bad envelope or more than 500 items SHALL be rejected. `/radar` SHALL show
+its limit SHALL be dropped, and the response SHALL name each dropped item and its bad fields (`reasons`); a bad envelope or more than 500 items SHALL be rejected. `/radar` SHALL show
 the newest feed grouped by app (most breaks first) with a "Run <App> on Podway" call to action for
 offered apps, and each `/apps/<slug>` page SHALL show that app's 3 most recent breaks.
 

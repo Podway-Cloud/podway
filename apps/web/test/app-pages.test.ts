@@ -1,9 +1,16 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
 import { listPublicApps } from "../lib/app-catalog";
 import { APP_PAGE_COPY } from "../lib/app-pages-copy";
 import { parseRadarFeed } from "../lib/radar";
 
 describe("/apps hosting pages", () => {
+  it("titles do not repeat the brand (the root layout template appends ' · Podway')", () => {
+    for (const f of ["app/apps/page.tsx", "app/apps/[slug]/page.tsx", "app/radar/page.tsx"]) {
+      expect(readFileSync(f, "utf8"), f).not.toMatch(/title: .*· Podway[`"]/);
+    }
+  });
+
   it("every public app has page copy, and no copy points at an app we do not offer", async () => {
     const apps = (await listPublicApps()).map((a) => a.name);
     expect(apps.length).toBeGreaterThanOrEqual(27);

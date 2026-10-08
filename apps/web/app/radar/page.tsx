@@ -10,7 +10,7 @@ import styles from "@/app/selfhost/selfhost-landing.module.css";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Upgrade Radar — fresh upgrade breaks across self-hosted apps · Podway",
+  title: "Upgrade Radar — fresh upgrade breaks across self-hosted apps",
   description:
     "Fresh upgrade breaks across popular self-hosted apps, from public GitHub issues. Updated daily.",
   alternates: { canonical: "https://podway.io/radar" },

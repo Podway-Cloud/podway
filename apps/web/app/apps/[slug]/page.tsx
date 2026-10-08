@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!found) return {};
   const { app, copy, price } = found;
   return {
-    title: `${app.title} hosting with an AI admin — $${price}/mo · Podway`,
+    title: `${app.title} hosting with an AI admin — $${price}/mo`,
     description: `${copy.oneLiner} Podway hosts ${app.title} 24/7 in its own pod, with a snapshot before every upgrade and automatic rollback.`,
     alternates: { canonical: `https://podway.io/apps/${app.name}` },
   };

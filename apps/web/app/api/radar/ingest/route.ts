@@ -26,9 +26,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   } catch {
     return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
-  const feed = parseRadarFeed(raw);
+  const rejects: string[] = [];
+  const feed = parseRadarFeed(raw, rejects);
   if (!feed) return NextResponse.json({ error: "invalid feed: need updated (YYYY-MM-DD) and items[] (≤500)" }, { status: 400 });
   await saveRadarFeed(feed);
   const sent = Array.isArray((raw as { items?: unknown[] }).items) ? (raw as { items: unknown[] }).items.length : 0;
-  return NextResponse.json({ ok: true, accepted: feed.items.length, dropped: sent - feed.items.length });
+  return NextResponse.json({ ok: true, accepted: feed.items.length, dropped: sent - feed.items.length, reasons: rejects.slice(0, 100) });
 }
