@@ -19,7 +19,13 @@ const nextConfig = {
   // /pricing (the old dev-pod plans page) is gone — owner, 2026-10-08. Old links land on the
   // landing's pricing section instead of a 404.
   async redirects() {
-    return [{ source: "/pricing", destination: "/#pricing", permanent: true }];
+    return [
+      { source: "/pricing", destination: "/#pricing", permanent: true },
+      // /apps + /radar removed (owner, 2026-10-08). Temporary redirects: "removed for now".
+      { source: "/apps", destination: "/#apps", permanent: false },
+      { source: "/apps/:slug", destination: "/#apps", permanent: false },
+      { source: "/radar", destination: "/", permanent: false },
+    ];
   },
   async rewrites() {
     return [
