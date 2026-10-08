@@ -91,6 +91,7 @@ export default function LaunchConfigure({
   billingEnabled = false,
   creditCents = 0,
   hasCard = false,
+  freeRamGb = 0,
   minSize,
   appName,
 }: {
@@ -140,6 +141,9 @@ export default function LaunchConfigure({
   billingEnabled?: boolean;
   creditCents?: number;
   hasCard?: boolean;
+  /** The no-card free RAM budget (GB): a pod that keeps a no-card account within it is free in alpha
+   * (billing never charges it — control-plane dunning.ts). */
+  freeRamGb?: number;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -301,6 +305,8 @@ export default function LaunchConfigure({
   // at the ceiling instead of a dead end. Only when the carded budget would actually fit this size.
   // ponytail: client reads the DEFAULT carded budget (64); a server-only PODWAY_CARDED_RAM_GB override
   // would not show here — pass it as a prop if prod ever sets one.
+  // Free alpha Mini (owner, 2026-10-08): mirrors the dunning rule, so "free" here is never a lie.
+  const freePod = !oss && billingEnabled && !hasCard && ram.used + ramCost <= freeRamGb;
   const canRaiseWithCard = billingEnabled && !hasCard && ram.cap < CARDED_RAM_GB && ramCost <= CARDED_RAM_GB - ram.used;
   // api-key mode needs a key before launch (there's no /login to fall back on).
   const keyProvided = agentAuth !== "api-key" || agentApiKey.trim().length > 0;
@@ -477,6 +483,7 @@ export default function LaunchConfigure({
                     Reserved compute for this pod. You can change it later (a brief restart).
                   </p>
                 )}
+                {freePod && <p className="text-[13px] font-medium text-success">Free in alpha · no card needed.</p>}
                 {!ram.unlimited && (
                   <p className={`text-[13px] ${ramFit ? "text-muted-foreground" : "text-destructive"}`}>
                     Uses <strong>{ramCost} GB</strong> of your <strong>{ramFree} GB</strong> free.{" "}
@@ -780,7 +787,14 @@ export default function LaunchConfigure({
 
               {/* Cost-at-create (billing-ux) — cloud only. Shows the chosen size's price against the
                   owner's free credit so "what happens when I click Create" is never a surprise. */}
-              {!oss && (() => {
+              {freePod ? (
+                <div className="rounded-lg border border-border/60 bg-white/[0.02] p-3.5 text-[13.5px]">
+                  <p className="font-semibold text-success">Free in alpha · no card needed</p>
+                  <p className="mt-1 text-[12.5px] text-muted-foreground">
+                    Want a bigger pod later? Add a card then and get ${SIGNUP_CREDIT_USD} in credit.
+                  </p>
+                </div>
+              ) : !oss && (() => {
                 const price = POD_TIERS[size].monthlyUsd;
                 const credit = creditCents / 100;
                 const monthsCovered = price > 0 ? Math.floor(credit / price) : 0;
@@ -847,7 +861,7 @@ export default function LaunchConfigure({
             </Button>
             {isLast ? (
               <Button onClick={submit} disabled={!launchable}>
-                Create pod
+                {freePod ? "Create my free pod" : "Create pod"}
               </Button>
             ) : (
               <Button onClick={next} disabled={!canAdvance}>

@@ -63,6 +63,19 @@ export const SIGNUP_CREDIT_CENTS = 1500;
 export const ACCOUNT_RAM_GB =
   Number(typeof process !== "undefined" ? process.env?.PODWAY_ACCOUNT_RAM_GB : undefined) || 16;
 
+/** Campaign-lead pass (owner, 2026-10-07): a no-card account whose first-touch ref starts with this may
+ * run ONE Small (2 GB) instead of one Mini — and it is free in alpha like the Mini (2026-10-08: those
+ * leads were emailed "free while we're in alpha"). ponytail: the ref comes from a public link, so anyone
+ * who types ?ref=email-… gets it too — owner accepted; switch to a verified lead list if abused. */
+export const LEAD_REF_PREFIX = "email-";
+export const LEAD_RAM_GB = 2;
+
+/** The no-card RAM budget (GB) for an account with this first-touch ref — what it may run, and (in
+ * alpha) what it runs for free. One rule for the launch gate (web) and billing (dunning). */
+export function noCardRamGb(ref: string | null | undefined): number {
+  return ref?.startsWith(LEAD_REF_PREFIX) ? Math.max(ACCOUNT_RAM_GB, LEAD_RAM_GB) : ACCOUNT_RAM_GB;
+}
+
 /** The RAM budget for an account WITH a card on file. A carded user pays per pod beyond their free
  * credit, so they must not be hard-blocked at the free budget — but a generous ceiling still guards
  * against a runaway bill from a mistake. Override with PODWAY_CARDED_RAM_GB. */

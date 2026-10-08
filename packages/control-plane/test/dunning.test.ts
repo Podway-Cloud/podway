@@ -1,4 +1,9 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
+
+// Match prod: the no-card free budget is ONE Mini (Fly secret PODWAY_ACCOUNT_RAM_GB=1).
+vi.hoisted(() => {
+  process.env.PODWAY_ACCOUNT_RAM_GB = "1";
+});
 import { createTestDb, user, billingDelinquencies, eq, type Database } from "@podway/db";
 import { DunningService, DUNNING_GRACE_DAYS, type DunningEmailInfo } from "../src/dunning.js";
 import type { BillingService } from "../src/billing.js";
@@ -84,6 +89,23 @@ describe("DunningService.evaluateOwner (the rule)", () => {
     const svc = new DunningService(db, fakeBilling({ u1: { creditCents: 1000, hasCard: false } }), fakePods([]));
     const r = await svc.evaluateOwner("u1", [pod("p1", "u1", "l")]); // $22 bill, $10 credit
     expect(r.delinquent).toBe(true);
+  });
+
+  it("free alpha Mini: no card, pods within the free RAM budget → never delinquent (owner, 2026-10-08)", async () => {
+    const db = await freshDb();
+    const svc = new DunningService(db, fakeBilling({ u1: { creditCents: 0, hasCard: false } }), fakePods([]));
+    expect((await svc.evaluateOwner("u1", [pod("p1", "u1", "mini")])).delinquent).toBe(false);
+    // Above the free budget (a Small, or a second pod) is billed as before.
+    expect((await svc.evaluateOwner("u1", [pod("p1", "u1", "s")])).delinquent).toBe(true);
+    expect((await svc.evaluateOwner("u1", [pod("p1", "u1", "mini"), pod("p2", "u1", "mini")])).delinquent).toBe(true);
+  });
+
+  it("an email-* lead's one Small is free too (they were emailed 'free while in alpha')", async () => {
+    const db = await freshDb();
+    await db.insert(user).values({ id: "lead", name: "lead", email: "lead@example.com", ref: "email-batch-a" });
+    const svc = new DunningService(db, fakeBilling({ lead: { creditCents: 0, hasCard: false } }), fakePods([]));
+    expect((await svc.evaluateOwner("lead", [pod("p1", "lead", "s")])).delinquent).toBe(false);
+    expect((await svc.evaluateOwner("lead", [pod("p1", "lead", "m")])).delinquent).toBe(true);
   });
 
   it("no card but credit covers the bill → not delinquent", async () => {

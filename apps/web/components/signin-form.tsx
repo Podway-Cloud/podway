@@ -21,6 +21,7 @@ export default function SignInForm({
   ownerExists = true,
   ownerEmail = "owner@localhost",
   hasGoogle = false,
+  setupNote,
 }: {
   next: string;
   /** Self-host edition: email+password owner instead of the GitHub button. */
@@ -31,11 +32,13 @@ export default function SignInForm({
   ownerEmail?: string;
   /** Cloud: also offer "Continue with Google" (only when Google OAuth is configured). */
   hasGoogle?: boolean;
+  /** Cloud: one line naming the app the visitor is setting up (from `next`), e.g. "free in alpha". */
+  setupNote?: string;
 }) {
   if (oss) {
     return <OwnerForm next={next} setup={!ownerExists} ownerEmail={ownerEmail} />;
   }
-  return <CloudForm next={next} hasGoogle={hasGoogle} />;
+  return <CloudForm next={next} hasGoogle={hasGoogle} setupNote={setupNote} />;
 }
 
 /** GitHub octocat mark (inherits the button's text colour). */
@@ -60,7 +63,7 @@ function GoogleIcon() {
 }
 
 /** Cloud: social sign-in — GitHub, plus Google when it's configured. */
-function CloudForm({ next, hasGoogle }: { next: string; hasGoogle: boolean }) {
+function CloudForm({ next, hasGoogle, setupNote }: { next: string; hasGoogle: boolean; setupNote?: string }) {
   const [busy, setBusy] = useState<null | "github" | "google">(null);
   const [error, setError] = useState<string | null>(null);
   const label = (p: "github" | "google") => (p === "github" ? "GitHub" : "Google");
@@ -85,8 +88,9 @@ function CloudForm({ next, hasGoogle }: { next: string; hasGoogle: boolean }) {
   return (
     <div className={styles.authContent}>
       <h1 id="signin-title">Sign in to Podway</h1>
+      {setupNote && <p className={styles.intro}><strong>{setupNote}</strong></p>}
       <p className={styles.intro}>
-        Continue with {hasGoogle ? "GitHub or Google" : "GitHub"} to request access or sign in.
+        Continue with {hasGoogle ? "GitHub or Google" : "GitHub"} to sign in or create your account.
       </p>
 
       <div className={styles.oauthButtons} aria-busy={Boolean(busy)}>

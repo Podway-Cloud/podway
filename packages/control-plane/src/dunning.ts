@@ -12,8 +12,8 @@
  * The rule intentionally only ever suspends the delinquent account's OWN pods — a paid or
  * credit-covered account is never touched (velsa's hard constraint, 2026-09-14).
  */
-import { billingDelinquencies, eq, type Database } from "@podway/db";
-import { priceForSize, isPodSize } from "@podway/shared";
+import { billingDelinquencies, user, eq, type Database } from "@podway/db";
+import { priceForSize, isPodSize, ramGbForSize, noCardRamGb } from "@podway/shared";
 import { createLogger, type Logger } from "@podway/shared/log";
 import type { BillingService } from "./billing.js";
 import type { PodService } from "./service.js";
@@ -43,6 +43,9 @@ export interface DunningDeps {
   /** Injectable clock for tests. */
   now?: () => number;
   logger?: Logger;
+  /** Override the no-card free budget (GB) for every account — the e2e seam pins prod's 1 GB because
+   * the suite lifts PODWAY_ACCOUNT_RAM_GB to 100000, which would make every no-card pod free. */
+  freeRamGb?: number;
 }
 
 export interface DunningSweepResult {
@@ -92,6 +95,14 @@ export class DunningService {
     // No billable pods → nothing owed → never delinquent (and any stale row gets resolved).
     if (amountDueCents <= 0) return { delinquent: false, amountDueCents: 0 };
     const acct = await this.billing.getAccount(ownerId);
+    // Free in alpha (owner, 2026-10-08): a no-card account running only what fits its no-card budget
+    // (one Mini; one Small for an email-* lead) owes nothing — the wizard promises "free", so billing
+    // must not nag or suspend it.
+    const ramGb = billablePods.reduce((n, p) => n + (isPodSize(p.size) ? ramGbForSize(p.size) : 0), 0);
+    if (!acct.hasCard && !suspendedDueCents) {
+      const [row] = await this.db.select({ ref: user.ref }).from(user).where(eq(user.id, ownerId));
+      if (ramGb <= (this.deps.freeRamGb ?? noCardRamGb(row?.ref))) return { delinquent: false, amountDueCents: 0 };
+    }
     const noWorkingPayment = !acct.hasCard || (await this.billing.hasOpenInvoice(ownerId));
     const delinquent = noWorkingPayment && acct.creditCents < amountDueCents;
     return { delinquent, amountDueCents };

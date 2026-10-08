@@ -37,6 +37,7 @@ export async function POST(req: Request): Promise<Response> {
 
   const dunning = new DunningService(db, getBillingService(), getPodService(), {
     now: () => Date.now() + offsetDays * DAY_MS,
+    freeRamGb: 1, // prod's free budget (one Mini); the suite's own budget would make every pod free
   });
   const result = await dunning.advance(user.id);
   const rows = await db.select().from(billingDelinquencies).where(eq(billingDelinquencies.ownerId, user.id));

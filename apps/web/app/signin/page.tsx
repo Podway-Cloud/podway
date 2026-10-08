@@ -6,6 +6,7 @@ import SignInForm from "@/components/signin-form";
 import { getCurrentUser, editionOss } from "@/lib/session";
 import { ownerCredentialExists, resolveOwnerEmail } from "@/lib/auth-config";
 import { resolveSignInCallback } from "@/lib/signin-callback";
+import { freeSetupNote } from "@/lib/free-setup-note";
 import styles from "./signin.module.css";
 
 /** The owner's login email in OSS (self-host-auth-gate) — pre-filled so the owner mostly types a
@@ -68,6 +69,7 @@ export default async function SignIn({
               ownerExists={ownerExists}
               ownerEmail={ownerEmail}
               hasGoogle={hasGoogle}
+              setupNote={oss ? undefined : await freeSetupNote(safeNext)}
             />
           </div>
         </div>

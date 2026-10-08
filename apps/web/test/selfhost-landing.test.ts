@@ -53,7 +53,7 @@ describe("self-host landing and homepage promotion", () => {
 
   it("keeps the account and app-specific launch paths", () => {
     expect(landing).toContain('const primaryHref = "/start?tab=apps&ref=selfhost-landing";');
-    expect(landing).toContain('const primaryLabel = "Start hosting an app";');
+    expect(landing).toContain('const primaryLabel = "Start free";');
     expect(landing).toContain('href={`/start?app=${app.slug}&ref=selfhost-lineup`}');
     expect(landing).toContain('href="/start?tab=apps&ref=selfhost-full-catalog"');
     expect(landing).toContain('href={`/start?tab=apps&ref=selfhost-pricing-${t.id}`}');

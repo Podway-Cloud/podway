@@ -153,6 +153,16 @@ free signup credit. Self-host (no per-pod price) SHALL NOT show this card.
 - **WHEN** an owner with no card on file reaches Review on cloud
 - **THEN** the cost card shows the size price and prompts to add a card to get the free credit
 
+#### Scenario: Creating the free alpha Mini
+
+- **WHEN** an owner with no card creates a pod that keeps their running pods within the no-card free
+  RAM budget (`PODWAY_ACCOUNT_RAM_GB`, one Mini in prod) while billing is on
+- **THEN** the size step and Review say "Free in alpha · no card needed" instead of a price, and the
+  button reads "Create my free pod"
+- **AND** the self-host landing labels Mini app cards "Free in alpha" with a "Start free" main button,
+  and sign-in shows "You're setting up <App> — free in alpha, no card needed." when the `next` app fits
+  the visitor's no-card budget (`apps/web/lib/free-setup-note.ts`)
+
 ### Requirement: The signup-credit figure has a single source of truth
 
 The advertised signup-credit dollar figure and the amount actually granted SHALL derive from one
@@ -174,6 +184,11 @@ referrals, and admin grants. An account with a working card, or with enough cred
 bill, SHALL NOT be treated as delinquent and SHALL NOT have any pod suspended. Suspension SHALL be
 at the level of the delinquent account: a paid or credit-covered account's pods are never affected
 by another account's delinquency.
+
+Free alpha Mini (owner, 2026-10-08): a no-card account whose running pods fit within the no-card free
+RAM budget (`noCardRamGb`: `PODWAY_ACCOUNT_RAM_GB`, or one Small for an `email-*` campaign lead — those
+leads were promised "free while in alpha") owes nothing and SHALL NOT be treated as delinquent — no
+reminder, no suspension. Above that budget (a bigger size, or a second pod) the rule above applies.
 
 Non-payment suspension SHALL suspend (reversibly), never delete, a pod. This behavior is cloud-only;
 under the self-host edition it SHALL NOT run.

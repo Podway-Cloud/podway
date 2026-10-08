@@ -94,6 +94,8 @@ export default async function NewPodPage({
         billingEnabled={billing !== null}
         creditCents={billing?.creditCents ?? 0}
         hasCard={billing?.hasCard ?? false}
+        // A no-card account's cap IS its free-in-alpha budget (one Mini; one Small for an email-* lead).
+        freeRamGb={ramCap === Infinity ? 0 : ramCap}
       />
     </DashboardPage>
   );
