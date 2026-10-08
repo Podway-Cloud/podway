@@ -118,6 +118,12 @@ describe("version uniqueness (record-image.sh)", () => {
     expect(await nextFreeVersion("0.8.0", "0.8.0 0.8.1 0.8.2")).toBe("0.8.3");
   });
 
+  it("never reuses a GAP below the highest used version (pruned old images free their numbers)", async () => {
+    // 2026-10-07: 0.8.42 had been pruned, so first-free gave 0.8.42 after a live 0.8.44.
+    const taken = Array.from({ length: 41 }, (_, i) => `0.8.${i + 1}`).concat(["0.8.43", "0.8.44"]).join(" ");
+    expect(await nextFreeVersion("0.8.1", taken)).toBe("0.8.45");
+  });
+
   it("is a no-op on an empty taken list — the computed version stands (the caller's guard decides trust)", async () => {
     // next_free_version itself can't tell "empty because first ship" from "empty because the fetch
     // failed" — that judgment lives in untrusted_versions_reason (below), which refuses the failure.
