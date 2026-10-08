@@ -62,6 +62,11 @@ export default function TermsPage() {
         We may suspend or terminate accounts that break these rules, and we may act to protect the
         service, other users, and third parties.
       </p>
+      <p>
+        To report abuse coming from a Podway pod, email{" "}
+        <a href="mailto:security@podway.io">security@podway.io</a>. Include the address, time, and what
+        happened.
+      </p>
 
       <h2>5. Your content and data</h2>
       <p>

@@ -70,6 +70,7 @@ import {
 import { generateSlug } from "./slug.js";
 import { AdmissionGate } from "./admission.js";
 import { usageForPod, type PodUsage } from "./metrics.js";
+import { UsageWatch, type UsageAlert } from "./usage-watch.js";
 
 /** Min gap between config-drift auto-refresh ATTEMPTS on one pod, so a persistently-failing refresh
  * doesn't exec on every reconcile sweep. A successful refresh updates config_hash and stops retrying
@@ -169,6 +170,8 @@ export interface PodServiceConfig {
   /** Called once when a pod's VM runs but its agent has not answered for UNRESPONSIVE_MS (a frozen
    * guest), and again with `recovered` when it answers. The gateway sends an ops alert. */
   onPodUnresponsive?: (pod: PodRecord, info: { minutes: number; recovered: boolean }) => Promise<void>;
+  /** Abuse watch: host-measured CPU/egress looks like mining or spam (usage-watch.ts). Alert-only. */
+  onPodUsageAlert?: (pod: PodRecord, alert: UsageAlert) => Promise<void>;
   /** Total pod RAM (GB) the box may be PROMISED (PODWAY_BOX_RAM_GB). Unset ⇒ no box gate (self-host).
    * Account budgets alone let the box be promised 124 GB of 128 (2026-09-28): guests fill their RAM
    * with page cache over hours, so an over-promised box ends in the OOM killer. */
@@ -4328,6 +4331,8 @@ export class PodService {
     const info = await prov.getPod(id);
     const status = await this.liveStatus(id, info.status, prov);
     await this.watchUnresponsive(record, info.status, status).catch(() => undefined);
+    if (status === "running") await this.watchUsage(record, prov).catch(() => undefined);
+    else this.usageWatch.forget(id);
     // Backfill the authoritative machine identity for LEGACY rows created before
     // these columns existed (both null on pods predating them). machineId powers
     // duplicate-prevention on re-provision; imageDigest powers update-detection —
@@ -4463,6 +4468,18 @@ export class PodService {
    * records `pod_unresponsive` on the pod's timeline and alerts ops, once per episode; recovery is
    * recorded too. In-memory per process: a gateway restart re-arms it (worst case a late alert).
    */
+  private readonly usageWatch = new UsageWatch();
+  private async watchUsage(rec: PodRecord, prov: SandboxProvider): Promise<void> {
+    if (!prov.usageCounters || !this.config.onPodUsageAlert) return;
+    const c = await prov.usageCounters(rec.id);
+    if (!c) return;
+    for (const alert of this.usageWatch.sample(rec.id, { t: Date.now(), ...c }, POD_TIERS[rec.size].cpus)) {
+      this.log.warn("pod_usage_alert", { podId: rec.id, kind: alert.kind, detail: alert.detail });
+      await this.emit(rec, "pod_usage_alert", { kind: alert.kind, detail: alert.detail }).catch(() => undefined);
+      await this.config.onPodUsageAlert(rec, alert).catch(() => undefined);
+    }
+  }
+
   private readonly unresponsiveSince = new Map<string, number>();
   private readonly unresponsiveAlerted = new Set<string>();
   private async watchUnresponsive(rec: PodRecord, vm: PodStatus, live: PodStatus, now = Date.now()): Promise<void> {

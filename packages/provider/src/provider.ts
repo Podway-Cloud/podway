@@ -39,6 +39,10 @@ export interface SandboxProvider {
   /** Host-level stats for the self-hosted box this provider runs (backoffice).
    * Optional — providers without a "box" concept (Fly) omit it. */
   boxStats?(): Promise<BoxStats>;
+  /** Host-measured cumulative counters for one running VM (abuse watch): CPU time and bytes the VM
+   * sent. Measured OUTSIDE the guest, so a pod cannot fake them. Null when unknown. Optional:
+   * self-host (LocalProvider) has no abuse surface. */
+  usageCounters?(id: string): Promise<{ cpuNs: number; txBytes: number } | null>;
   /** List published base images in the provider's image store (image-manifest
    * prune). Optional — providers without an image store (Fly) omit it. */
   listBaseImages?(): Promise<BaseImage[]>;

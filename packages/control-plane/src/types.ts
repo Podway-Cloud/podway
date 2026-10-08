@@ -44,6 +44,7 @@ export type PodEventType =
   | "secrets_restored"
   // A running VM whose agent never answered for 10 min (a frozen guest), and its recovery.
   | "pod_unresponsive"
+  | "pod_usage_alert"
   | "pod_responsive_again"
   | "admin_action"
   // The owner revealed a stored secret value in the cockpit. meta: { key }. Audited

@@ -5,6 +5,10 @@ import { eq } from "drizzle-orm";
 import { createAppDb, user as userTable } from "@podway/db";
 import { sendApprovalEmail } from "@podway/auth";
 import { requireAdmin } from "./access";
+import { getPodService } from "./pod-service";
+import { createLogger } from "@podway/shared/log";
+
+const log = createLogger("web");
 
 export async function approveUser(userId: string): Promise<void> {
   await requireAdmin();
@@ -27,6 +31,11 @@ export async function approveUser(userId: string): Promise<void> {
 export async function revokeUser(userId: string): Promise<void> {
   await requireAdmin();
   await createAppDb().update(userTable).set({ approved: false }).where(eq(userTable.id, userId));
+  // Revoke also stops what the user runs (abuse response): suspend every running pod. Data stays.
+  const svc = getPodService();
+  for (const pod of await svc.listPods(userId)) {
+    if (pod.status === "running") await svc.adminSleep(pod.id).catch((err) => log.error("revoke_suspend_failed", { podId: pod.id, err }));
+  }
   revalidatePath("/admin");
 }
 

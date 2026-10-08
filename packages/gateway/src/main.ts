@@ -86,6 +86,13 @@ async function main(): Promise<void> {
           ? `✅ Pod "${p.name ?? p.id}" (${p.id}) answers again.`
           : `🧊 Pod "${p.name ?? p.id}" (${p.id}) is FROZEN: VM running, agent silent for ${i.minutes} min. Runbook: docs/runbooks/pod-recovery.md (force restart).`,
       ),
+    // Abuse watch (open sign-up): host-measured CPU / egress that looks like mining or spam. Alert-only.
+    onPodUsageAlert: async (p, a) => {
+      const owner = (await db.select({ email: user.email }).from(user).where(eq(user.id, p.ownerId)))[0]?.email ?? p.ownerId;
+      await notifyOps(
+        `🔥 Possible abuse: pod "${p.name ?? p.id}" (${p.id}) — ${a.detail}.\nOwner: ${owner} · size ${p.size}\nReview: https://podway.io/admin/pods/${p.id} (suspend if it is mining/spam).`,
+      );
+    },
     onClaudeRenewed: (p, oldExp, newExp) =>
       loginReminders.notifyRenewed({ id: p.id, name: p.name, ownerId: p.ownerId, agentAuth: p.agentAuth, claudeLoginExpiresAt: newExp }, oldExp, newExp),
     onClaudeSignedOut: (p) =>

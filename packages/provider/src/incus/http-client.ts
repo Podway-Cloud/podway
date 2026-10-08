@@ -37,8 +37,12 @@ export interface IncusInstance {
 
 export interface IncusInstanceState {
   status: string;
-  network?: Record<string, { addresses: { family: string; address: string; scope: string }[] }>;
+  network?: Record<
+    string,
+    { addresses: { family: string; address: string; scope: string }[]; counters?: { bytes_sent?: number } }
+  >;
   memory?: { usage?: number };
+  cpu?: { usage?: number }; // cumulative CPU time, nanoseconds
 }
 
 export interface IncusImage {

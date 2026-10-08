@@ -134,6 +134,8 @@ Non-admins SHALL NOT reach it.
 - **WHEN** an admin revokes a user
 - **THEN** that user's `approved` flag SHALL be cleared and they SHALL be pending again (unless
   admin/pre-approved)
+- **AND** every RUNNING pod the user owns SHALL be suspended (data kept; one failed suspend SHALL NOT
+  stop the others) — the abuse response for open sign-up
 
 ### Requirement: Signup notification
 

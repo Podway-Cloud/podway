@@ -1419,6 +1419,20 @@ export class IncusProvider implements SandboxProvider {
     };
   }
 
+  async usageCounters(id: string): Promise<{ cpuNs: number; txBytes: number } | null> {
+    const st = await this.incus.instanceState(id, 5_000).catch(() => null);
+    const cpuNs = st?.cpu?.usage;
+    if (!st || typeof cpuNs !== "number") return null;
+    // The guest's uplink NIC(s) only — skip loopback and the in-guest Docker bridges (docker0 / veth* /
+    // br-*), whose traffic is the app's own containers talking to each other. ponytail: VM network
+    // counters come from the in-guest incus-agent (a root user could hide them); CPU time above is
+    // host-measured and cannot be faked. Upgrade path: read the host tap's counters on the box.
+    const txBytes = Object.entries(st.network ?? {})
+      .filter(([nic]) => !VIRTUAL_IFACE.test(nic))
+      .reduce((sum, [, n]) => sum + (n.counters?.bytes_sent ?? 0), 0);
+    return { cpuNs, txBytes };
+  }
+
   /** The VM's bridge IPv4 (reachable from the gateway over WireGuard). */
   private async instanceIp(id: string, timeoutMs?: number): Promise<string | null> {
     const state = await this.incus.instanceState(id, timeoutMs);

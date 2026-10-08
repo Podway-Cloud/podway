@@ -620,3 +620,16 @@ agent answers again it SHALL record `pod_responsive_again` and alert the recover
 - **GIVEN** a pod whose VM runs and whose agent never answers
 - **WHEN** 10 minutes pass
 - **THEN** exactly one `pod_unresponsive` event and one ops alert SHALL be produced
+
+### Requirement: Possible-abuse usage alerts
+
+For each running pod, the reconcile loop SHALL sample the host-measured CPU time and the bytes the VM
+sent. It SHALL send an ops alert (and record a `pod_usage_alert` event) when CPU use is at least 90% of
+the pod's vCPUs over 2 hours (e.g. mining), or when the pod sent at least 5 GiB in 1 hour (e.g. spam).
+Each pod and kind SHALL alert at most once per 24 hours. It SHALL only alert, never throttle or suspend:
+the owner decides. A counter reset (VM restart) SHALL NOT produce an alert.
+
+#### Scenario: A pod mines cryptocurrency
+- **GIVEN** a running pod at near-100% CPU
+- **WHEN** 2 hours pass
+- **THEN** exactly one ops alert names the pod, its owner and a link to the admin pod page
