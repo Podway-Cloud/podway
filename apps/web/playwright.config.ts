@@ -18,6 +18,10 @@ export default defineConfig({
   // times out once. That's environmental, not a product defect — a retry absorbs it
   // without masking a genuinely broken test (which fails both attempts).
   retries: 1,
+  // Every assertion may wait 20 s (default 5 s). The Next DEV server compiles each route on its first
+  // visit — /admin/relay took 11.5 s in CI (2026-10-08) — so a first-visit check timed out at 5 s and
+  // passed on retry. Those were 4 of today's 5 "flakes". A real failure still fails, just 15 s later.
+  expect: { timeout: 20_000 },
   globalSetup: "./e2e/global-setup.ts",
   globalTeardown: "./e2e/global-teardown.ts",
   use: {
