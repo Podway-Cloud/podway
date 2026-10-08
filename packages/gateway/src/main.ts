@@ -12,8 +12,9 @@ import {
   loadIncusConfig,
   type SandboxProvider,
 } from "@podway/provider";
-import { createAppDb, user, eq, pods } from "@podway/db";
+import { createAppDb, user, eq, isNotNull, pods } from "@podway/db";
 import { credKeyFromEnv } from "@podway/shared/crypto";
+import { offerRamGb } from "@podway/shared";
 import { GatewayServer } from "./server.js";
 
 /** Production wiring: real better-auth sessions, Fly (+ optional Incus)
@@ -303,10 +304,20 @@ async function main(): Promise<void> {
         );
       },
     });
+    // Free-pod offers ride the same daily sweep: an offer's free pod idle 60 days is suspended (the
+    // owner resumes it on request). Only that one free pod; paid pods are never touched.
+    const runOfferIdle = async () => {
+      const holders = await db.select({ id: user.id, offer: user.freeOffer }).from(user).where(isNotNull(user.freeOffer));
+      for (const { id, offer } of holders) {
+        const podId = await control.suspendIdleFreePod(id, offerRamGb(offer)).catch((e) => (console.error("free_pod_idle_failed", e), null));
+        if (podId) console.log("free_pod_idle_suspended", JSON.stringify({ ownerId: id, podId }));
+      }
+    };
     const runDunning = () =>
       void dunning
         .sweep()
         .then((r) => console.log("dunning_sweep", JSON.stringify(r)))
+        .then(runOfferIdle)
         .catch((e) => console.error("dunning_sweep_failed", e));
     setTimeout(runDunning, 60_000).unref();
     setInterval(runDunning, dunningMs).unref();

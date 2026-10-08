@@ -2,6 +2,8 @@ import { requireAdmin, listUsers } from "@/lib/access";
 import DashboardPage from "@/components/dashboard-page";
 import AdminUserRow from "@/components/admin-user-row";
 import type { AdminUser } from "@/lib/access";
+import { offerCounts } from "@/lib/attribution";
+import { FREE_POD_OFFERS } from "@podway/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +35,7 @@ export default async function Admin() {
   const all = (await listUsers()).filter((u) => !u.approved);
   const waiting = all.filter((u) => !u.deferredAt);
   const later = all.filter((u) => u.deferredAt);
+  const claims = await offerCounts().catch(() => ({}) as Record<string, number>);
 
   return (
     <DashboardPage
@@ -52,6 +55,16 @@ export default async function Admin() {
       ) : (
         <RequestList users={waiting} deferred={false} />
       )}
+
+      <p className="mt-6 text-[12.5px] text-muted-foreground">
+        Free-pod offers claimed:{" "}
+        {Object.entries(FREE_POD_OFFERS).map(([key, o], i) => (
+          <span key={key}>
+            {i > 0 && " · "}
+            {key} <strong className="text-foreground">{claims[key] ?? 0} / {o.cap}</strong>
+          </span>
+        ))}
+      </p>
 
       {later.length > 0 && (
         <div className="mt-8">

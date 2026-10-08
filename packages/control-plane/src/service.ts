@@ -39,6 +39,7 @@ import {
 import { formatWarnDigest } from "./warn-digest.js";
 import { createLogger, type Logger } from "@podway/shared/log";
 import { legacyAgentAuthState, type AgentAuthState, type PodAgentState, type PodIssue } from "@podway/shared";
+import { freePodId } from "./billing.js";
 import type {
   PodInfo,
   SandboxProvider,
@@ -1393,6 +1394,23 @@ export class PodService {
     const updated = await this.store.update(id, { status: info.status });
     await this.emit(rec, "suspended", { reason: "manual" });
     return updated;
+  }
+
+  /**
+   * Free-pod offer guardrail (owner, 2026-10-08): the account's free pod (up to `offerGb`) may be
+   * suspended after FREE_POD_IDLE_MS with no activity; the owner resumes it like any suspended pod. Only
+   * that one free pod — paid pods are never touched. Returns the suspended pod id, or null.
+   */
+  async suspendIdleFreePod(ownerId: string, offerGb: number, idleMs = FREE_POD_IDLE_MS, now = Date.now()): Promise<string | null> {
+    const running = (await this.listPods(ownerId)).filter((p) => p.status === "running");
+    const freeId = freePodId(running.filter((p) => isPodSize(p.size)).map((p) => ({ podId: p.id, size: p.size as PodSize })), offerGb);
+    const pod = running.find((p) => p.id === freeId);
+    if (!pod) return null;
+    const live = (await this.ownerLiveSignals(ownerId).catch(() => [])).find((l) => l.id === pod.id);
+    if (!freePodIdle(pod.lastActiveAt, live?.agentIdleMs ?? null, now, idleMs)) return null;
+    await this.sleep(ownerId, pod.id);
+    this.log.info("free_pod_idle_suspend", { podId: pod.id, ownerId });
+    return pod.id;
   }
 
   /**
@@ -4607,4 +4625,15 @@ export function envMissingMessage(environmentName: string): string {
     `so this pod can’t be rebuilt from it. Nothing you can do here will bring it back; ` +
     `delete this pod and launch a new one from the current catalog.`
   );
+}
+
+/** 60 days: an offer's free pod counts as abandoned after this long with no activity. */
+export const FREE_POD_IDLE_MS = 60 * 24 * 60 * 60_000;
+
+/** Idle = BOTH signals agree: no client traffic since `lastActiveAt` (terminal/preview) AND no agent turn
+ * (`agentIdleMs`, the session-file age). An unknown agent signal (null) never counts as idle — when in
+ * doubt, keep the pod running. */
+export function freePodIdle(lastActiveAt: string, agentIdleMs: number | null, now: number, idleMs: number): boolean {
+  if (agentIdleMs == null) return false;
+  return now - Date.parse(lastActiveAt) >= idleMs && agentIdleMs >= idleMs;
 }

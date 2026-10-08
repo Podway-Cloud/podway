@@ -6,6 +6,8 @@ import type { PodCardProps } from "@/components/pod-card";
 import AutoRefresh from "@/components/auto-refresh";
 import DashboardPage from "@/components/dashboard-page";
 import { editionOss } from "@/lib/session";
+import { accountOffer } from "@/lib/attribution";
+import { FREE_POD_OFFERS } from "@podway/shared";
 import { withDbRetry } from "@podway/auth";
 import { sameDigest } from "@/lib/pod-image";
 import { currentImage } from "@/lib/image-manifest";
@@ -30,6 +32,8 @@ export const metadata = { title: "Pods" };
 
 export default async function Dashboard() {
   const user = await requireApprovedUser();
+  const offer = editionOss() ? null : await accountOffer(user.id).catch(() => null);
+  const offerLabel = offer && Object.hasOwn(FREE_POD_OFFERS, offer) ? FREE_POD_OFFERS[offer]!.label : null;
   const svc = getPodService();
   const pods = await withDbRetry(() => svc.listPods(user.id));
   // Live signals (agent activity, :3000 liveness, live-critical trouble) are fetched
@@ -97,6 +101,11 @@ export default async function Dashboard() {
         </Button>
       }
     >
+      {offerLabel && (
+        <p className="mb-4 w-fit rounded-full border border-success/40 bg-success/10 px-2.5 py-0.5 text-[11.5px] font-semibold text-success">
+          {offerLabel}
+        </p>
+      )}
       <AutoRefresh fast={pods.some((p) => TRANSITIONAL.has(p.status) || isUpdating(p))} />
 
       {!isProvisioningEnabled() && (

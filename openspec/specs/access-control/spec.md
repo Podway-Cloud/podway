@@ -134,6 +134,9 @@ Non-admins SHALL NOT reach it.
 - **WHEN** an admin revokes a user
 - **THEN** that user's `approved` flag SHALL be cleared and they SHALL be pending again (unless
   admin/pre-approved)
+- **AND** the admin users table SHALL show each user's first-touch ref, claimed free-pod offer, card on
+  file and last sign-in IP (cloud reads the `Fly-Client-IP` header), flag only revoked users, and link each
+  row to `/admin/users/<id>` — the user's details plus their pods in the same table as `/admin/pods`
 - **AND** every RUNNING pod the user owns SHALL be suspended (data kept; one failed suspend SHALL NOT
   stop the others) — the abuse response for open sign-up
 

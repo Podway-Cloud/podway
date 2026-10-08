@@ -68,12 +68,35 @@ export const ACCOUNT_RAM_GB =
  * leads were emailed "free while we're in alpha"). ponytail: the ref comes from a public link, so anyone
  * who types ?ref=email-… gets it too — owner accepted; switch to a verified lead list if abused. */
 export const LEAD_REF_PREFIX = "email-";
+/** selfh.st paid-reader tiles (owner, 2026-10-08): same one free Small in alpha as the email leads. */
+export const LEAD_REF_PREFIXES = [LEAD_REF_PREFIX, "selfhst-tile-"];
 export const LEAD_RAM_GB = 2;
 
-/** The no-card RAM budget (GB) for an account with this first-touch ref — what it may run, and (in
- * alpha) what it runs for free. One rule for the launch gate (web) and billing (dunning). */
-export function noCardRamGb(ref: string | null | undefined): number {
-  return ref?.startsWith(LEAD_REF_PREFIX) ? Math.max(ACCOUNT_RAM_GB, LEAD_RAM_GB) : ACCOUNT_RAM_GB;
+/** Free-pod offers (owner, 2026-10-08), claimed by visiting /start?ref=<key> while fewer than `cap`
+ * accounts hold that offer (user.free_offer). The account's ONE biggest pod up to `ramGb` is never
+ * billed — with or without a card, for the life of the account; other pods follow the normal rules.
+ * It may be suspended after 60 idle days. ponytail: the key is a public link; the cap bounds abuse. */
+export interface FreePodOffer {
+  ramGb: number;
+  cap: number;
+  label: string;
+}
+export const FREE_POD_OFFERS: Record<string, FreePodOffer> = {
+  "selfhst-insider": { ramGb: 2, cap: 100, label: "Free for life · selfh.st insider" },
+  "noted-jeremy": { ramGb: 4, cap: 100, label: "Free pod · Noted.lol partner" },
+  "selfhst-ethan": { ramGb: 4, cap: 100, label: "Free pod · selfh.st partner" },
+};
+
+/** The free-pod size (GB) an account's claimed offer grants; 0 for none / an unknown key. */
+export function offerRamGb(offer: string | null | undefined): number {
+  return (offer && Object.hasOwn(FREE_POD_OFFERS, offer) ? FREE_POD_OFFERS[offer]!.ramGb : 0);
+}
+
+/** The no-card RAM budget (GB) for an account with this first-touch ref (+ any claimed offer's free pod)
+ * — what it may run, and what it runs for free. One rule for the launch gate (web) and billing (dunning). */
+export function noCardRamGb(ref: string | null | undefined, offerGb = 0): number {
+  const lead = LEAD_REF_PREFIXES.some((p) => ref?.startsWith(p));
+  return Math.max(ACCOUNT_RAM_GB, lead ? LEAD_RAM_GB : 0, offerGb);
 }
 
 /** The RAM budget for an account WITH a card on file. A carded user pays per pod beyond their free

@@ -13,9 +13,9 @@
  * credit-covered account is never touched (velsa's hard constraint, 2026-09-14).
  */
 import { billingDelinquencies, user, eq, type Database } from "@podway/db";
-import { priceForSize, isPodSize, ramGbForSize, noCardRamGb } from "@podway/shared";
+import { priceForSize, isPodSize, ramGbForSize, noCardRamGb, offerRamGb, type PodSize } from "@podway/shared";
 import { createLogger, type Logger } from "@podway/shared/log";
-import type { BillingService } from "./billing.js";
+import { freePodId, type BillingService } from "./billing.js";
 import type { PodService } from "./service.js";
 import type { PodRecord } from "./types.js";
 
@@ -91,17 +91,24 @@ export class DunningService {
      * pods resumed an hour later with no payment (found by the hourly-sweep test, 2026-09-30). */
     suspendedDueCents = 0,
   ): Promise<{ delinquent: boolean; amountDueCents: number }> {
-    const amountDueCents = Math.max(this.amountDueCents(billablePods), suspendedDueCents);
+    const [row] = await this.db
+      .select({ ref: user.ref, offer: user.freeOffer })
+      .from(user)
+      .where(eq(user.id, ownerId));
+    const offerGb = offerRamGb(row?.offer);
+    // Free-pod offer: one pod up to the offer's size is free FOR LIFE, card or not — it is not on the bill.
+    const free = freePodId(billablePods.map((p, i) => ({ podId: String(i), size: p.size as PodSize })), offerGb);
+    const owed = billablePods.filter((_, i) => String(i) !== free);
+    const amountDueCents = Math.max(this.amountDueCents(owed), suspendedDueCents);
     // No billable pods → nothing owed → never delinquent (and any stale row gets resolved).
     if (amountDueCents <= 0) return { delinquent: false, amountDueCents: 0 };
     const acct = await this.billing.getAccount(ownerId);
     // Free in alpha (owner, 2026-10-08): a no-card account running only what fits its no-card budget
-    // (one Mini; one Small for an email-* lead) owes nothing — the wizard promises "free", so billing
-    // must not nag or suspend it.
+    // (one Mini; one Small for an email-*/selfhst-tile-* lead; a claimed offer's free pod) owes nothing — the wizard
+    // promises "free", so billing must not nag or suspend it.
     const ramGb = billablePods.reduce((n, p) => n + (isPodSize(p.size) ? ramGbForSize(p.size) : 0), 0);
-    if (!acct.hasCard && !suspendedDueCents) {
-      const [row] = await this.db.select({ ref: user.ref }).from(user).where(eq(user.id, ownerId));
-      if (ramGb <= (this.deps.freeRamGb ?? noCardRamGb(row?.ref))) return { delinquent: false, amountDueCents: 0 };
+    if (!acct.hasCard && !suspendedDueCents && ramGb <= (this.deps.freeRamGb ?? noCardRamGb(row?.ref, offerGb))) {
+      return { delinquent: false, amountDueCents: 0 };
     }
     const noWorkingPayment = !acct.hasCard || (await this.billing.hasOpenInvoice(ownerId));
     const delinquent = noWorkingPayment && acct.creditCents < amountDueCents;

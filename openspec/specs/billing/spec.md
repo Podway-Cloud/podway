@@ -190,6 +190,18 @@ RAM budget (`noCardRamGb`: `PODWAY_ACCOUNT_RAM_GB`, or one Small for an `email-*
 leads were promised "free while in alpha") owes nothing and SHALL NOT be treated as delinquent — no
 reminder, no suspension. Above that budget (a bigger size, or a second pod) the rule above applies.
 
+Free-pod offers (owner, 2026-10-08): `FREE_POD_OFFERS` in `@podway/shared` lists offer links — today
+`selfhst-insider` (one Small, free for life), `noted-jeremy` and `selfhst-ethan` (partner trials, one pod up
+to Medium) — each capped at 100 accounts. A signed-in visit to `/start?ref=<key>` while that offer is
+under its cap SHALL mark the account (`user.free_offer`, set once, one offer per account). For such an
+account ONE pod up to the offer's size (the biggest that fits) SHALL never be billed — not as a Stripe
+subscription item and not in the non-payment rule — with or without a card; other pods follow the normal
+rules, and a no-card account may launch up to the offer's size. That free pod MAY be suspended (never
+deleted) after 60 days with no client traffic AND no agent turn (an unknown agent signal never counts as
+idle); the owner resumes it like any suspended pod. The dashboard SHALL show the offer's label and the
+admin page SHALL show claims per offer out of its cap. `selfhst-tile-*` first-touch refs get the same free
+Small in alpha as `email-*` leads. Cloud-only.
+
 Non-payment suspension SHALL suspend (reversibly), never delete, a pod. This behavior is cloud-only;
 under the self-host edition it SHALL NOT run.
 

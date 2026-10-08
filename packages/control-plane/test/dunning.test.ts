@@ -108,6 +108,22 @@ describe("DunningService.evaluateOwner (the rule)", () => {
     expect((await svc.evaluateOwner("lead", [pod("p1", "lead", "m")])).delinquent).toBe(true);
   });
 
+  it("selfh.st insider: one Small free for life; only the rest is owed (card or not)", async () => {
+    const db = await freshDb();
+    await db.insert(user).values({ id: "ins", name: "ins", email: "ins@example.com", freeOffer: "selfhst-insider" });
+    const noCard = new DunningService(db, fakeBilling({ ins: { creditCents: 0, hasCard: false } }), fakePods([]));
+    expect(await noCard.evaluateOwner("ins", [pod("p1", "ins", "s")])).toEqual({ delinquent: false, amountDueCents: 0 });
+    // Small + Medium, no card: owes only the Medium ($12), not the Small.
+    expect(await noCard.evaluateOwner("ins", [pod("p1", "ins", "s"), pod("p2", "ins", "m")])).toEqual({
+      delinquent: true,
+      amountDueCents: 1200,
+    });
+    // A selfh.st tile visitor's Small is free in alpha (like the email leads).
+    await db.insert(user).values({ id: "tile", name: "t", email: "t@example.com", ref: "selfhst-tile-memos" });
+    const tile = new DunningService(db, fakeBilling({ tile: { creditCents: 0, hasCard: false } }), fakePods([]));
+    expect((await tile.evaluateOwner("tile", [pod("p1", "tile", "s")])).delinquent).toBe(false);
+  });
+
   it("no card but credit covers the bill → not delinquent", async () => {
     const db = await freshDb();
     const svc = new DunningService(db, fakeBilling({ u1: { creditCents: 5000, hasCard: false } }), fakePods([]));

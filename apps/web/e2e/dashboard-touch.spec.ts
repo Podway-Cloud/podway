@@ -9,17 +9,19 @@ import { login, launchPod } from "./helpers";
 test("on a phone: a tap opens the pod; a long-press + move reorders", async ({ page, browser }) => {
   test.setTimeout(300_000);
   await login(page, "approved");
-  await launchPod(page, "nextjs-starter", { name: "touch-a" });
-  await launchPod(page, "nextjs-starter", { name: "touch-b" });
+  // Unique per attempt: a retry must not find the first attempt's cards too (strict-mode clash, CI 2026-10-08).
+  const tag = `t${test.info().retry}`;
+  await launchPod(page, "nextjs-starter", { name: `touch-a${tag}` });
+  await launchPod(page, "nextjs-starter", { name: `touch-b${tag}` });
   const phone = await browser.newContext({ ...devices["iPhone 13"], baseURL: test.info().project.use.baseURL });
   const m = await phone.newPage();
   await login(m, "approved");
   await m.goto("/dashboard");
-  const card = m.getByTestId("pod-card").filter({ has: m.getByRole("button", { name: "Reorder touch-a" }) });
+  const card = m.getByTestId("pod-card").filter({ has: m.getByRole("button", { name: `Reorder touch-a${tag}` }) });
   await expect(card).toBeVisible();
-  const names = () => m.getByTestId("pod-card").locator("button[aria-label^='Reorder ']").evaluateAll((els) =>
-    els.map((e) => e.getAttribute("aria-label")!.replace("Reorder ", "")).filter((n) => n.startsWith("touch-")),
-  );
+  const names = () => m.getByTestId("pod-card").locator("button[aria-label^='Reorder ']").evaluateAll((els, t) =>
+    els.map((e) => e.getAttribute("aria-label")!.replace("Reorder ", "")).filter((n) => n.endsWith(t) && n.startsWith("touch-")),
+  tag);
   await expect.poll(async () => (await names()).length).toBe(2);
   const before = await names();
 
@@ -42,6 +44,7 @@ test("on a phone: a tap opens the pod; a long-press + move reorders", async ({ p
   // A plain tap opens the pod.
   const box = (await cardOf(before[0]!).boundingBox())!;
   await m.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
-  await expect(m).toHaveURL(/\/dashboard\/pods\//, { timeout: 10_000 });
+  // 30 s: the first visit to the pod page compiles it on the CI dev server (cold compile > 10 s seen in CI).
+  await expect(m).toHaveURL(/\/dashboard\/pods\//, { timeout: 30_000 });
   await phone.close();
 });

@@ -47,6 +47,10 @@ export const user = pgTable("user", {
   ref: text("ref"),
   /** The /start link (app + ref) an unapproved account arrived with; approval sends them back to it. */
   pendingStart: text("pending_start"),
+  // Free-pod offer (owner, 2026-10-08): the offer link this account claimed (a key of @podway/shared
+  // FREE_POD_OFFERS, e.g. "selfhst-insider") and when — one pod up to the offer's size is never billed.
+  freeOffer: text("free_offer"),
+  freeOfferSince: timestamp("free_offer_since"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

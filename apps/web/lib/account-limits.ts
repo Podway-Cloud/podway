@@ -1,11 +1,11 @@
 import "server-only";
 
-import { ACCOUNT_RAM_GB, CARDED_RAM_GB, noCardRamGb } from "@podway/shared/tiers";
+import { ACCOUNT_RAM_GB, CARDED_RAM_GB, noCardRamGb, offerRamGb } from "@podway/shared/tiers";
 import { isAdmin } from "./access-rules";
 import { editionOss } from "./session";
 import { getBillingService } from "./pod-service";
 import { stripeConfigured } from "@podway/control-plane";
-import { getAccountRef } from "./attribution";
+import { getAccountRef, accountOffer } from "./attribution";
 
 /**
  * The account's pod-RAM budget (GB) — the ceiling on total running-pod RAM.
@@ -28,6 +28,6 @@ export async function accountRamCapGb(userId: string, email: string): Promise<nu
     .then((a) => a.hasCard)
     .catch(() => false);
   if (hasCard) return CARDED_RAM_GB;
-  const ref = await getAccountRef(userId).catch(() => null);
-  return noCardRamGb(ref); // campaign-lead pass: shared/tiers.ts
+  const [ref, offer] = await Promise.all([getAccountRef(userId).catch(() => null), accountOffer(userId).catch(() => null)]);
+  return noCardRamGb(ref, offerRamGb(offer)); // lead passes + free-pod offers: shared/tiers.ts
 }

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser, editionOss } from "@/lib/session";
 import { getEnvironmentDetail } from "@/lib/environments";
-import { recordFirstTouchRef, savePendingStart } from "@/lib/attribution";
+import { recordFirstTouchRef, savePendingStart, claimOffer } from "@/lib/attribution";
 import { currentUserAllowed } from "@/lib/access";
 import { sanitizeRef } from "@podway/shared";
 import { POD_SIZES } from "@podway/shared/tiers";
@@ -60,6 +60,8 @@ export default async function StartPage({
   // surface (edition-parity). Set-once, never overwritten (recordFirstTouchRef).
   if (!editionOss() && ref) {
     await recordFirstTouchRef(user.id, ref);
+    // Free-pod offer link (selfh.st insider, partners): claim it while under its cap — existing accounts too.
+    await claimOffer(user.id, ref);
   }
 
   // Cloud invite gate: an account still waiting for approval keeps THIS link (app + ref) on the

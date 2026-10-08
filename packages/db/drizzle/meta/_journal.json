@@ -477,6 +477,13 @@
       "when": 1791402000000,
       "tag": "0067_radar_snapshots",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1791488400000,
+      "tag": "0068_user_free_offer",
+      "breakpoints": true
     }
   ]
 }

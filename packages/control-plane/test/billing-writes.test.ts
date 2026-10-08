@@ -325,6 +325,24 @@ describe("syncSubscription — the charge orchestration", () => {
     );
   });
 
+  it("a selfh.st insider's one Small is never a subscription item (free for life, card or not)", async () => {
+    const db = await freshDb();
+    await seedUser(db, "u1");
+    await db.update(user).set({ freeOffer: "selfhst-insider" }).where(eq(user.id, "u1"));
+    await seedAccount(db, "u1", "cus_1", true);
+    const { create, stripe } = subStripe([]);
+    const svc = new BillingService(db, stripe);
+
+    const r = await svc.syncSubscription("u1", [
+      { podId: "mini", size: "mini", status: "running" },
+      { podId: "small", size: "s", status: "running" },
+      { podId: "big", size: "m", status: "running" },
+    ]);
+    expect(r).toMatchObject({ items: 2 });
+    const items = (create.mock.calls[0]![0] as { items: { metadata: { podId: string } }[] }).items;
+    expect(items.map((i) => i.metadata.podId)).toEqual(["mini", "big"]); // the Small is the free one
+  });
+
   it("prices a SUSPENDED pod at the suspended rate, not its size", async () => {
     const db = await freshDb();
     await seedUser(db, "u1");

@@ -9,6 +9,8 @@ import { editionOss } from "@/lib/session";
 import { harnessEnabled } from "@/lib/agent-harness";
 import { getBillingSummary } from "@/lib/billing-actions";
 import { accountRamCapGb } from "@/lib/account-limits";
+import { accountOffer } from "@/lib/attribution";
+import { FREE_POD_OFFERS } from "@podway/shared";
 import { sanitizeRef } from "@podway/shared";
 import { POD_SIZES, type PodSize } from "@podway/shared/tiers";
 
@@ -96,6 +98,10 @@ export default async function NewPodPage({
         hasCard={billing?.hasCard ?? false}
         // A no-card account's cap IS its free-in-alpha budget (one Mini; one Small for an email-* lead).
         freeRamGb={ramCap === Infinity ? 0 : ramCap}
+        freeOffer={await (async () => {
+          const o = oss ? null : await accountOffer(user.id).catch(() => null);
+          return o && Object.hasOwn(FREE_POD_OFFERS, o) ? FREE_POD_OFFERS[o] : undefined;
+        })()}
       />
     </DashboardPage>
   );

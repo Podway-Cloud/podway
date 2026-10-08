@@ -21,6 +21,29 @@ test.describe("admin backoffice pages", () => {
     await expect(page.getByRole("button", { name: /^Revoke$/ }).first()).toBeVisible();
   });
 
+  test("a user row opens that user's page: ref, free pod, and their pods table", async ({ page, browser }) => {
+    // The approved user claims a partner offer through its link and launches a pod.
+    const ctx = await browser.newContext();
+    const up = await ctx.newPage();
+    await login(up, "approved");
+    await up.goto("/start?ref=noted-jeremy");
+    await launchPod(up);
+    await ctx.close();
+
+    await login(page, "admin");
+    await page.goto("/admin/users");
+    await expect(page.getByRole("columnheader", { name: "Free pod" })).toBeVisible();
+    await page.getByRole("link", { name: /approved@podway\.test/ }).click();
+    await expect(page).toHaveURL(/\/admin\/users\/[^/]+$/);
+    await expect(page.getByText("Came from (ref)")).toBeVisible();
+    await expect(page.getByText("Free pod · Noted.lol partner", { exact: false })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Pods" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /e2e-pod/ }).first()).toBeVisible(); // the shared pods table
+    await page.screenshot({ path: "test-results/admin-user-page.png", fullPage: true });
+    await page.goto("/admin/users");
+    await page.screenshot({ path: "test-results/admin-users.png", fullPage: true });
+  });
+
   test("Incidents page renders its fleet view", async ({ page }) => {
     await login(page, "admin");
     await page.goto("/admin/incidents");

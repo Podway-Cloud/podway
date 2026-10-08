@@ -19,12 +19,13 @@ const editionOss = vi.fn<() => boolean>();
 const stripeConfigured = vi.fn<() => boolean>();
 const getAccount = vi.fn<() => Promise<{ hasCard: boolean }>>();
 const getAccountRef = vi.fn<() => Promise<string | null>>();
+const accountOffer = vi.fn<() => Promise<string | null>>();
 
 vi.mock("@/lib/access-rules", () => ({ isAdmin: (e: string) => isAdmin(e) }));
 vi.mock("@/lib/session", () => ({ editionOss: () => editionOss() }));
 vi.mock("@/lib/pod-service", () => ({ getBillingService: () => ({ getAccount }) }));
 vi.mock("@podway/control-plane", () => ({ stripeConfigured: () => stripeConfigured() }));
-vi.mock("@/lib/attribution", () => ({ getAccountRef: () => getAccountRef() }));
+vi.mock("@/lib/attribution", () => ({ getAccountRef: () => getAccountRef(), accountOffer: () => accountOffer() }));
 
 const { accountRamCapGb } = await import("@/lib/account-limits");
 
@@ -35,6 +36,17 @@ describe("accountRamCapGb", () => {
     stripeConfigured.mockReturnValue(true);
     getAccount.mockResolvedValue({ hasCard: false });
     getAccountRef.mockResolvedValue(null);
+    accountOffer.mockResolvedValue(null);
+  });
+
+  it("a no-card selfh.st tile visitor or insider may run one Small; a partner one Medium", async () => {
+    getAccountRef.mockResolvedValue("selfhst-tile-memos");
+    expect(await accountRamCapGb("u1", "t@example.com")).toBe(2);
+    getAccountRef.mockResolvedValue("hn");
+    accountOffer.mockResolvedValue("selfhst-insider");
+    expect(await accountRamCapGb("u1", "i@example.com")).toBe(2);
+    accountOffer.mockResolvedValue("noted-jeremy");
+    expect(await accountRamCapGb("u1", "j@example.com")).toBe(4);
   });
 
   it("gives a no-card campaign lead (ref email-*) room for one Small, and nobody else", async () => {

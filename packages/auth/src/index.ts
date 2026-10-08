@@ -117,6 +117,11 @@ export function createAuth(env: AuthEnv) {
   const advanced: Record<string, unknown> = {};
   if (env.COOKIE_DOMAIN) advanced.crossSubDomainCookies = { enabled: true, domain: env.COOKIE_DOMAIN };
   if (oss && !env.BETTER_AUTH_URL?.startsWith("https://")) advanced.useSecureCookies = false;
+  // Cloud is served straight by Fly, whose x-forwarded-for carries the client AND a proxy hop — better-auth
+  // rejects a multi-IP list without trustedProxies, so every session stored an EMPTY ip (admin "Last IP"
+  // blank, 2026-10-08). Fly-Client-IP is the single client IP, set by Fly's edge (a client can't forge it).
+  // Not for self-host: there nothing strips a forged Fly-Client-IP header.
+  if (!oss) advanced.ipAddress = { ipAddressHeaders: ["fly-client-ip", "x-forwarded-for"] };
   return betterAuth({
     database: drizzleAdapter(db, { provider: "pg", schema }),
     secret: env.BETTER_AUTH_SECRET,

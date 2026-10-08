@@ -1,7 +1,7 @@
 import "server-only";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, sql } from "drizzle-orm";
 import { createAppDb, user as userTable } from "@podway/db";
-import { sanitizeRef } from "@podway/shared";
+import { sanitizeRef, FREE_POD_OFFERS } from "@podway/shared";
 
 /**
  * Deep-link referral attribution (deeplink-onboarding). `ref` lives on the account as FIRST-TOUCH
@@ -48,4 +48,43 @@ export async function getPendingStart(userId: string): Promise<string | null> {
     .from(userTable)
     .where(eq(userTable.id, userId));
   return row?.pendingStart?.startsWith("/start") ? row.pendingStart : null;
+}
+
+/**
+ * Free-pod offer claim (owner, 2026-10-08): a /start?ref=<offer key> visit marks this account with that
+ * offer while fewer than the offer's `cap` accounts hold it. Set-once (one offer per account); one atomic
+ * UPDATE with the count in the WHERE. ponytail: two claims racing at cap-1 can both pass (cap +1);
+ * neon-http has no interactive transaction for an advisory lock. Returns true if this call claimed it.
+ */
+export async function claimOffer(userId: string, offer: string): Promise<boolean> {
+  const o = Object.hasOwn(FREE_POD_OFFERS, offer) ? FREE_POD_OFFERS[offer] : undefined;
+  if (!o) return false;
+  const rows = await createAppDb()
+    .update(userTable)
+    .set({ freeOffer: offer, freeOfferSince: new Date() })
+    .where(
+      and(
+        eq(userTable.id, userId),
+        isNull(userTable.freeOffer),
+        sql`(select count(*) from "user" where free_offer = ${offer}) < ${o.cap}`,
+      ),
+    )
+    .returning({ id: userTable.id });
+  return rows.length > 0;
+}
+
+/** Claims per offer key (the admin counter: N / cap). */
+export async function offerCounts(): Promise<Record<string, number>> {
+  const rows = await createAppDb()
+    .select({ offer: userTable.freeOffer, n: sql<number>`count(*)::int` })
+    .from(userTable)
+    .where(isNotNull(userTable.freeOffer))
+    .groupBy(userTable.freeOffer);
+  return Object.fromEntries(rows.map((r) => [r.offer!, r.n]));
+}
+
+/** The offer key this account claimed, or null. */
+export async function accountOffer(userId: string): Promise<string | null> {
+  const [r] = await createAppDb().select({ o: userTable.freeOffer }).from(userTable).where(eq(userTable.id, userId));
+  return r?.o ?? null;
 }

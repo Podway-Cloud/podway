@@ -10,7 +10,7 @@
 import Stripe from "stripe";
 import { randomUUID } from "node:crypto";
 import { billingAccounts, creditGrants, user, eq, and, desc, sql, type Database } from "@podway/db";
-import { POD_TIERS, SUSPENDED_USD, SIGNUP_CREDIT_CENTS, type PodSize } from "@podway/shared";
+import { POD_TIERS, SUSPENDED_USD, SIGNUP_CREDIT_CENTS, offerRamGb, ramGbForSize, type PodSize } from "@podway/shared";
 
 /**
  * The signup credit granted once a card is on file (cents). Advertised as ~$15. The value now lives
@@ -556,8 +556,11 @@ export class BillingService {
     // Desired: podId → priceId. error/gone/destroyed pods are not billable.
     const billable = (s: string) => s !== "error" && s !== "gone" && s !== "destroyed" && s !== "destroying";
     const desired = new Map<string, string>();
+    // Free-pod offer (selfh.st insider, partners): one pod up to the offer's size is never a subscription item.
+    const [meta] = await this.db.select({ offer: user.freeOffer }).from(user).where(eq(user.id, ownerId));
+    const freePod = freePodId(pods.filter((p) => billable(p.status)), offerRamGb(meta?.offer));
     for (const p of pods) {
-      if (!billable(p.status)) continue;
+      if (!billable(p.status) || p.podId === freePod) continue;
       const key = p.status === "suspended" ? "suspended" : p.size;
       desired.set(p.podId, prices.get(key)!);
     }
@@ -652,4 +655,15 @@ export class BillingService {
     this._prices = out;
     return out;
   }
+}
+
+/** A free-pod offer's free pod: the biggest pod that fits `maxGb` (a Small beats a Mini), first one on a
+ * tie. Null when none fits (or maxGb is 0 — no offer). */
+export function freePodId(pods: { podId: string; size: PodSize }[], maxGb: number): string | null {
+  let best: { podId: string; gb: number } | null = null;
+  for (const p of pods) {
+    const gb = ramGbForSize(p.size);
+    if (gb <= maxGb && (!best || gb > best.gb)) best = { podId: p.podId, gb };
+  }
+  return best?.podId ?? null;
 }

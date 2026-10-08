@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { requireAdmin, listUsersDetailed } from "@/lib/access";
 import DashboardPage from "@/components/dashboard-page";
 import AdminUserRow from "@/components/admin-user-row";
+import { FREE_POD_OFFERS } from "@podway/shared";
 
 export const dynamic = "force-dynamic";
 
@@ -49,33 +51,43 @@ export default async function UsersPage() {
           <thead className="border-b border-border/60 bg-surface-1">
             <tr>
               <th className={th}>User</th>
-              <th className={th}>Status</th>
+              <th className={th}>Ref</th>
+              <th className={th}>Free pod</th>
               <th className={th}>Registered</th>
               <th className={th}>Last login</th>
               <th className={`${th} text-right`}>Logins</th>
               <th className={`${th} text-right`}>Pods</th>
-              <th className={th}>Plan</th>
+              <th className={th}>Card</th>
               <th className={th}>Last IP</th>
               <th className={th}></th>
             </tr>
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} className="border-t border-border/60">
+              <tr key={u.id} className="border-t border-border/60 hover:bg-surface-3">
                 <td className={td}>
-                  <div className="font-medium">{u.name}</div>
+                  <Link href={`/admin/users/${u.id}`} className="-mx-3 -my-2.5 block px-3 py-2.5 hover:underline">
+                  <div className="font-medium">
+                    {u.name}
+                    {/* Open sign-up approves everyone, so only a revoked account is worth flagging. */}
+                    {!u.approved && (
+                      <span className="ml-2 rounded-md bg-destructive/12 px-1.5 py-0.5 text-[11px] font-semibold text-destructive">revoked</span>
+                    )}
+                  </div>
                   <div className="text-[11.5px] text-muted-foreground">{u.email}</div>
+                  </Link>
+                </td>
+                <td className={`${td} font-mono text-[11.5px] text-muted-foreground`}>
+                  <span className="block max-w-[160px] truncate" title={u.ref ?? undefined}>{u.ref ?? "—"}</span>
                 </td>
                 <td className={td}>
-                  <span
-                    className={
-                      u.approved
-                        ? "rounded-full bg-success/15 px-2 py-0.5 text-[11px] text-success"
-                        : "rounded-full bg-warning/15 px-2 py-0.5 text-[11px] text-warning"
-                    }
-                  >
-                    {u.approved ? "approved" : "pending"}
-                  </span>
+                  {u.freeOffer ? (
+                    <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10.5px] font-medium text-success" title={u.freeOffer}>
+                      {FREE_POD_OFFERS[u.freeOffer]?.label ?? u.freeOffer}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
                 </td>
                 <td className={`${td} text-muted-foreground`}>{shortDate(u.createdAt)}</td>
                 <td className={td}>
@@ -86,7 +98,7 @@ export default async function UsersPage() {
                 </td>
                 <td className={`${td} text-right tabular-nums`}>{u.loginCount}</td>
                 <td className={`${td} text-right tabular-nums`}>{u.podCount}</td>
-                <td className={`${td} text-muted-foreground`}>alpha</td>
+                <td className={`${td} text-muted-foreground`}>{u.hasCard ? "yes" : "—"}</td>
                 <td className={`${td} font-mono text-[11.5px] text-muted-foreground`}>
                   <span className="block max-w-[120px] truncate" title={u.lastIp ?? undefined}>
                     {u.lastIp ?? "—"}
@@ -101,8 +113,8 @@ export default async function UsersPage() {
         </table>
       </div>
       <p className="text-[12px] text-muted-foreground">
-        Login count + last IP come from active sessions (better-auth). Plan is a placeholder until
-        billing lands. Pending users can be approved here or on <a className="underline" href="/admin">Access requests</a>.
+        Login count + last IP come from active sessions (sessions before 2026-10-08 stored no IP). Ref is the
+        account&rsquo;s first-touch link. Click a user for details and their pods. Revoke removes access AND suspends the user&rsquo;s running pods (data kept).
       </p>
     </DashboardPage>
   );

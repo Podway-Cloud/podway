@@ -1,7 +1,7 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { createAppDb, user as userTable, session as sessionTable, pods as podsTable } from "@podway/db";
+import { createAppDb, user as userTable, session as sessionTable, pods as podsTable, billingAccounts } from "@podway/db";
 import { withDbRetry } from "@podway/auth";
 import { getCurrentUser, editionOss, type CurrentUser } from "./session";
 import { isAdmin, isPreapproved } from "./access-rules";
@@ -100,8 +100,13 @@ export interface AdminUserDetail extends AdminUser {
   /** Median-ish signal is overkill; the newest session's lifetime span in ms. */
   lastSessionMs: number | null;
   podCount: number;
-  /** No billing yet — every alpha user is on the free invite plan. */
-  subscription: "alpha";
+  /** First-touch ref (where the account came from), or null. */
+  ref: string | null;
+  /** The free-pod offer this account claimed (a FREE_POD_OFFERS key), or null. */
+  freeOffer: string | null;
+  freeOfferSince: string | null;
+  /** A card is on file (billing). */
+  hasCard: boolean;
 }
 
 /**
@@ -111,7 +116,7 @@ export interface AdminUserDetail extends AdminUser {
  */
 export async function listUsersDetailed(): Promise<AdminUserDetail[]> {
   const db = createAppDb();
-  const [users, sessions, pods] = await Promise.all([
+  const [users, sessions, pods, cards] = await Promise.all([
     db.select().from(userTable),
     db
       .select({
@@ -122,7 +127,9 @@ export async function listUsersDetailed(): Promise<AdminUserDetail[]> {
       })
       .from(sessionTable),
     db.select({ ownerId: podsTable.ownerId }).from(podsTable),
+    db.select({ ownerId: billingAccounts.ownerId, hasCard: billingAccounts.hasCard }).from(billingAccounts),
   ]);
+  const carded = new Set(cards.filter((c) => c.hasCard).map((c) => c.ownerId));
 
   const byUser = new Map<string, typeof sessions>();
   for (const s of sessions) {
@@ -150,7 +157,10 @@ export async function listUsersDetailed(): Promise<AdminUserDetail[]> {
         lastIp: latest?.ipAddress ?? null,
         lastSessionMs: latest ? +latest.expiresAt - +latest.createdAt : null,
         podCount: podCounts.get(u.id) ?? 0,
-        subscription: "alpha" as const,
+        ref: u.ref,
+        freeOffer: u.freeOffer,
+        freeOfferSince: u.freeOfferSince ? u.freeOfferSince.toISOString() : null,
+        hasCard: carded.has(u.id),
       };
     })
     .sort(
