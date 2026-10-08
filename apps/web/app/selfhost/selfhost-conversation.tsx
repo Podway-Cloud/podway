@@ -2,37 +2,37 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AgentLogo } from "@/components/agent-logo";
-import { conversationFrameAt, MESSAGE_TIMING } from "./selfhost-conversation-timing";
+import { sceneFrameAt } from "./selfhost-conversation-timing";
 import styles from "./selfhost-landing.module.css";
 
-const MESSAGES = [
-  { role: "you", parts: [{ text: "deploy n8n for me" }] },
+/** Real jobs people hand their AI admin — one app per scene (owner-picked script, 2026-10-08). The app is
+ * already installed in the pod, so nobody asks to "deploy" it. Plain words, no jargon. */
+const SCENES = [
   {
-    role: "admin",
-    parts: [
-      { text: "on it. " },
-      { text: "✓ live", tone: "ok" },
-      { text: " at n8n-acme.podway.site. n8n and Postgres are up; first snapshot taken." },
-    ],
+    app: "Uptime Kuma",
+    logo: "/selfhost-apps/uptime-kuma.svg",
+    you: "Watch our site and the checkout API. Tell me if either goes down.",
+    admin: "Done: two monitors, checked every minute. Do you want alerts by email, Slack or Telegram?",
   },
-  { role: "you", parts: [{ text: "upgrade it when safe" }] },
   {
-    role: "admin",
-    parts: [
-      { text: "snapshot taken. the new version " },
-      { text: "failed its health check", tone: "warn" },
-      { text: ". restored the previous version and data. " },
-      { text: "✓ rolled back", tone: "ok" },
-    ],
+    app: "n8n",
+    logo: "/selfhost-apps/n8n.svg",
+    you: "Every morning, post yesterday's Stripe payments to #sales on Slack.",
+    admin: "Built it. It runs every day at 8:00. Add your Stripe key in the Secrets tab and I'll do a test run.",
+  },
+  {
+    app: "Ghost",
+    logo: "/selfhost-apps/ghost.png",
+    you: "Ghost 6 is out. Can we upgrade?",
+    admin: "I took a snapshot, then upgraded. Your theme broke on 6.0, so I rolled back. The site is up and nothing was lost. Fix the theme first?",
   },
 ] as const;
 
-const MESSAGE_LENGTHS = MESSAGES.map((message) => message.parts.reduce((sum, part) => sum + part.text.length, 0));
-const LAST_FRAME_MS = Math.max(...MESSAGE_TIMING.map((timing, index) => timing.startsAt + MESSAGE_LENGTHS[index] * timing.msPerChar)) + 100;
+const LENGTHS = SCENES.map((s) => ({ you: s.you.length, admin: s.admin.length }));
 
 export default function SelfhostConversation() {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [elapsedMs, setElapsedMs] = useState<number | null>(null);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
@@ -43,74 +43,70 @@ export default function SelfhostConversation() {
     return () => media.removeEventListener("change", update);
   }, []);
 
+  // Loop while the panel is on screen; pause (and keep the place) when it scrolls away.
   useEffect(() => {
     if (reducedMotion) return;
     const panel = panelRef.current;
     if (!panel) return;
-
     let interval: number | undefined;
-    let observer: IntersectionObserver | undefined;
-    const start = () => {
+    let base = 0;
+    const play = () => {
       if (interval !== undefined) return;
-      const startedAt = performance.now();
-      setElapsedMs(0);
-      interval = window.setInterval(() => {
-        const elapsed = performance.now() - startedAt;
-        setElapsedMs(Math.min(elapsed, LAST_FRAME_MS));
-        if (elapsed >= LAST_FRAME_MS) window.clearInterval(interval);
-      }, 32);
-      observer?.disconnect();
+      const startedAt = performance.now() - base;
+      interval = window.setInterval(() => setElapsedMs((base = performance.now() - startedAt)), 32);
     };
-
-    if (typeof IntersectionObserver === "undefined") {
-      start();
-    } else {
-      observer = new IntersectionObserver(([entry]) => {
-        if (entry?.isIntersecting) start();
-      }, { threshold: 0.25 });
-      observer.observe(panel);
-    }
-    return () => {
-      observer?.disconnect();
+    const pause = () => {
       if (interval !== undefined) window.clearInterval(interval);
+      interval = undefined;
+    };
+    if (typeof IntersectionObserver === "undefined") {
+      play();
+      return pause;
+    }
+    const observer = new IntersectionObserver(([entry]) => (entry?.isIntersecting ? play() : pause()), { threshold: 0.25 });
+    observer.observe(panel);
+    return () => {
+      observer.disconnect();
+      pause();
     };
   }, [reducedMotion]);
 
-  const frame = conversationFrameAt(elapsedMs ?? 0, MESSAGE_LENGTHS, reducedMotion);
+  const f = sceneFrameAt(elapsedMs, LENGTHS, reducedMotion);
+  const scene = SCENES[f.scene]!;
+  const typingYou = f.youChars < scene.you.length;
+  const typingAdmin = !typingYou && !f.thinking && f.adminChars < scene.admin.length;
 
   return (
     <div
       ref={panelRef}
       className={styles.term}
       role="img"
-      aria-label="Example conversations in Claude: ask the AI admin to deploy n8n, then to upgrade it safely. The upgrade fails its health check, so the admin restores the previous version and data."
+      aria-label={`Example conversations in Claude. ${SCENES.map((s) => `${s.app}: you ask "${s.you}" and the AI admin answers "${s.admin}"`).join(" ")}`}
     >
       <div className={styles.termBar}>
         <AgentLogo agent="claude-code" className={styles.claudeMark} />
         <span>example conversations · in Claude</span>
       </div>
-      <div className={styles.termBody} aria-hidden="true">
-        {MESSAGES.map((message, index) => {
-          const started = reducedMotion || (elapsedMs !== null && elapsedMs >= MESSAGE_TIMING[index].startsAt);
-          if (!started && frame.thinking !== index) return null;
-          if (frame.thinking === index) {
-            return <p key={index} className={`${styles.adm} ${styles.thinking}`}><span /><span /><span /></p>;
-          }
-
-          const isTyping = frame.chars[index] < MESSAGE_LENGTHS[index];
-          return (
-            <p key={index} className={`${message.role === "you" ? styles.you : styles.adm} ${isTyping ? styles.typingCursor : ""}`}>
-              {message.parts.map((part, partIndex) => {
-                const preceding = message.parts.slice(0, partIndex).reduce((sum, previous) => sum + previous.text.length, 0);
-                const visibleText = part.text.slice(0, Math.max(0, frame.chars[index] - preceding));
-                return <span key={partIndex} className={"tone" in part ? (part.tone === "ok" ? styles.ok : styles.warn) : undefined}>{visibleText}</span>;
-              })}
-            </p>
-          );
-        })}
+      <div className={`${styles.termBody} ${f.fading ? styles.sceneFade : ""}`} aria-hidden="true">
+        <p className={styles.sceneApp}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={scene.logo} alt="" width={18} height={18} />
+          {scene.app}
+        </p>
+        {f.youChars > 0 && (
+          <p className={`${styles.you} ${typingYou ? styles.typingCursor : ""}`}>{scene.you.slice(0, f.youChars)}</p>
+        )}
+        {f.thinking && (
+          <p className={`${styles.adm} ${styles.thinking}`}><span /><span /><span /></p>
+        )}
+        {f.adminChars > 0 && (
+          <p className={`${styles.adm} ${typingAdmin ? styles.typingCursor : ""}`}>{scene.admin.slice(0, f.adminChars)}</p>
+        )}
       </div>
       <noscript>
-        <p>deploy n8n for me · on it. n8n is live and backed up. · upgrade it when safe · the upgrade failed its health check, so the previous version and data were restored.</p>
+        {SCENES.map((s) => (
+          <p key={s.app}>{s.app} — {s.you} · {s.admin}</p>
+        ))}
       </noscript>
     </div>
   );

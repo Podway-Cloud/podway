@@ -1,27 +1,58 @@
-export const MESSAGE_TIMING = [
-  { startsAt: 0, msPerChar: 50 },
-  { startsAt: 1300, msPerChar: 16 },
-  { startsAt: 3800, msPerChar: 50 },
-  { startsAt: 5400, msPerChar: 16 },
-] as const;
+/**
+ * Timing model for the landing's example conversation (owner, 2026-10-08: one realistic scene per app,
+ * shown one at a time, looping). Each scene: the visitor's message types, Claude "thinks", the reply
+ * streams, then it HOLDS long enough to be read before the next scene fades in.
+ *
+ *   type     : YOU_MS_PER_CHAR   — brisk human typing, still readable as it appears
+ *   think    : THINK_MS          — the only dead air in a scene
+ *   stream   : ADMIN_MS_PER_CHAR — faster than reading, like Claude
+ *   hold     : the reply is read at ~20 chars/s (≈240 wpm); what streaming did not cover is held, ≥ MIN_HOLD_MS
+ *   fade     : FADE_MS           — the scene fades out, then the next one starts
+ */
+export const YOU_MS_PER_CHAR = 35;
+export const THINK_MS = 900;
+export const ADMIN_MS_PER_CHAR = 15;
+export const READ_MS_PER_CHAR = 50;
+export const MIN_HOLD_MS = 1800;
+export const FADE_MS = 450;
 
-export function conversationFrameAt(
-  elapsedMs: number,
-  messageLengths: readonly number[],
-  reducedMotion = false,
-): { chars: number[]; thinking: number | null } {
-  if (reducedMotion) return { chars: [...messageLengths], thinking: null };
+export interface SceneLengths {
+  you: number;
+  admin: number;
+}
 
-  const chars = messageLengths.map((length, index) => {
-    const timing = MESSAGE_TIMING[index];
-    if (!timing) return length;
-    return Math.min(length, Math.max(0, Math.floor((elapsedMs - timing.startsAt) / timing.msPerChar)));
-  });
-  const thinking = [1, 3].find((index) => {
-    const startsAt = MESSAGE_TIMING[index].startsAt;
-    const previous = MESSAGE_TIMING[index - 1];
-    const previousFinish = previous.startsAt + messageLengths[index - 1] * previous.msPerChar;
-    return elapsedMs >= Math.max(startsAt - 350, previousFinish) && elapsedMs < startsAt;
-  }) ?? null;
-  return { chars, thinking };
+export interface SceneFrame {
+  scene: number;
+  youChars: number;
+  adminChars: number;
+  thinking: boolean;
+  /** The scene is fading out (next one starts after FADE_MS). */
+  fading: boolean;
+}
+
+/** Duration of one scene, start to the end of its fade. */
+export function sceneDurationMs(s: SceneLengths): number {
+  const type = s.you * YOU_MS_PER_CHAR;
+  const stream = s.admin * ADMIN_MS_PER_CHAR;
+  const hold = Math.max(MIN_HOLD_MS, s.admin * READ_MS_PER_CHAR - stream);
+  return type + THINK_MS + stream + hold + FADE_MS;
+}
+
+/** What to show `elapsedMs` into the loop. Reduced motion: the first scene, complete and still. */
+export function sceneFrameAt(elapsedMs: number, scenes: readonly SceneLengths[], reducedMotion = false): SceneFrame {
+  if (reducedMotion) return { scene: 0, youChars: scenes[0]!.you, adminChars: scenes[0]!.admin, thinking: false, fading: false };
+  const total = scenes.reduce((n, s) => n + sceneDurationMs(s), 0);
+  let t = ((elapsedMs % total) + total) % total;
+  let i = 0;
+  while (t >= sceneDurationMs(scenes[i]!)) t -= sceneDurationMs(scenes[i++]!);
+  const s = scenes[i]!;
+  const typeEnd = s.you * YOU_MS_PER_CHAR;
+  const streamStart = typeEnd + THINK_MS;
+  return {
+    scene: i,
+    youChars: Math.min(s.you, Math.floor(t / YOU_MS_PER_CHAR)),
+    adminChars: Math.max(0, Math.min(s.admin, Math.floor((t - streamStart) / ADMIN_MS_PER_CHAR))),
+    thinking: t >= typeEnd && t < streamStart,
+    fading: t >= sceneDurationMs(s) - FADE_MS,
+  };
 }

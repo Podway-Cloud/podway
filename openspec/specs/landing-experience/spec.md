@@ -11,9 +11,12 @@ The page SHALL pair the headline "Self-host anything. Your AI admin runs it." wi
 that identify Podway's cloud as the hosting location. Its availability at `/selfhost` SHALL NOT
 depend on whether administrators also promote it to `/`.
 All FAQ questions and answers SHALL be visible in a static Q&A layout without collapse controls.
-The example Claude conversation SHALL type the requests and admin replies in order once it is
-visible, then leave the complete transcript on screen. Reduced-motion visitors SHALL see the
-complete transcript without animation.
+The example Claude conversation SHALL show realistic jobs on an app that is ALREADY installed (never
+"deploy it" — owner, 2026-10-08), one scene per app (today: Uptime Kuma monitoring, an n8n
+Stripe→Slack automation, a Ghost upgrade that fails and rolls back), in plain words, one scene at a
+time: the request types, the admin "thinks", the reply streams and stays up long enough to be read,
+then the next scene fades in; it loops while visible. Reduced-motion visitors SHALL see the first
+scene complete and still.
 
 The page SHALL explain the sign-in and review steps before launch beside the supported app catalog.
 Its primary hosting calls to action, full-catalog link, and pricing "Pick an app" links SHALL open
