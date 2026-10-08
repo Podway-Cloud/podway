@@ -131,6 +131,8 @@ export default async function globalSetup(): Promise<void> {
       // Prod has open sign-up (approved at creation); keep the approval QUEUE on here so the
       // /pending gate + admin-approve specs still exercise it.
       PODWAY_SIGNUP_REVIEW: "1",
+      // Turns the radar ingest ON for the app-pages spec (40+ chars; the route refuses shorter).
+      RADAR_INGEST_TOKEN: "e2e-radar-token-0000000000000000000000000000",
       PODWAY_FAKE_PROVIDER: "1",
       // Render the preview card, so the cockpit e2e sees the REAL layout (it is a
       // big part of the page's height, and scroll behaviour depends on it).

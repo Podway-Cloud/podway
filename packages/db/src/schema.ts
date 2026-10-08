@@ -11,6 +11,7 @@ import {
   primaryKey,
   jsonb,
   check,
+  serial,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -820,3 +821,9 @@ export const podReports = pgTable(
   (t) => [index("pod_reports_pod_idx").on(t.podId), index("pod_reports_fp_idx").on(t.fingerprint)],
 );
 
+/** Upgrade Radar snapshots (GTM pod → /api/radar/ingest). Pages render the newest row. */
+export const radarSnapshots = pgTable("radar_snapshots", {
+  id: serial("id").primaryKey(),
+  receivedAt: timestamp("received_at").notNull().defaultNow(),
+  data: jsonb("data").$type<unknown>().notNull(),
+});

@@ -5,7 +5,7 @@ import { LINEUP } from "../app/selfhost/selfhost-lineup";
 
 // The landing lineup must only advertise apps we actually run, at the price the wizard will charge.
 const repo = path.resolve(__dirname, "../../..");
-const gallery = readFileSync(path.join(repo, "apps/web/components/env-gallery.tsx"), "utf8");
+const gallery = readFileSync(path.join(repo, "apps/web/lib/app-catalog.ts"), "utf8");
 const hidden = gallery.slice(gallery.indexOf("HIDDEN_APPS"), gallery.indexOf("]);", gallery.indexOf("HIDDEN_APPS")));
 
 describe("self-host landing lineup", () => {

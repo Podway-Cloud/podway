@@ -1,4 +1,5 @@
 import { listEnvironments } from "@/lib/environments";
+import { HIDDEN_APPS } from "@/lib/app-catalog";
 import { fetchRepoMeta } from "@/lib/github-stars";
 import { isProvisioningEnabled } from "@/lib/pod-service";
 import { editionOss } from "@/lib/session";
@@ -18,18 +19,7 @@ const featureRank = (name: string) => FEATURED_FIRST[name] ?? 99;
 
 // Apps hidden from the catalog (owner curation). They stay baked + launchable by direct ?env= link;
 // they're just not shown in the browse grid. Edit this set to show/hide an app.
-const HIDDEN_APPS = new Set([
-  "excalidraw",
-  "code-server",
-  "gitea",
-  "it-tools",
-  "filebrowser",
-  "homepage",
-  "wikijs",
-  // Not owner-curation: firefly-iii is committed + baked but fails restart-survival on a
-  // hard pod reboot (storage-perms corruption). Hidden until fixed + re-smoked. See 0audit.md.
-  "firefly-iii",
-]);
+// HIDDEN_APPS lives in lib/app-catalog.ts — shared with the /apps pages and the landing lineup.
 
 export default async function EnvGallery() {
   const all = await listEnvironments();
