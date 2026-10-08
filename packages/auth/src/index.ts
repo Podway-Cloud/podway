@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { createNeonDb, createAppDb, schema } from "@podway/db";
+import { createNeonDb, createAppDb, schema, eq } from "@podway/db";
 import { notifySignup, sendNewAccountEmail, sendNewRequestEmail } from "./notify.js";
 import { mintActionToken } from "./action-token.js";
 
@@ -160,10 +160,9 @@ export function createAuth(env: AuthEnv) {
           // Email+password sign-up (e2e or the OSS owner) has no SMTP to verify against, so a
           // created account is trusted-verified — otherwise verified-email gates would reject the
           // owner on a self-host box that can't send mail.
-          ...(emailPassword || openSignup
+          ...(emailPassword
             ? {
                 before: async (user: Record<string, unknown>) => {
-                  if (!emailPassword) return { data: { ...user, approved: true } };
                   // OSS is single-owner: refuse a second account. The guard is "does an owner
                   // credential already exist" — false for the legitimate first-run sign-up (no
                   // credential yet), true for any later attempt. Immune to a stray no-credential
@@ -171,13 +170,15 @@ export function createAuth(env: AuthEnv) {
                   if (oss && (await ownerCredentialExists(db))) {
                     throw new Error("This self-host install already has an owner.");
                   }
-                  // OSS: the created account IS the owner — approve it so it doesn't land on
-                  // /pending (the cloud invite gate is meaningless single-tenant).
-                  return { data: { ...user, emailVerified: true, ...(oss || openSignup ? { approved: true } : {}) } };
+                  // (OSS owner / open sign-up approval is written in `after` — see there.)
+                  return { data: { ...user, emailVerified: true } };
                 },
               }
             : {}),
           after: async (created: { id: string; name?: string | null; email: string }) => {
+            // better-auth only writes fields it knows, so `approved: true` from `before` is silently
+            // dropped (Frank queued on 2026-10-07). Write it ourselves.
+            if (oss || openSignup) await db.update(schema.user).set({ approved: true }).where(eq(schema.user.id, created.id));
             // No ops mailbox to notify on a self-host install — the "signup" is just the owner.
             if (oss) return;
             await notifySignup({ name: created.name, email: created.email });

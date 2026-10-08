@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { login, launchPod, scriptPodSecretRequests } from "./helpers";
+import { login, launchPod, scriptPodSecretRequests, waitForPodReady } from "./helpers";
 
 /** Dismiss the once-per-pod connect walkthrough if it's overlaying the panel. */
 async function dismissWalkthrough(page: Page): Promise<void> {
@@ -19,6 +19,7 @@ test.describe("secrets tab", () => {
     test.setTimeout(90_000);
     await login(page, "approved");
     const slug = await launchPod(page);
+    await waitForPodReady(page, slug); // a pod still in setup shows the wizard, not the tabs (flaked CI 2026-10-08)
     await page.goto(`/dashboard/pods/${slug}?tab=secrets`);
     await dismissWalkthrough(page);
     await expect(page.getByRole("heading", { name: "Secrets" })).toBeVisible();
@@ -43,6 +44,7 @@ test.describe("secrets tab", () => {
     test.setTimeout(90_000);
     await login(page, "approved");
     const slug = await launchPod(page);
+    await waitForPodReady(page, slug); // a pod still in setup shows the wizard, not the tabs (flaked CI 2026-10-08)
     await page.goto(`/dashboard/pods/${slug}?tab=secrets`);
     await dismissWalkthrough(page);
     await expect(page.getByRole("heading", { name: "Secrets" })).toBeVisible();
