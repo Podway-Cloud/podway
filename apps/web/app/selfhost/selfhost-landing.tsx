@@ -84,6 +84,8 @@ export default function SelfhostLanding({
 }) {
   const primaryHref = "/start?tab=apps&ref=selfhost-landing";
   const primaryLabel = "Start free";
+  // The free offer, said ONE way everywhere (owner, 2026-10-08: no "alpha" wording; "during early access").
+  const freeLine = "Your first app is free during early access. No card needed.";
   const fromUsd = Math.min(...LINEUP.map(appPriceUsd));
 
   return (
@@ -107,6 +109,9 @@ export default function SelfhostLanding({
       <main>
         <section className={`${styles.wrap} ${styles.hero}`}>
           <div>
+            <p className={styles.offer}>
+              {freeLine}
+            </p>
             <p className={styles.eyebrow}>open-source apps · hosted on Podway</p>
             <h1>
               Self-host anything.<br />
@@ -123,7 +128,7 @@ export default function SelfhostLanding({
               <a className={styles.btnSecondary} href="#apps">Browse apps</a>
             </div>
             <p className={styles.fine}>
-              <b>Free in alpha: one app on a Mini pod, no card needed.</b> After alpha, from ${fromUsd}/month per app.<br />
+              Bigger apps from <b>$7/month</b>, with ${SIGNUP_CREDIT_USD} credit when you add a card.<br />
               Bring your Claude Pro or Max plan.
             </p>
           </div>
@@ -174,7 +179,7 @@ export default function SelfhostLanding({
                   <span className={styles.benefit}>{app.benefit}</span>
                   <span className={styles.appMeta}>
                     {app.minSize === "mini"
-                      ? <span><strong>Free in alpha</strong></span>
+                      ? <span className={styles.freeTag}>Free · early access</span>
                       : <span>From <strong>${appPriceUsd(app)}/mo</strong></span>}
                     <span>Replaces {app.replaces}</span>
                   </span>
@@ -216,7 +221,7 @@ export default function SelfhostLanding({
             <h2 className={styles.secH}>One predictable hosting price per app.</h2>
             <p className={styles.secP}>
               Each app runs in its own always-on cloud pod. Choose a size that fits it. There are no usage meters,
-              bandwidth bills or per-seat fees from Podway. During alpha, your first app on a Mini pod is free with
+              bandwidth bills or per-seat fees from Podway. During early access, your first app on a Mini pod is free with
               no card; bigger sizes use these prices, with ${SIGNUP_CREDIT_USD} credit when you add a card.
             </p>
             <div className={styles.pricing}>

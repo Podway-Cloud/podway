@@ -24,11 +24,11 @@ const render = (over: Record<string, unknown>) =>
 
 describe("free alpha Mini in the launch wizard", () => {
   it("a no-card account's first Mini is offered free", () => {
-    expect(render({})).toContain("Free in alpha · no card needed");
+    expect(render({})).toContain("Free during early access · no card needed");
   });
   it("never says free with a card, a second pod, or billing off", () => {
-    expect(render({ hasCard: true })).not.toContain("Free in alpha");
-    expect(render({ ram: { used: 1, cap: 1, unlimited: false } })).not.toContain("Free in alpha");
-    expect(render({ billingEnabled: false })).not.toContain("Free in alpha");
+    expect(render({ hasCard: true })).not.toContain("Free during early access");
+    expect(render({ ram: { used: 1, cap: 1, unlimited: false } })).not.toContain("Free during early access");
+    expect(render({ billingEnabled: false })).not.toContain("Free during early access");
   });
 });

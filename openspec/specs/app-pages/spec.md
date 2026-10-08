@@ -32,3 +32,24 @@ offered apps, and each `/apps/<slug>` page SHALL show that app's 3 most recent b
 #### Scenario: A stranger posts
 - **WHEN** a request without the token posts to the ingest
 - **THEN** it SHALL get 401 and nothing SHALL be stored
+
+### Requirement: /apps cards are searchable and name the app only
+
+The /apps index SHALL show each app card titled with the app name alone (no "hosting" suffix) and a
+search box above the cards that filters them as the visitor types: every typed word must appear in the
+app's name, one-liner or "replaces", or as in-order letters of its name (typo-tolerant). All cards SHALL
+still be server-rendered. On a phone the public header SHALL keep one row (Upgrade Radar and Pricing
+move to the footer).
+
+#### Scenario: Searching for a replacement
+- **WHEN** a visitor types "zapier"
+- **THEN** only n8n remains visible
+
+### Requirement: No standalone /pricing page
+
+The old dev-pod `/pricing` page SHALL NOT exist; `/pricing` SHALL permanently redirect to the landing's
+pricing section (`/#pricing`) so old links still land on current prices.
+
+#### Scenario: An old /pricing link
+- **WHEN** a visitor opens /pricing
+- **THEN** they are redirected (308) to /#pricing

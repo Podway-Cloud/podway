@@ -25,7 +25,7 @@ export default async function Pending() {
         </span>
         <h2 style={{ fontSize: 18 }}>You&apos;re on the list</h2>
         <p className="muted">
-          Thanks for requesting access, {user.name}. Podway is in invite-only alpha — we&apos;ll email
+          Thanks for requesting access, {user.name}. Your account is waiting for approval — we&apos;ll email
           you at <b>{user.email}</b> when your spot opens up.
         </p>
         <SignOutButton />

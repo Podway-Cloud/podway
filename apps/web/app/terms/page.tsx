@@ -21,7 +21,7 @@ export default function TermsPage() {
       <p>
         Podway provides cloud &ldquo;pods&rdquo; that run coding agents you can reach from a browser.
         Podway is operated by <strong>Itzhak Lobak</strong> (an individual/sole proprietor). Podway is
-        currently in <strong>invite-only alpha</strong> and provided{" "}
+        currently in <strong>early access</strong> and provided{" "}
         <strong>&ldquo;as is&rdquo;</strong>, without guarantees of availability, fitness, or that it
         will meet your needs. Features may change.
       </p>
@@ -93,13 +93,14 @@ export default function TermsPage() {
 
       <h2>8. Fees</h2>
       <p>
-        The alpha is currently provided at no charge. If we introduce paid plans, we&rsquo;ll give
-        notice and the applicable pricing and billing terms will apply from then.
+        During early access, your first app on a Mini pod is free and needs no card. Other pods are billed
+        monthly at the prices shown when you create them, against any credit on your account and then the
+        card you add. We&rsquo;ll give notice before changing prices or ending the free offer.
       </p>
 
       <h2>9. Availability</h2>
       <p>
-        We aim to keep Podway up but offer <strong>no SLA</strong> during alpha. We may perform
+        We aim to keep Podway up but offer <strong>no SLA</strong> during early access. We may perform
         maintenance, update pod images, or change or discontinue features. Some actions (updates,
         resizes) briefly restart your pod.
       </p>

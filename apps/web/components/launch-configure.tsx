@@ -142,7 +142,7 @@ export default function LaunchConfigure({
   billingEnabled?: boolean;
   creditCents?: number;
   hasCard?: boolean;
-  /** The no-card free RAM budget (GB): a pod that keeps a no-card account within it is free in alpha
+  /** The no-card free RAM budget (GB): a pod that keeps a no-card account within it is free during early access
    * (billing never charges it — control-plane dunning.ts). */
   freeRamGb?: number;
   /** A claimed free-pod offer (selfh.st insider, partner): one pod up to `ramGb` is free, card or not. */
@@ -312,7 +312,7 @@ export default function LaunchConfigure({
   // (A free-pod offer covers one pod up to its size, card or not — control-plane billing.ts freePodId.)
   const freeBudget = Math.max(hasCard ? 0 : freeRamGb, freeOffer?.ramGb ?? 0);
   const freePod = !oss && billingEnabled && ram.used + ramCost <= freeBudget;
-  const freeLabel = freeOffer?.label ?? "Free in alpha · no card needed";
+  const freeLabel = freeOffer?.label ?? "Free during early access · no card needed";
   const canRaiseWithCard = billingEnabled && !hasCard && ram.cap < CARDED_RAM_GB && ramCost <= CARDED_RAM_GB - ram.used;
   // api-key mode needs a key before launch (there's no /login to fall back on).
   const keyProvided = agentAuth !== "api-key" || agentApiKey.trim().length > 0;

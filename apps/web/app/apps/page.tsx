@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import AppsMarketingShell, { appLogoSrc } from "@/components/apps-marketing-shell";
@@ -6,6 +5,7 @@ import { appPriceUsd, listPublicApps } from "@/lib/app-catalog";
 import { APP_PAGE_COPY } from "@/lib/app-pages-copy";
 import { editionOss, getCurrentUser } from "@/lib/session";
 import styles from "@/app/selfhost/selfhost-landing.module.css";
+import AppsSearchGrid from "@/components/apps-search-grid";
 
 export const dynamic = "force-dynamic";
 
@@ -29,22 +29,17 @@ export default async function AppsIndex() {
           Each app runs 24/7 in its own cloud pod. Before every upgrade we take a snapshot, and if the new
           version fails its health check we roll back automatically. Your AI admin, in Claude, does the server work.
         </p>
-        <div className={styles.apps}>
-          {apps.map((a) => (
-            <Link key={a.name} className={styles.app} href={`/apps/${a.name}`}>
-              <span className={styles.appTop}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img className={styles.appLogo} src={appLogoSrc(a)} alt="" width={28} height={28} />
-                <span className={styles.appName}>{a.title} hosting</span>
-              </span>
-              <span className={styles.benefit}>{APP_PAGE_COPY[a.name]?.oneLiner ?? a.description}</span>
-              <span className={styles.appMeta}>
-                <span>From <strong>${appPriceUsd(a)}/mo</strong></span>
-                {APP_PAGE_COPY[a.name] && <span>Replaces {APP_PAGE_COPY[a.name]!.replaces}</span>}
-              </span>
-            </Link>
-          ))}
-        </div>
+        <AppsSearchGrid
+          apps={apps.map((a) => ({
+            name: a.name,
+            title: a.title,
+            logo: appLogoSrc(a),
+            priceUsd: appPriceUsd(a),
+            free: a.minSize === "mini",
+            oneLiner: APP_PAGE_COPY[a.name]?.oneLiner ?? a.description,
+            replaces: APP_PAGE_COPY[a.name]?.replaces ?? "",
+          }))}
+        />
       </section>
     </AppsMarketingShell>
   );

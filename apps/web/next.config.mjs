@@ -16,6 +16,11 @@ const nextConfig = {
   serverExternalPackages: ["@electric-sql/pglite", "pg"],
   // Analytics is proxied through our own origin so ad-blockers don't silently drop
   // it (and so the browser never talks to a third-party host directly).
+  // /pricing (the old dev-pod plans page) is gone — owner, 2026-10-08. Old links land on the
+  // landing's pricing section instead of a 404.
+  async redirects() {
+    return [{ source: "/pricing", destination: "/#pricing", permanent: true }];
+  },
   async rewrites() {
     return [
       {

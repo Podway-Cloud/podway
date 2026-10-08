@@ -23,8 +23,9 @@ export default function AppsMarketingShell({
           </Link>
           <nav className={styles.nav} aria-label="Main navigation">
             <Link href="/apps">Apps</Link>
-            <Link href="/radar">Upgrade Radar</Link>
-            <Link href="/selfhost#pricing">Pricing</Link>
+            {/* Phones: these two move to the footer only, so the top bar stays one calm row. */}
+            <Link className={styles.navExtra} href="/radar">Upgrade Radar</Link>
+            <Link className={styles.navExtra} href="/selfhost#pricing">Pricing</Link>
             {user ? <LandingAccountLink user={user} /> : <Link href="/selfhost/signin">Sign in</Link>}
           </nav>
         </div>
@@ -35,6 +36,7 @@ export default function AppsMarketingShell({
         <nav aria-label="Footer navigation">
           <Link href="/apps">Apps</Link>
           <Link href="/radar">Upgrade Radar</Link>
+          <Link href="/selfhost#pricing">Pricing</Link>
           <Link href="/selfhost">Self-host</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>

@@ -43,7 +43,7 @@ export default async function AppHostingPage({ params }: Props) {
   const idx = all.findIndex((a) => a.name === app.name);
   const others = [1, 2, 3].map((k) => all[(idx + k) % all.length]!).filter((a) => a.name !== app.name);
   const faqs = [
-    { q: `Can I bring my existing ${app.title} data?`, a: "Yes. During alpha we help you move it by hand — ask us when you sign up." },
+    { q: `Can I bring my existing ${app.title} data?`, a: "Yes. During early access we help you move it by hand — ask us when you sign up." },
     { q: "Who does the upgrades?", a: "Your AI admin, with a snapshot first and an automatic rollback if the new version fails its health check." },
     { q: "What does it cost?", a: `From $${price}/month for ${app.title}. No per-seat fees.` },
     { q: "Is my data mine?", a: "Yes. Your own pod, your own database. Export any time." },

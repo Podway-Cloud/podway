@@ -6,9 +6,40 @@ test.describe("public app hosting pages + Upgrade Radar", () => {
   test("/apps lists the apps and each links to its hosting page", async ({ page }) => {
     await page.goto("/apps");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Open-source apps, run for you/);
-    const umami = page.getByRole("link", { name: /Umami hosting/ });
+    const umami = page.getByRole("link", { name: /^Umami/ });
     await expect(umami).toHaveAttribute("href", "/apps/umami");
+    await expect(page.getByText(/Umami hosting/)).toHaveCount(0); // cards name the app only (owner, 2026-10-08)
     expect(await page.locator('a[href^="/apps/"]').count()).toBeGreaterThanOrEqual(27);
+  });
+
+  test("/apps quick search filters the cards as you type", async ({ page }) => {
+    await page.goto("/apps");
+    const search = page.getByRole("searchbox", { name: "Search apps" });
+    await search.fill("zapier");
+    await expect(page.getByRole("link", { name: /^n8n/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Umami/ })).toBeHidden();
+    await search.fill("pperless"); // a typo still finds it
+    await expect(page.getByRole("link", { name: /^Paperless/ })).toBeVisible();
+    await search.fill("zzzz");
+    await expect(page.getByText(/No app matches/)).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await search.fill("");
+    await page.screenshot({ path: "test-results/apps-mobile.png" });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.screenshot({ path: "test-results/apps-desktop.png" });
+  });
+
+  test("/pricing is gone (redirects to the landing pricing); the landing shows the free offer, no 'alpha'", async ({ page }) => {
+    await page.goto("/pricing");
+    await expect(page).toHaveURL(/\/#pricing$/);
+    await page.goto("/selfhost");
+    await expect(page.getByText("Your first app is free during early access. No card needed.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Start free" }).first()).toBeVisible();
+    await expect(page.getByText(/alpha/i)).toHaveCount(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: "test-results/landing-mobile.png" });
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.screenshot({ path: "test-results/landing-desktop.png" });
   });
 
   test("an app page has the template, price from its size, and a /start CTA; unknown apps 404", async ({ page }) => {

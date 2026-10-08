@@ -39,7 +39,7 @@ export default async function OutcomesLanding({
     available: available.has(id),
   }));
   const primaryHref = user ? "/dashboard" : "/signin";
-  const primaryLabel = user ? "Open dashboard" : "Request alpha access";
+  const primaryLabel = user ? "Open dashboard" : "Get started";
 
   return (
     <main className={styles.landing}>

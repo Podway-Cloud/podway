@@ -46,9 +46,9 @@
 .wordmark { color: var(--accent); font-size: var(--type-lg); font-weight: 750; }
 .wordmark span { color: var(--accent-light); }
 .nav { display: flex; align-items: center; gap: 20px; font-size: var(--type-sm); }
-.nav a { color: var(--muted); text-decoration: none; }
+.nav a { color: var(--muted); text-decoration: none; white-space: nowrap; }
 .nav a:hover { color: var(--ink); }
-@media (max-width: 560px) { .nav a[href^="#"] { display: none; } }
+@media (max-width: 560px) { .nav { gap: 14px; } .nav a[href^="#"], .nav .navExtra { display: none; } }
 
 /* hero */
 .hero { display: grid; grid-template-columns: 1.05fr .95fr; align-items: center; gap: clamp(28px, 5vw, 56px); padding-block: clamp(32px, 6vw, 72px) 40px; }
@@ -61,6 +61,8 @@
 .btnPrimary:hover { background: var(--accent-hover); }
 .btnSecondary { border-color: var(--line-2); color: var(--ink); }
 .btnSecondary:hover { border-color: var(--accent-light); color: var(--accent-light); }
+.offer { display: inline-flex; align-items: center; margin: 0 0 18px; padding: 8px 14px; border: 1px solid color-mix(in srgb, var(--ok) 45%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--ok) 12%, transparent); color: var(--ok); font-size: var(--type-sm); font-weight: 700; }
+.freeTag { color: var(--ok); font-weight: 700; }
 .fine { margin: 14px 0 0; color: var(--muted); font-size: var(--type-sm); }
 .fine b { color: var(--ink); font-weight: 650; }
 
@@ -99,6 +101,9 @@
 .punch { margin: 24px 0 0; font-size: var(--type-lg); font-weight: 650; }
 
 /* lineup */
+.appSearch { display: block; width: 100%; max-width: 420px; margin-top: 24px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); font: inherit; font-size: var(--type-base); }
+.appSearch:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.app[hidden] { display: none; }
 .apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; margin-top: 28px; }
 .app { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 20px; background: var(--panel); text-decoration: none; transition: border-color 150ms ease, transform 150ms ease; }
 .app:hover { border-color: var(--accent); transform: translateY(-1px); }

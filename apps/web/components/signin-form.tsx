@@ -32,7 +32,7 @@ export default function SignInForm({
   ownerEmail?: string;
   /** Cloud: also offer "Continue with Google" (only when Google OAuth is configured). */
   hasGoogle?: boolean;
-  /** Cloud: one line naming the app the visitor is setting up (from `next`), e.g. "free in alpha". */
+  /** Cloud: one line naming the app the visitor is setting up (from `next`), e.g. "free during early access". */
   setupNote?: string;
 }) {
   if (oss) {

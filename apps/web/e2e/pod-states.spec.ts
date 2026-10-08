@@ -55,7 +55,7 @@ test.describe("ownership + gates", () => {
     await login(page, "pending");
     await page.goto("/pending");
     await expect(page.getByRole("heading", { name: /You.?re on the list/i })).toBeVisible();
-    await expect(page.getByText(/invite-only alpha/i)).toBeVisible();
+    await expect(page.getByText(/waiting for approval/i)).toBeVisible();
     await expect(page.getByText("pending@podway.test")).toBeVisible();
     // The gate's own escape hatch.
     await expect(page.getByRole("button", { name: /sign out/i })).toBeVisible();
