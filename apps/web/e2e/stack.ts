@@ -1,6 +1,7 @@
 import path from "node:path";
 import os from "node:os";
 import { writeFileSync } from "node:fs";
+import { UNAUTHED_AGENT_PORT } from "./ports";
 /**
  * Live-terminal stack for e2e: a REAL pod-agent (tmux, plain shell so a typed
  * command echoes — no Claude CLI needed) + a REAL gateway that authenticates the
@@ -57,7 +58,7 @@ export async function startTerminalStack(opts: {
   // pods (named NO-SESSION) route here, so they hold in the sign-in phase instead of the
   // shared authed agent advancing them straight to ready — that's what lets the onboarding
   // hero / sign-in step be exercised (greeter-frame simulation, area 8).
-  const unauthedPort = opts.agentPort + 100; // +1 would collide with the gateway port
+  const unauthedPort = UNAUTHED_AGENT_PORT; // e2e/ports.ts: clear of every shard/runner's ports
   const agentUnauthed = new AgentServer({
     sessionName: `e2e-noauth-${process.pid}-${Date.now()}`,
     cwd: process.cwd(),

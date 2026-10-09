@@ -1,6 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
-const PORT = 3111 + Number(process.env.PODWAY_E2E_SHARD ?? 0) * 20; // matches global-setup's shard offset
+import { WEB_PORT as PORT } from "./e2e/ports"; // shard + CI runner offset (e2e/ports.ts)
 
 // The hermetic stack (ephemeral Postgres + the Next server pointed at it) is
 // booted in global setup and torn down in global teardown — see e2e/global-*.ts.

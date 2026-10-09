@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { USERS, DB } from "./users";
+import { WEB_PORT } from "./ports";
 
 type UserKey = keyof typeof USERS;
 
@@ -94,7 +95,7 @@ export async function acceptCookies(page: Page): Promise<void> {
   // Match the shard's web port (global-setup offsets every port by PODWAY_E2E_SHARD * 20) so the
   // cookie's origin equals the page's — otherwise on shard >= 1 it wouldn't apply and the banner
   // would reappear and intercept clicks.
-  const port = 3111 + Number(process.env.PODWAY_E2E_SHARD ?? 0) * 20;
+  const port = WEB_PORT;
   await page.context().addCookies([
     { name: "pb-cookie-consent", value: "granted", url: `http://localhost:${port}` },
   ]);
