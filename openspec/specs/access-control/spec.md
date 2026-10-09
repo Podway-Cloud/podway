@@ -142,6 +142,18 @@ Non-admins SHALL NOT reach it.
 - **AND** every RUNNING pod the user owns SHALL be suspended (data kept; one failed suspend SHALL NOT
   stop the others) — the abuse response for open sign-up
 
+### Requirement: Sign-up funnel by ref (admin)
+
+`/admin/funnel` SHALL show, for accounts created in the last 7, 30 or 90 days (admins excluded), per
+first-touch ref plus an "All" row: signed up → created a pod (a `created` pod event, kept after deletion)
+→ agent signed in (a pod's `authed_at`, or the `agent_connected` landing event) → came back (a session or
+pod activity 24 h or more after sign-up). Steps are nested. It is computed from our own database, so it
+needs no cookie consent (owner, 2026-10-08).
+
+#### Scenario: A campaign link brings sign-ups
+- **WHEN** two accounts first arrive with `ref=email-x` and one creates a pod
+- **THEN** the `email-x` row shows 2 signed up and 1 (50%) created a pod
+
 ### Requirement: Signup notification
 
 When a new user account is created and a notification channel is configured, the system SHALL send

@@ -44,6 +44,19 @@ test.describe("admin backoffice pages", () => {
     await page.screenshot({ path: "test-results/admin-users.png", fullPage: true });
   });
 
+  test("Funnel page shows the sign-up funnel by ref, with window filters", async ({ page, browser }) => {
+    // A non-admin sign-up so the window is not empty (admins are excluded from the funnel).
+    const ctx = await browser.newContext();
+    await login(await ctx.newPage(), "approved");
+    await ctx.close();
+    await login(page, "admin");
+    await page.goto("/admin/funnel?days=90");
+    await expect(page.getByRole("heading", { name: "Sign-up funnel" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Created a pod" })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "All", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "7 days" })).toHaveAttribute("href", "/admin/funnel?days=7");
+  });
+
   test("Incidents page renders its fleet view", async ({ page }) => {
     await login(page, "admin");
     await page.goto("/admin/incidents");
