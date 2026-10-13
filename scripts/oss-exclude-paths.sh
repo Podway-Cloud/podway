@@ -9,7 +9,7 @@ EXCLUDES=(
   # infra topology — Fly app configs + fleet/deploy/box orchestration (the ops moat)
   "apps/web/fly.toml" "packages/gateway/fly.toml"
   "smoke/fly.toml" "scripts/db-backup"
-  "scripts/deploy-app.sh" "scripts/incus"
+  "scripts/deploy-app.sh" "scripts/incus" "scripts/indexnow.sh" # podway.io-only deploy ping (its public key trips gitleaks)
   # ops runbooks reveal infra topology
   "docs/runbooks"
   # internal planning / GTM / business

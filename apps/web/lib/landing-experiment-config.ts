@@ -290,8 +290,30 @@ export function chooseLandingVariant(
   return definition.variants.at(-1) ?? definition.fallbackVariant;
 }
 
+/**
+ * The landing a search crawler sees: the one most PEOPLE see — the single landing in "one" mode, else
+ * the variant with the biggest share of the live split. Falls back to the coded crawlerVariant only
+ * when no live traffic is known. (Before 2026-10-08 crawlers always got the coded agent landing while
+ * people got 100% self-host: Google indexed the old product, and bot ≠ human content reads as cloaking.)
+ */
+export function crawlerLandingVariant(
+  traffic: { mode: "split" | "one"; one: LandingVariant | null; weights: Readonly<Partial<Record<LandingVariant, number>>> } | null,
+  definition: LandingExperimentDefinition = ACTIVE_LANDING_EXPERIMENT,
+): LandingVariant {
+  if (!traffic) return definition.crawlerVariant;
+  if (traffic.mode === "one" && traffic.one) return traffic.one;
+  let best: LandingVariant = definition.crawlerVariant;
+  let bestShare = -1;
+  for (const v of definition.variants) {
+    const share = traffic.weights[v] ?? 0;
+    if (share > bestShare) [best, bestShare] = [v, share];
+  }
+  return best;
+}
+
 export function landingPreviewPath(variant: LandingVariant): string {
   if (variant === "selfhost") return "/selfhost";
+  if (variant === "agent-computer") return "/agent-computer";
   return `/preview/landing/${variant}`;
 }
 

@@ -251,3 +251,16 @@ the always-loaded summary that reaches both agents.)
 Nothing here overrides the confirm-before-outbound rule above: autonomy is about *initiative*, never
 about escalating your own permissions.
 <!-- /podway:relentless -->
+
+## Questions and autopilot (every pod — not tied to Relentless)
+
+- **"(Recommended)" means "safe to pick without the owner".** The owner may turn on *Always choose
+  recommended*: after ~10 minutes with no reply, the pod picks the FIRST option of each question when it
+  is labelled "(Recommended)". So put "(Recommended)" ONLY on a routine, reversible choice inside your
+  lane. On an owner decision — push, deploy, merge, delete, spend, publish or post anything, a choice
+  that shapes what gets built, or "I don't know what to do next" — mark NO option "(Recommended)": that
+  question then waits for the owner, always.
+- **When autopilot wakes you** ("next? (Autopilot: …)") do the most valuable next thing, exactly as if the
+  owner had typed "next?". If nothing is genuinely worth doing, ask ONE question with no "(Recommended)"
+  option and stop — never invent busywork to look active.
+

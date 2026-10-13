@@ -96,6 +96,9 @@ export class PreviewShotter {
           "--disable-dev-shm-usage", // pods have a small /dev/shm; without this Chromium can crash
           "--hide-scrollbars",
           `--window-size=${this.width},${this.height}`,
+          // Let the page's JS run before the shot: SPAs (n8n, Grafana…) paint after load, so an
+          // immediate capture was a blank shell or a spinner. Virtual time = fast-forwarded timers.
+          "--virtual-time-budget=5000",
           `--screenshot=${out}`,
           `http://localhost:${this.port}/`,
         ],

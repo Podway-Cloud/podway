@@ -130,7 +130,8 @@ test("VISUAL launch wizard — name required, secret persists, review size", asy
   await page.goto("/dashboard/pods/new?env=doc-qa");
   await page.waitForLoadState("networkidle");
 
-  // Basics: name required — Next is disabled until it's filled.
+  // Basics: name required — the field opens with a default ("my <app>"); emptied, Next is disabled.
+  await page.locator("#pod-name").fill("");
   await expect(page.getByRole("button", { name: /^next$/i })).toBeDisabled();
   await page.screenshot({ path: `${OUT}/wizard-basics-required.png`, fullPage: true });
 

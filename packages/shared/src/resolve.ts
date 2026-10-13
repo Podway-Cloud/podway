@@ -30,7 +30,7 @@ export interface ResolvedPod {
   network: Required<Pick<Network, "policy">> & { allow: string[] };
   env: Record<string, string>;
   /** Secret keys the app needs; the user supplies values per-pod (opsx pod-secrets). */
-  secrets: { key: string; description: string | null; required: boolean; url: string | null }[];
+  secrets: { key: string; description: string | null; required: boolean; url: string | null; generate: boolean }[];
   setup: string[];
   repo: { url: string; ref: string | null } | null;
   /** Agent-led onboarding prompt, or null. */
@@ -104,6 +104,7 @@ export async function resolve(envDir: string): Promise<ResolvedPod> {
       description: s.description ?? null,
       required: s.required,
       url: s.url ?? null,
+      generate: s.generate,
     })),
     setup: env.setup ? [...env.setup] : [],
     repo: env.repo ? { url: env.repo.url, ref: env.repo.ref ?? null } : null,

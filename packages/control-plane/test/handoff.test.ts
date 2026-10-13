@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { requestHandoff, HANDOFF_DIR } from "../src/handoff.js";
+import { requestHandoff, HANDOFF_IDLE_SKIP_MS, HANDOFF_DIR } from "../src/handoff.js";
 import type { SandboxProvider } from "@podway/provider";
 
 const log = {
@@ -48,6 +48,25 @@ describe("requestHandoff", () => {
     // (the skill's own lookup can return the ACTIVE window, so two agents shared 0.md).
     expect(sent).not.toMatch(/send-keys -t main:0 "\//);
     expect(sent).toContain(`${HANDOFF_DIR}/0.md`);
+  });
+
+  it("an IDLE agent gets no handoff: nothing typed, no wait (owner, 2026-10-13)", async () => {
+    const mk = (idleMs: number) => {
+      const r = providerWith((s) => (s.includes("list-windows") ? "0\n" : s.includes("capture-pane") ? READY_PANE : ""));
+      (r.provider as unknown as { agentIdleMs: () => Promise<number> }).agentIdleMs = async () => idleMs;
+      return r;
+    };
+    const idle = mk(HANDOFF_IDLE_SKIP_MS + 1);
+    expect(await requestHandoff({ provider: idle.provider, podId: "p1", log, sleep: noSleep, timeoutMs: 10 })).toEqual([]);
+    expect(idle.calls.some((c) => c.includes("send-keys"))).toBe(false);
+    // A working agent still gets asked…
+    const busy = mk(10_000);
+    await requestHandoff({ provider: busy.provider, podId: "p1", log, sleep: noSleep, timeoutMs: 10 });
+    expect(busy.calls.some((c) => c.includes("send-keys"))).toBe(true);
+    // …and the T3 yield asks even an idle one (a fresh session takes over there).
+    const t3 = mk(HANDOFF_IDLE_SKIP_MS + 1);
+    await requestHandoff({ provider: t3.provider, podId: "p1", log, sleep: noSleep, timeoutMs: 10, skipWhenIdle: false });
+    expect(t3.calls.some((c) => c.includes("send-keys"))).toBe(true);
   });
 
   it("does NOT type into a pane showing a blocking gate (the 2026-07-24 failure mode)", async () => {

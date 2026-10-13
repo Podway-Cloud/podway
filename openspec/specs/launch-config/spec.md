@@ -36,6 +36,13 @@ secret key the env does not declare, before any pod is provisioned.
 - **WHEN** the owner opens the launch dialog for an env with a required secret
 - **THEN** Launch is disabled until that secret has a value
 
+#### Scenario: A generated secret is made at creation, not asked for
+
+- **WHEN** the env declares a secret with `generate: true` (e.g. an app's `ADMIN_PASSWORD`) and the
+  launch gives no value for it
+- **THEN** the launch form does not ask for it, the server stores a random per-pod value for it at
+  creation, and the owner can reveal it in the pod's Secrets tab; a value the launch does give wins
+
 #### Scenario: Undeclared secret key is rejected
 
 - **WHEN** a launch includes a secret key the env does not declare
@@ -121,6 +128,8 @@ unchanged.
   + secret)
 - **THEN** the browser SHALL be sent to GitHub's authorization page for a single Authorize click and
   returned via a callback that stores the token — no device-code copy/paste
+- **AND** the callback SHALL be `/api/auth/callback/github/connect`, a sub-path of the sign-in callback,
+  so the ONE OAuth app that sign-in uses accepts it with no extra callback URL
 - **AND** WHEN the web flow is NOT configured (or on self-host), the connect SHALL fall back to the
   device-code flow, so the step always works
 
@@ -168,7 +177,9 @@ declared minimum behaves exactly as today (the global default, freely adjustable
 The pod-create wizard SHALL support being opened PREFILLED from a deep link: the target app already
 selected and a pod name pre-generated, so the user's only remaining action is to confirm. The wizard
 SHALL require a single explicit "Create" action and SHALL NOT auto-submit or otherwise create a pod
-without that action, because a pod is a real, billable machine.
+without that action, because a pod is a real, billable machine. Every create path (a deep link or the
+app catalog) SHALL open with a friendly default name ("my <app>"), so a required, empty name never keeps
+Next disabled.
 
 #### Scenario: Prefilled wizard still requires an explicit create
 

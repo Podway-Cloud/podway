@@ -15,9 +15,9 @@ import {
   wakePod,
   sleepPod,
   destroyPod,
-  renamePod,
   setPodPreviewPublic,
   setPodAutoUpdate,
+  setPodAppWatch,
   setPodAgenticBehavior,
   updatePodImage,
   podUpdateProgress,
@@ -180,6 +180,7 @@ export interface PodCockpitProps {
   /** "Agentic behavior": how much this pod does on its own while the owner is away. */
   relentlessHold?: boolean;
   relentlessWake?: boolean;
+  relentlessAutopick?: boolean;
   /** Set while this pod is QUEUED for a batch update but has not started. The cockpit takes
    *  over, because a bulk update recreates pods one at a time and this pod may wait ~36
    *  minutes in a 24-pod batch — long enough for an owner to start an edit that its turn
@@ -218,6 +219,8 @@ export interface PodCockpitProps {
   /** Fleet-updates (C): "off" = excluded from the bulk "update idle pods" button; "inherit" = included.
    * Cloud-only surface. */
   autoUpdate?: "inherit" | "off";
+  /** App watch (app pods only; undefined hides the row). */
+  appWatch?: boolean;
   sessionUrl: string | null;
   /** Durable Claude sign-in URL (from the pod row), so the Sign-in step shows the
    * link from the backend and survives a refresh mid-login. */
@@ -286,6 +289,7 @@ export default function PodCockpit(props: PodCockpitProps) {
     updatingSince,
     relentlessHold = false,
     relentlessWake = false,
+    relentlessAutopick = false,
     updateQueuedSince,
     queueAhead = null,
     updateStageInitial,
@@ -396,6 +400,7 @@ export default function PodCockpit(props: PodCockpitProps) {
 
   const [previewPublic, setPreviewPub] = useState(props.previewPublic);
   const [autoUpdate, setAutoUpdateState] = useState<"inherit" | "off">(props.autoUpdate ?? "inherit");
+  const [appWatch, setAppWatchState] = useState(props.appWatch ?? true);
   const [walkthroughDone, setWalkthroughDone] = useState(false);
   // "Replay walkthrough" (from Details) forces the tour once more this session even
   // though the per-user flag says seen. Reset when the tour finishes.
@@ -419,7 +424,7 @@ export default function PodCockpit(props: PodCockpitProps) {
   // Local mirror so the ROW DESCRIPTION updates the moment the modal saves. The description is
   // where an owner reads what the pod is actually doing, so a stale one is worse than none:
   // this mechanism's failures are silent, and a row that lies about them hides exactly that.
-  const [agentic, setAgentic] = useState({ hold: relentlessHold, wake: relentlessWake });
+  const [agentic, setAgentic] = useState({ hold: relentlessHold, wake: relentlessWake, autopick: relentlessAutopick });
   const [updating, setUpdating] = useState(Boolean(updatingSince));
   // T3 Code enable/disable wizard state — seeded durably from the row (t3Since), kept live by the
   // poll below (mirrors the update flow). `inControl` drives the banner + hiding conflicting controls.
@@ -1035,10 +1040,28 @@ export default function PodCockpit(props: PodCockpitProps) {
     const next = draft.trim();
     if (next === (name ?? "")) return;
     savingName.current = true;
+    const previous = name;
     setName(next || null);
-    void renamePod(slug, next)
-      .then((r) => {
-        if (r?.error) setActionError(`Couldn't rename: ${r.error}`);
+    // A Next server action is canceled when the owner leaves this page while it is
+    // pending. A tiny keepalive request finishes across navigation, so the fleet
+    // roster cannot silently keep the old name after the cockpit showed the new one.
+    void fetch(`/api/pods/${encodeURIComponent(slug)}/name`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ name: next }),
+      keepalive: true,
+    })
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = (await r.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error || `request failed (${r.status})`);
+        }
+        router.refresh();
+      })
+      .catch((e) => {
+        setName(previous);
+        setActionError(`Couldn't rename: ${e instanceof Error ? e.message : String(e)}`);
       })
       .finally(() => {
         savingName.current = false;
@@ -1431,7 +1454,7 @@ export default function PodCockpit(props: PodCockpitProps) {
               </CardHeader>
               <CardContent className="flex flex-col gap-3.5">
                 <ProvisionStages
-                  sinceMs={Date.now() - Date.parse(createdAt)}
+                  startedAt={Date.parse(createdAt)}
                   agent={agent}
                   // While the env's own deploy is reporting progress (an app pod pulling its image),
                   // the last stage is "Deploying <app>", not "Starting <agent>".
@@ -1829,6 +1852,29 @@ export default function PodCockpit(props: PodCockpitProps) {
           {/* Custom domain (add-custom-domains) — directly under Preview: podway URL, then your own
               domain. Cloud-only; the row self-hides on self-host. */}
           <CustomDomainRow slug={slug} oss={oss} provisioned={customDomainsAvailable} />
+
+          {/* App watch (app pods only): Podway checks the app every 5 min, restarts it if it is down, emails
+              the owner, and wakes the agent to find the cause (control-plane/src/app-watch.ts). */}
+          {props.appWatch !== undefined && (
+            <SettingRow
+              label="Watch app"
+              desc={
+                appWatch
+                  ? "On — Podway checks the app every 5 minutes; if it is down, Podway restarts it, emails you and wakes your AI admin"
+                  : "Off — nobody checks the app; you find out when you open it"
+              }
+            >
+              <Switch
+                checked={appWatch}
+                disabled={pending}
+                aria-label="Watch app"
+                onCheckedChange={(on) => {
+                  setAppWatchState(on);
+                  act(() => setPodAppWatch(slug, on), "update app watch");
+                }}
+              />
+            </SettingRow>
+          )}
 
           {/* Fleet-updates (C): exclude a pod from the bulk "update idle pods" button. Cloud-only —
               self-host updates are a host-level compose pull, not a per-pod action. A pod running a

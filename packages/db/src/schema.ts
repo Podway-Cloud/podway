@@ -230,6 +230,9 @@ export const pods = pgTable(
      */
     relentlessHold: boolean("relentless_hold").notNull().default(false),
     relentlessWake: boolean("relentless_wake").notNull().default(false),
+    relentlessAutopick: boolean("relentless_autopick").notNull().default(false),
+    /** App watch: Podway health-checks this app pod (control-plane/src/app-watch.ts). */
+    appWatch: boolean("app_watch").notNull().default(true),
 
     /**
      * Set while a pod is QUEUED for a batch image update but has not started yet.

@@ -20,6 +20,18 @@ test.describe("dashboard shell + cards", () => {
     await expect(page.getByRole("link", { name: /^Launch / }).first()).toBeVisible();
   });
 
+  test("clicking an app's NAME launches it; only the arrow opens the app's site", async ({ page }) => {
+    await login(page, "approved");
+    await page.goto("/dashboard/create");
+    await page.getByRole("tab", { name: "Apps" }).click();
+    const card = page.locator("div.group", { has: page.getByRole("link", { name: /website$/ }) }).first();
+    await expect(card.getByRole("link", { name: /website$/ })).toHaveAttribute("target", "_blank");
+    // A real click on the name's first letters (the launch overlay is meant to sit on top of it).
+    const box = (await card.locator("h3").boundingBox())!;
+    await page.mouse.click(box.x + 4, box.y + 8);
+    await expect(page).toHaveURL(/\/dashboard\/pods\/new\?env=/);
+  });
+
   test("pods page links launching to the create-a-pod page (no env cards mixed in)", async ({
     page,
   }) => {
@@ -59,11 +71,8 @@ test.describe("dashboard shell + cards", () => {
     await page.locator('[data-testid=cockpit-name]').click();
     const input = page.locator('[data-testid=cockpit-rename]');
     await input.fill("renamed by e2e");
-    // Wait for the RENAME's own request to complete before navigating: a reload or
-    // goto cancels an in-flight server action, and the write never lands. Matching
-    // "a POST to /pods/<slug>" is not enough — the agent cards poll through server
-    // actions, which post to the SAME url, so that matched a poll and the test
-    // sailed on. The payload carries the new name, so match on that.
+    // Wait for the rename request in this ordinary reload case. Match its payload
+    // because agent-card polls can also POST to the same cockpit URL.
     const committed = page.waitForResponse(
       (r) =>
         r.request().method() === "POST" && (r.request().postData() ?? "").includes("renamed by e2e"),
@@ -77,6 +86,43 @@ test.describe("dashboard shell + cards", () => {
 
     await page.goto(`/dashboard/pods/${slug}`);
     await expect(page.locator('[data-testid=cockpit-name]')).toContainText("renamed by e2e"); // survives reload
+  });
+
+  test("rename survives leaving the cockpit before the save responds", async ({ page }) => {
+    await login(page, "approved");
+    const slug = await launchPod(page);
+    await page.goto(`/dashboard/pods/${slug}`);
+    await page.locator('[data-testid=cockpit-name]').click();
+    const nextName = "renamed then left";
+    await page.locator('[data-testid=cockpit-rename]').fill(nextName);
+
+    // A slow response must not turn a visible optimistic name into an unsaved rename
+    // when the owner goes straight back to their pod list.
+    await page.route("**/*", async (route) => {
+      if (route.request().method() === "POST" && (route.request().postData() ?? "").includes(nextName)) {
+        await new Promise((resolve) => setTimeout(resolve, 750));
+      }
+      await route.continue();
+    });
+    await page.locator('[data-testid=cockpit-rename]').press("Enter");
+    await page.goto("/dashboard");
+    await expect.poll(async () => {
+      await page.reload();
+      return page.locator('[data-testid=pod-card]', { hasText: nextName }).count();
+    }, { timeout: 20_000 }).toBe(1);
+    await expect(page.locator('[data-testid=pod-card]', { hasText: nextName })).toBeVisible();
+  });
+
+  test("rename endpoint rejects a form-compatible content type", async ({ page }) => {
+    await login(page, "approved");
+    const slug = await launchPod(page);
+    const response = await page.request.post(`/api/pods/${slug}/name`, {
+      data: JSON.stringify({ name: "cross-site rename" }),
+      headers: { "content-type": "text/plain" },
+    });
+    expect(response.status()).toBe(415);
+    await page.goto(`/dashboard/pods/${slug}`);
+    await expect(page.locator('[data-testid=cockpit-name]')).not.toContainText("cross-site rename");
   });
 
   test("card shows a live status dot and links to the cockpit", async ({ page }) => {

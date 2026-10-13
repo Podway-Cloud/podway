@@ -25,8 +25,8 @@ const homeSource = read("../app/page.tsx");
 const selfhostSource = read("../app/selfhost/page.tsx");
 const blogPostSource = read("../app/blog/[slug]/page.tsx");
 const landingFooterSource = read("../components/landing-footer.tsx");
+const agentComputerSource = read("../app/agent-computer/page.tsx");
 const previewSources = [
-  read("../app/preview/landing/agent-computer/page.tsx"),
   read("../app/preview/landing/agent-home/page.tsx"),
   read("../app/preview/landing/outcomes/page.tsx"),
 ];
@@ -67,6 +67,12 @@ describe("public search metadata", () => {
     const body = await (await llmsTxt()).text();
     expect(body).toContain("https://podway.io/docs");
     expect(body).not.toContain("https://podway.cloud");
+  });
+
+  it("indexes /agent-computer on its own URL (owner, 2026-10-13)", () => {
+    expect(sitemap().map((e) => e.url)).toContain("https://podway.io/agent-computer");
+    expect(agentComputerSource).toContain('canonical: "https://podway.io/agent-computer"');
+    expect(agentComputerSource).not.toContain("index: false");
   });
 
   it("points every landing preview back to the canonical public homepage", () => {

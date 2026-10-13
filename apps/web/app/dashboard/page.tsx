@@ -6,7 +6,7 @@ import type { PodCardProps } from "@/components/pod-card";
 import AutoRefresh from "@/components/auto-refresh";
 import DashboardPage from "@/components/dashboard-page";
 import { editionOss } from "@/lib/session";
-import { accountOffer } from "@/lib/attribution";
+import { accountOffer, applyRefCookie } from "@/lib/attribution";
 import { FREE_POD_OFFERS } from "@podway/shared";
 import { withDbRetry } from "@podway/auth";
 import { sameDigest } from "@/lib/pod-image";
@@ -32,6 +32,8 @@ export const metadata = { title: "Pods" };
 
 export default async function Dashboard() {
   const user = await requireApprovedUser();
+  // Someone who signed in straight from a landing (not via /start) still gets the link's ref credited.
+  if (!editionOss()) await applyRefCookie(user.id).catch(() => undefined);
   const offer = editionOss() ? null : await accountOffer(user.id).catch(() => null);
   const offerLabel = offer && Object.hasOwn(FREE_POD_OFFERS, offer) ? FREE_POD_OFFERS[offer]!.label : null;
   const svc = getPodService();

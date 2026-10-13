@@ -95,6 +95,8 @@ export function eventSentence(e: TimelineEventLike): string {
           .replace(/^reinstall /, "reinstalled ");
       return `Podway ${phrase}`;
     }
+    case "billing_item":
+      return "Added to your monthly bill";
     default:
       // Readable-ish rather than raw: "some_new_event" → "Some new event".
       return e.type.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());

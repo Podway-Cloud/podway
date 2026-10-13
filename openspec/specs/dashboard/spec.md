@@ -1167,12 +1167,16 @@ app is up, rather than captioning a working page with a permanent "blank?" hedge
 The app view SHALL be a LIVE scaled-down iframe of the running app (owner preference: a live view is
 more useful than a static thumbnail). The card SHALL NOT render any app view until liveness is
 CONFIRMED (`appListening` true) — never optimistically while still checking — so it never flashes a
-view it is about to hide.
+view it is about to hide. After the app comes up the view refreshes itself twice (at 5 s and 13 s —
+an app like n8n answers its port before its first render, so the first load can be stale), and the
+manual Reload does the same, WITHOUT a visible flash: a refresh loads in a hidden frame and replaces the
+shown one only after it has loaded and had a moment to paint; exactly one frame is visible at all times
+(owner, 2026-10-11).
 
-(A pod-side self-screenshot capability exists — the pod-agent can capture its own loopback `:3000`
-with the image's prebaked headless Chromium and serve a PNG on `/preview-shot`, surfaced via the
-provider/control-plane and a web route — but it is currently DORMANT: the cockpit renders the live
-iframe, not the thumbnail. It is kept in place for a possible lighter-weight thumbnail return later.)
+The pod-side self-screenshot (the pod-agent shoots its own loopback `:3000` at 1200×750 with the image's
+prebaked headless Chromium, letting the page's JS run first, and serves a PNG on `/preview-shot`) is shown
+as a 16:10 thumbnail on the RIGHT of each dashboard pod card when the card itself is wide enough
+(container query) and the app is serving; no shot → no image box, never a broken image.
 
 #### Scenario: Running pod
 
@@ -2362,3 +2366,12 @@ call take ~4 s, and every dashboard and billing load sat on skeletons for it (20
 - **GIVEN** one of the owner's pods is "waking" and its VM state call takes 3 s
 - **WHEN** the owner opens the dashboard
 - **THEN** the pod list SHALL render within about 1 s
+
+### Requirement: A pod rename persists when the owner leaves the cockpit
+
+When the owner confirms a new pod name, the dashboard SHALL send an owner-scoped save request that can complete even if the owner immediately navigates away or reloads. The new name SHALL be durable in the pod record and appear in the dashboard and the owner's fleet roster. If the save fails while the cockpit remains open, it SHALL restore the prior name and show the error.
+
+#### Scenario: Leave immediately after renaming
+
+- **WHEN** the owner enters a new pod name and immediately navigates to the pod list before the save responds
+- **THEN** the save completes and the new name appears on the pod card after the list reloads

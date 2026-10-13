@@ -37,9 +37,16 @@ lifecycle: always-on
 
 preview: private
 
+# The app's first admin password: Podway makes it at pod creation and keeps it in the Secrets tab, so
+# the owner can reveal it there even without the agent. The setup below falls back to a local random one.
+secrets:
+  - key: ADMIN_PASSWORD
+    description: "First sign-in password (user: admin). Change it in the app after you sign in."
+    generate: true
+
 setup:
   - >-
-    if [ ! -f .env ]; then printf 'FRESHRSS_IMAGE=%s\n' "freshrss/freshrss:latest" > .env; chmod 600 .env; fi
+    if [ ! -f .env ]; then printf 'FRESHRSS_IMAGE=%s\nADMIN_PASSWORD=%s\n' "freshrss/freshrss:1.30.1" "${ADMIN_PASSWORD:-$(openssl rand -hex 12)}" > .env; chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
 
@@ -57,9 +64,13 @@ kickoff: |
   First turn:
   1. Confirm health: `APP_ADMIN_DIR=~/work bin/app-admin.sh status` and open the preview. If it is up,
      tell the owner their FreshRSS is live and give them the preview link.
-  2. Offer, don't assume: back up now? Keep it to 1-2 sharp questions.
+  2. Give the owner the first sign-in: username `admin`; the password is the ADMIN_PASSWORD secret.
+     Send the Secrets-tab link (the `cockpit:` link from `podway info`, plus `?tab=secrets`), where they click Reveal. Tell them to change it in FreshRSS (Settings → Profile) after signing in.
+  3. Offer, don't assume: back up now? Keep it to 1-2 sharp questions.
 
   Ongoing duties:
+  - LOG every change you make to the app (config, plugins, fixes, restarts): `APP_ADMIN_DIR=~/work bin/app-admin.sh log "<what>" "<who asked / why>" "<how to undo>"`. The engine logs its own snapshots, upgrades and restores; ~/work/admin-log.md is the owner's record. A weekly report + upkeep job runs on Mondays (podway schedule "Weekly app report").
+  - BEFORE ANY UPGRADE run `APP_ADMIN_DIR=~/work bin/app-admin.sh check-upgrade` and follow its ADVICE (SAFE / WAIT / REVIEW / RISKY = ask the owner). Tell the owner in plain words why you upgrade now or wait.
   - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot`.
   - UPGRADES: NEVER just `docker compose pull`. Use
     `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <tag>` — it snapshots, pulls, health-checks and

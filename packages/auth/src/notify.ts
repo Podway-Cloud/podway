@@ -131,7 +131,7 @@ async function gmailToken(saJson: string, impersonate: string, f: typeof fetch):
  * Send one email on the shared layout (openspec: email-templates): multipart/alternative, a plain-text
  * part and an HTML part rendered from the SAME content. Gmail API via a Workspace service account with
  * domain-wide delegation. Best-effort by contract: missing config is a silent no-op and a failed send is
- * RECORDED and swallowed — it must never break the signup, approval, billing or reminder that sent it.
+ * RECORDED, alerted to the ops chat, and swallowed — it must never break the signup, approval, billing or reminder that sent it.
  */
 export async function sendEmail(to: string, subject: string, content: EmailContent, deps: EmailDeps = {}): Promise<void> {
   const saJson = deps.saJson ?? process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
@@ -161,8 +161,11 @@ export async function sendEmail(to: string, subject: string, content: EmailConte
       body: JSON.stringify({ raw: b64url(message) }),
     });
     await assertAccepted("gmail", res, { to });
+    if (!res.ok) await notifyOps(`⚠️ Email NOT sent to ${to} (Gmail ${res.status}): "${subject}"`, { fetchImpl: f });
   } catch (e) {
-    reportSendFailure("gmail", { error: (e as Error)?.message ?? String(e) });
+    const error = (e as Error)?.message ?? String(e);
+    reportSendFailure("gmail", { error });
+    await notifyOps(`⚠️ Email NOT sent to ${to}: "${subject}" — ${error}`, { fetchImpl: f });
   }
 }
 

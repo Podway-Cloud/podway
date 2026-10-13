@@ -27,6 +27,10 @@ import { getPodAppListening } from "@/lib/actions";
  */
 // Memoized so switching cockpit tabs (which re-renders the parent) doesn't re-render the preview —
 // its own appUp poll + iframe stay put instead of flickering (owner: "rerenders the preview").
+/** After a refreshed frame loads, give its page this long to paint before it replaces the shown one. */
+const SETTLE_MS = 1500;
+const FADE_MS = 300;
+
 function PreviewCard({
   slug,
   url,
@@ -51,18 +55,33 @@ function PreviewCard({
    * on the preview port, which answers the same question honestly. Without it the card
    * had to hedge with a permanent "Blank? maybe…" caption under a perfectly good page. */
   const [appUp, setAppUp] = useState<boolean | null>(null);
-  // Bumping this re-keys the iframe → a fresh fetch. An app can answer on :3000 (appUp true) a
-  // beat before its UI finishes its FIRST render (n8n runs DB migrations + serves a shell that's
-  // briefly blank), so the frame loads empty and never re-fetches — the owner had to reload the
-  // whole page, sometimes twice. We auto re-key a couple of times after it first comes up, and
-  // offer a manual reload button, so the frame catches up on its own.
-  const [reloadKey, setReloadKey] = useState(0);
+  // Refreshes WITHOUT a flash (owner, 2026-10-11). An app can answer on :3000 a beat before its UI finishes
+  // its FIRST render (n8n runs DB migrations + serves a briefly blank shell), so a frame loaded then stays
+  // stale — hence the auto refreshes at 5 s and 13 s after it comes up (+ a manual Reload). They used to
+  // re-key the VISIBLE iframe, so every cockpit open flashed twice. Now a refresh loads into a second,
+  // hidden frame; once it has loaded and had SETTLE_MS to paint, it fades in over the old one, which is
+  // then dropped. Unchanged page → nothing visible; stale page → it quietly becomes current.
+  const [frames, setFrames] = useState<number[]>([0]); // frame ids, oldest first; the LAST loaded one shows
+  const [shown, setShown] = useState(0);
+  const shownRef = useRef(0);
+  const nextId = useRef(1);
+  // Keep the frame ON SCREEN plus one new loader — never drop what the user is looking at.
+  const refresh = () => setFrames(() => [shownRef.current, nextId.current++]);
+  const onFrameLoad = (id: number) => {
+    if (id === 0) return; // the first frame is visible from the start
+    setTimeout(() => {
+      if (id < shownRef.current) return; // a newer frame already took over
+      shownRef.current = id;
+      setShown(id);
+      setTimeout(() => setFrames((f) => f.filter((x) => x >= id)), FADE_MS);
+    }, SETTLE_MS);
+  };
   const cameUp = useRef(false);
   useEffect(() => {
     if (appUp !== true || cameUp.current) return;
     cameUp.current = true;
-    const t1 = setTimeout(() => setReloadKey((k) => k + 1), 5000);
-    const t2 = setTimeout(() => setReloadKey((k) => k + 1), 13000);
+    const t1 = setTimeout(refresh, 5000);
+    const t2 = setTimeout(refresh, 13000);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
@@ -114,7 +133,7 @@ function PreviewCard({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setReloadKey((k) => k + 1)}
+              onClick={refresh}
               aria-label="Reload preview"
               title="Reload the preview"
             >
@@ -172,15 +191,23 @@ function PreviewCard({
         // dormant, for a possible thumbnail return later). pointer-events-none so scrolling the cockpit
         // isn't captured by the frame; the overlay anchor carries the click.
         <div className="relative bg-background">
-          <div className="h-[220px] overflow-hidden sm:h-[280px]">
-            <iframe
-              key={reloadKey}
-              src={frameUrl ?? url}
-              title="Pod preview"
-              className="pointer-events-none h-[440px] w-[200%] origin-top-left scale-50 border-0 sm:h-[560px]"
-              sandbox="allow-scripts allow-same-origin"
-              loading="lazy"
-            />
+          <div className="relative h-[220px] overflow-hidden sm:h-[280px]">
+            {frames.map((id) => (
+              <iframe
+                key={id}
+                src={frameUrl ?? url}
+                title="Pod preview"
+                aria-hidden={id !== shown}
+                tabIndex={-1}
+                onLoad={() => onFrameLoad(id)}
+                // Stacked; the shown frame on top at full opacity, a loading one underneath and invisible.
+                className={`pointer-events-none absolute left-0 top-0 h-[440px] w-[200%] origin-top-left scale-50 border-0 transition-opacity duration-300 motion-reduce:transition-none sm:h-[560px] ${
+                  id === shown ? "z-10 opacity-100" : "z-0 opacity-0"
+                }`}
+                sandbox="allow-scripts allow-same-origin"
+                loading="lazy"
+              />
+            ))}
           </div>
           <a
             href={url}

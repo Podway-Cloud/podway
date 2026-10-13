@@ -130,6 +130,20 @@ describe("PodService app secrets", () => {
     expect(listed.some((x) => x.key === "PODWAY_AGENT_ANTHROPIC_KEY")).toBe(false);
   });
 
+  it("a `generate: true` secret gets a random value at creation, revealable by the owner", async () => {
+    root = await envRootDeclaring("secrets:\n  - key: ADMIN_PASSWORD\n    generate: true\n  - key: OTHER\n");
+    const s = svc();
+    const a = await s.launchPod("u1", "bot-env");
+    const b = await s.launchPod("u1", "bot-env");
+    const pa = await s.revealSecret("u1", a.id, "ADMIN_PASSWORD");
+    expect(pa).toMatch(/^[0-9a-f]{24}$/);
+    expect(await s.revealSecret("u1", b.id, "ADMIN_PASSWORD")).not.toBe(pa); // per pod, not a constant
+    expect((await s.listSecrets("u1", a.id)).find((x) => x.key === "OTHER")?.set).toBe(false); // only generate:true
+    // An owner-given value wins over generating one.
+    const c = await s.launchPod("u1", "bot-env", { secrets: { ADMIN_PASSWORD: "mine" } });
+    expect(await s.revealSecret("u1", c.id, "ADMIN_PASSWORD")).toBe("mine");
+  });
+
   it("reveals a single decrypted value for the owner and records an audit event", async () => {
     const s = svc();
     const rec = await s.launchPod("u1", "bot-env");

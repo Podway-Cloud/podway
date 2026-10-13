@@ -9,8 +9,8 @@
  */
 import Stripe from "stripe";
 import { randomUUID } from "node:crypto";
-import { billingAccounts, creditGrants, user, eq, and, desc, sql, type Database } from "@podway/db";
-import { POD_TIERS, SUSPENDED_USD, SIGNUP_CREDIT_CENTS, offerRamGb, ramGbForSize, type PodSize } from "@podway/shared";
+import { billingAccounts, creditGrants, user, podEvents, eq, and, desc, sql, type Database } from "@podway/db";
+import { POD_TIERS, SUSPENDED_USD, SIGNUP_CREDIT_CENTS, freePodGb, ramGbForSize, type PodSize } from "@podway/shared";
 
 /**
  * The signup credit granted once a card is on file (cents). Advertised as ~$15. The value now lives
@@ -557,8 +557,12 @@ export class BillingService {
     const billable = (s: string) => s !== "error" && s !== "gone" && s !== "destroyed" && s !== "destroying";
     const desired = new Map<string, string>();
     // Free-pod offer (selfh.st insider, partners): one pod up to the offer's size is never a subscription item.
-    const [meta] = await this.db.select({ offer: user.freeOffer }).from(user).where(eq(user.id, ownerId));
-    const freePod = freePodId(pods.filter((p) => billable(p.status)), offerRamGb(meta?.offer));
+    // …and the grandfathered early-access pod (shared/tiers.ts freePodGb): free for life, card or not.
+    const [meta] = await this.db
+      .select({ offer: user.freeOffer, ref: user.ref, createdAt: user.createdAt })
+      .from(user)
+      .where(eq(user.id, ownerId));
+    const freePod = freePodId(pods.filter((p) => billable(p.status)), freePodGb(meta ?? {}));
     for (const p of pods) {
       if (!billable(p.status) || p.podId === freePod) continue;
       const key = p.status === "suspended" ? "suspended" : p.size;
@@ -581,6 +585,9 @@ export class BillingService {
         payment_behavior: "allow_incomplete",
         proration_behavior: "create_prorations",
       });
+      for (const it of created.items?.data ?? []) {
+        if (it.metadata?.podId) await this.recordBillingItem(ownerId, it.metadata.podId, it.id);
+      }
       return { subscriptionId: created.id, items: desired.size };
     }
 
@@ -593,7 +600,8 @@ export class BillingService {
     for (const [podId, price] of desired) {
       const existing = byPod.get(podId);
       if (!existing) {
-        await stripe.subscriptionItems.create({ subscription: sub.id, price, quantity: 1, metadata: { podId } });
+        const item = await stripe.subscriptionItems.create({ subscription: sub.id, price, quantity: 1, metadata: { podId } });
+        await this.recordBillingItem(ownerId, podId, item.id);
       } else if (existing.price.id !== price) {
         await stripe.subscriptionItems.update(existing.id, { price, proration_behavior: "create_prorations" });
       }
@@ -606,6 +614,41 @@ export class BillingService {
       }
     }
     return { subscriptionId: sub.id, items: desired.size };
+  }
+
+  /** Remember which Stripe subscription item bills which pod (a pod event, kept after the pod is
+   * deleted). Stripe invoice lines carry only the item id, and a removed item can no longer be fetched,
+   * so this is how revenue is attributed per app. Best-effort: never fails billing. */
+  private async recordBillingItem(ownerId: string, podId: string, itemId: string): Promise<void> {
+    await this.db
+      .insert(podEvents)
+      .values({ id: randomUUID(), podId, ownerId, type: "billing_item", meta: { subscriptionItem: itemId } })
+      .catch(() => undefined);
+  }
+
+  /**
+   * Paid invoice lines in [from, to), for the per-app revenue report: each subscription-item line with the
+   * CASH it brought in — the line's share of what the invoice actually collected (credit balance applied
+   * to an invoice is not cash). Also returns item→pod from the live subscriptions (for items created before
+   * billing_item events existed). Stripe off → empty.
+   */
+  async paidLinesBetween(from: Date, to: Date): Promise<{ lines: { item: string; cashCents: number }[]; itemPods: Map<string, string> }> {
+    if (!stripeConfigured()) return { lines: [], itemPods: new Map() };
+    const stripe = this.stripe();
+    const created = { gte: Math.floor(from.getTime() / 1000), lt: Math.floor(to.getTime() / 1000) };
+    const invoices = await stripe.invoices.list({ status: "paid", created, limit: 100 }).autoPagingToArray({ limit: 10_000 });
+    const lines: { item: string; cashCents: number }[] = [];
+    for (const inv of invoices) {
+      const ratio = inv.total > 0 ? inv.amount_paid / inv.total : 0;
+      for (const l of inv.lines.data) {
+        const item = l.parent?.subscription_item_details?.subscription_item;
+        if (item) lines.push({ item, cashCents: Math.round(l.amount * ratio) });
+      }
+    }
+    const itemPods = new Map<string, string>();
+    const subs = await stripe.subscriptions.list({ status: "all", limit: 100 }).autoPagingToArray({ limit: 10_000 });
+    for (const s of subs) for (const it of s.items.data) if (it.metadata?.podId) itemPods.set(it.id, it.metadata.podId);
+    return { lines, itemPods };
   }
 
   /** Stable lookup key for a size's monthly price. */

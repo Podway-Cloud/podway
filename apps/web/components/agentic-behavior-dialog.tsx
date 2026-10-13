@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +18,8 @@ export interface AgenticBehavior {
   hold: boolean;
   /** Nudge the pod when it's idle with work waiting. Each nudge is a BILLED agent turn. */
   wake: boolean;
+  /** Pick a question's "(Recommended)" first options after ~10 min with no reply (pod-agent autopilot.ts). */
+  autopick: boolean;
 }
 
 /**
@@ -28,25 +30,19 @@ export interface AgenticBehavior {
  * and on 2026-09-06 it sat switched off for an hour while being reported as working. A switch that
  * reads "on" proves nothing; a description that states what the pod is actually doing does.
  */
-export function describeAgenticBehavior(b: AgenticBehavior): string {
+export function describeAgenticBehavior(b: AgenticBehavior): ReactNode {
   // Both states, always, as labelled pairs — never a single summary word. An owner checking whether
   // this pod is actually being held needs to read the answer, not infer it, and a row that only
-  // reported the interesting case would go quiet in exactly the state worth noticing.
-  return `Relentless: ${b.hold ? "on" : "off"} · Wake to work: ${b.wake ? "on" : "off"}`;
+  // reported the interesting case would go quiet in exactly the state worth noticing. "on" is bold so
+  // the switched-on features stand out (owner, 2026-10-12).
+  const state = (on: boolean) => (on ? <strong className="font-semibold text-foreground">on</strong> : "off");
+  return (
+    <>
+      Relentless: {state(b.hold)} · Wake to work: {state(b.wake)} · Always choose recommended: {state(b.autopick)}
+    </>
+  );
 }
 
-/**
- * Is "Wake to work" actually wired to anything yet?
- *
- * The switch is shown so the shape of the setting is visible, but it is INERT until the idle-pod
- * monitor exists — that is task 6 of the relentless change, deliberately gated on proving the Stop
- * hook first. Flip this to `true` in the same commit that lands the monitor; nothing else here needs
- * to change.
- *
- * A stored preference that nothing reads looks exactly like a working one, which is the failure this
- * whole mechanism keeps having, so the dialog says so rather than pretending.
- */
-const WAKE_AVAILABLE = false;
 
 /** Matches SettingRow's `desc` exactly — one settings design across the cockpit. */
 const HINT = "mt-0.5 text-[12.5px] text-muted-foreground";
@@ -169,19 +165,26 @@ export function AgenticBehaviorDialog({
             checked={draft.wake}
             onChange={(wake) => setDraft((d) => ({ ...d, wake }))}
             label="Wake to work"
-            hint={
-              <>
-                Woken when idle to find work and do it
-                {!WAKE_AVAILABLE && (
-                  // Shown because the switch is VISIBLE but inert. Storing a preference nothing acts
-                  // on would be indistinguishable from a working switch, and this mechanism's
-                  // failures are already invisible enough.
-                  <span className="mt-0.5 block">Not available yet</span>
-                )}
-              </>
-            }
-            disabled={saving || !WAKE_AVAILABLE}
+            hint="After 20 idle minutes, the pod sends “next?” — at most 8 times a day. Never while it waits for you; it pauses after two wakes that changed nothing, until you write."
+            disabled={saving}
           />
+          <Toggle
+            id="agentic-autopick"
+            checked={draft.autopick}
+            onChange={(autopick) => setDraft((d) => ({ ...d, autopick }))}
+            label="Always choose recommended"
+            hint="If you don't answer a question within 10 minutes, the pod picks the option Claude marked “(Recommended)”."
+            disabled={saving}
+          />
+          {draft.autopick && (
+            <div
+              role="note"
+              className="mt-1 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-[12.5px] text-warning"
+            >
+              Claude will act on its own suggestions without you. Questions about pushing, deploying, deleting,
+              spending or publishing are never auto-answered — but read your pod&apos;s history now and then.
+            </div>
+          )}
 
           {/* Only shown for the combination that surprises people. Waking a pod that is not held
               gets you exactly one piece of work: it wakes, does that, and stops — so the wake bought

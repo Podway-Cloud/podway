@@ -54,7 +54,7 @@ export async function githubAccountStatus(): Promise<{
 
 /** Start the one-click WEB OAuth flow: mint a CSRF `state`, stash it (+ where to return) in a
  * short-lived httpOnly cookie, and return the GitHub authorize URL for the browser to navigate to.
- * The callback route (`/api/github/oauth/callback`) validates the state and stores the token. */
+ * The callback route (`/api/auth/callback/github/connect`) validates the state and stores the token. */
 export async function startGithubAccountWebConnect(
   returnPath: string,
 ): Promise<{ url: string } | { error: string }> {

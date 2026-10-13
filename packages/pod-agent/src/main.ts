@@ -4,6 +4,8 @@ import path from "node:path";
 import { createLogger } from "@podway/shared/log";
 import { AgentServer } from "./server.js";
 import { startScheduler } from "./scheduler.js";
+import { autopilotTick, sh } from "./autopilot.js";
+import { sessionStateFromDisk, lastAgentActivityMs, newestClaudeTranscript, agentWindowTarget } from "./signals.js";
 import { startCacheTrim } from "./cache-trim.js";
 import {
   bootCommandForAgent,
@@ -201,8 +203,62 @@ async function main(): Promise<void> {
     gid: isRoot ? 1000 : undefined,
   });
 
+  // Autopilot (owner, 2026-10-11): wake-to-work + opt-in "always choose recommended" — both off unless the
+  // owner turned them on in the cockpit (pod-spec relentless.wake / relentless.autopick). See autopilot.ts.
+  const asDev = { uid: isRoot ? 1000 : undefined, gid: isRoot ? 1000 : undefined };
+  const tmuxTarget = () => agentWindowTarget("main", asDev);
+  let ticking = false;
+  setInterval(() => {
+    if (ticking) return;
+    ticking = true;
+    void autopilotTick({
+      now: Date.now,
+      spec: () => {
+        const r = (readSpec().relentless ?? {}) as { wake?: unknown; autopick?: unknown };
+        return { wake: r.wake === true, autopick: r.autopick === true };
+      },
+      status: sessionStateFromDisk,
+      idleMs: () => lastAgentActivityMs(),
+      transcript: () => {
+        const f = newestClaudeTranscript(path.join(home, "work"));
+        try {
+          return f ? readFileSync(f, "utf8") : "";
+        } catch {
+          return "";
+        }
+      },
+      screen: async () => sh("tmux", ["capture-pane", "-p", "-t", await tmuxTarget()], asDev),
+      // Did a wake lead to work? git HEAD + dirty files; for a ~/work that is not a git repo (many app
+      // pods), the newest file changes instead — otherwise every wake looks empty and waking pauses after 2.
+      workMarker: async () => {
+        const w = path.join(home, "work");
+        const git = (await sh("git", ["-C", w, "rev-parse", "HEAD"], asDev)) + (await sh("git", ["-C", w, "status", "--porcelain"], asDev));
+        if (git) return git;
+        return sh("bash", ["-c", "find \"$1\" -xdev -maxdepth 4 -type f -not -path '*/node_modules/*' -not -path '*/.git/*' -printf '%T@ %p\\n' 2>/dev/null | sort -n | tail -20", "_", w], asDev);
+      },
+      inject: async (text) => {
+        const t = await tmuxTarget();
+        await sh("tmux", ["send-keys", "-t", t, "-l", text], asDev);
+        await new Promise((r) => setTimeout(r, 400));
+        await sh("tmux", ["send-keys", "-t", t, "Enter"], asDev);
+      },
+      enter: async () => void (await sh("tmux", ["send-keys", "-t", await tmuxTarget(), "Enter"], asDev)),
+      sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+      statePath: path.join(home, ".podway", "autopilot.json"),
+    })
+      .catch((e) => log.warn("autopilot_tick_failed", { err: e instanceof Error ? e.message : String(e) }))
+      .finally(() => {
+        ticking = false;
+      });
+  }, 30_000).unref();
+
+  // Stop FAST. server.close() alone waits for every open connection to end — an open web terminal
+  // (WebSocket) or a keep-alive client never does — so systemd waited out its 90 s stop timeout
+  // and SIGKILLed us: the bulk of an update's downtime (measured 2026-10-13: 32 s in an update,
+  // 90 s for a plain stop). Drop open connections and exit within 3 s whatever happens.
   for (const sig of ["SIGTERM", "SIGINT"] as const) {
     process.on(sig, () => {
+      setTimeout(() => process.exit(0), 3_000).unref();
       void server.close().finally(() => process.exit(0));
     });
   }

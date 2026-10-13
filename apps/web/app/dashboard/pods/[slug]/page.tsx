@@ -321,6 +321,7 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
         updatingSince={pod.updatingSince}
         relentlessHold={pod.relentlessHold}
         relentlessWake={pod.relentlessWake}
+        relentlessAutopick={pod.relentlessAutopick}
         updateQueuedSince={pod.updateQueuedSince}
         queueAhead={queueAhead}
         updateStageInitial={pod.updateStage}
@@ -340,6 +341,7 @@ export default async function PodCockpitPage({ params }: { params: Promise<{ slu
         customDomainUrl={customDomainUrl}
         previewPublic={pod.previewPublic}
         autoUpdate={pod.autoUpdate}
+        appWatch={envDetail?.kind === "app" ? pod.appWatch !== false : undefined}
         sessionUrl={pod.sessionUrl}
         authUrl={pod.authUrl}
         authedAt={pod.authedAt}

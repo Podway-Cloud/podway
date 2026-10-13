@@ -31,7 +31,7 @@ describe("self-host landing and homepage promotion", () => {
     expect(metadata.twitter?.images).toEqual([
       { url: "/twitter-image.png", alt: "Podway" },
     ]);
-    expect(metadata.title).toContain("Host open-source apps");
+    expect(metadata.title).toEqual({ absolute: "Podway: Host open-source apps with an AI admin" }); // brand on / too
     expect(metadata.description).toContain("Podway's always-on cloud pods");
     expect(route).toContain('export const dynamic = "force-dynamic"');
     expect(route).toContain("if (editionOss()) redirect(\"/dashboard\")");
@@ -80,7 +80,7 @@ describe("self-host landing and homepage promotion", () => {
   });
 
   it("covers setup, troubleshooting, credentials and recovery before pricing", () => {
-    for (const title of ["Set up your app", "Investigate problems", "Keep secrets out of chat", "Back up and roll back"]) {
+    for (const title of ["Set up your app", "Investigate problems", "Keep secrets out of chat", "Watches your app", "Nightly backups", "Upgrade safely"]) {
       expect(landing).toContain(title);
     }
     expect(landing.indexOf('<ul className={styles.included}>')).toBeGreaterThan(landing.indexOf('id="trust"'));

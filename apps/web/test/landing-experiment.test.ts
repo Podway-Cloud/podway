@@ -148,9 +148,14 @@ describe("landing experiment request assignment", async () => {
     ).toBe("0");
 
     const preview = await middleware(
-      new NextRequest("https://podway.cloud/preview/landing/agent-computer"),
+      new NextRequest("https://podway.cloud/preview/landing/outcomes"),
     );
     expect(preview.cookies.getAll()).toHaveLength(0);
+
+    // A DIRECT visit to /agent-computer is counted for that landing even at 0% of the home split.
+    const direct = await middleware(new NextRequest("https://podway.io/agent-computer"));
+    expect(direct.cookies.get(LANDING_EXPERIMENT.cookie.variant)?.value).toBe("agent-computer");
+    expect(direct.cookies.get(LANDING_EXPERIMENT.cookie.visitor)?.value).toBeTruthy();
   });
 });
 
@@ -379,5 +384,41 @@ describe("landing experiment persistence", () => {
       campaign: "abc",
       visitors: 30,
     });
+  });
+});
+
+describe("crawlers see the landing most people see (SEO, 2026-10-08)", async () => {
+  const { crawlerLandingVariant, ACTIVE_LANDING_EXPERIMENT: def } = await import("../lib/landing-experiment-config");
+  it("follows one-landing mode, the biggest share of a split, and falls back only with no live data", () => {
+    expect(crawlerLandingVariant({ mode: "one", one: "selfhost", weights: {} }, def)).toBe("selfhost");
+    expect(crawlerLandingVariant({ mode: "split", one: null, weights: { selfhost: 100, "agent-computer": 0 } }, def)).toBe("selfhost");
+    expect(crawlerLandingVariant({ mode: "split", one: null, weights: { selfhost: 30, "agent-computer": 70 } }, def)).toBe("agent-computer");
+    expect(crawlerLandingVariant(null, def)).toBe(def.crawlerVariant);
+  });
+});
+
+describe("first-touch ref cookie", () => {
+  it("any page with ?ref= stores it once; an existing ref cookie is never replaced", async () => {
+    const { REF_COOKIE } = await import("@podway/shared");
+    const first = await middleware(new NextRequest("https://podway.io/selfhost?ref=creator-evan"));
+    expect(first.cookies.get(REF_COOKIE)?.value).toBe("creator-evan");
+    const later = await middleware(
+      new NextRequest("https://podway.io/?ref=other", { headers: { cookie: `${REF_COOKIE}=creator-evan` } }),
+    );
+    expect(later.cookies.get(REF_COOKIE)).toBeUndefined();
+    const junk = await middleware(new NextRequest("https://podway.io/?ref=%3Cscript%3E"));
+    expect(junk.cookies.get(REF_COOKIE)).toBeUndefined();
+  });
+  it("a link PREFETCH of a ?ref= URL does not store the ref (only a real visit does)", async () => {
+    const { REF_COOKIE } = await import("@podway/shared");
+    const prefetch = await middleware(
+      // What reaches middleware in production: Next has already stripped next-router-prefetch/rsc.
+      new NextRequest("https://podway.io/start?ref=selfhost-landing", { headers: { "sec-fetch-dest": "empty" } }),
+    );
+    expect(prefetch.cookies.get(REF_COOKIE)).toBeUndefined();
+    const page = await middleware(
+      new NextRequest("https://podway.io/start?ref=selfhost-landing", { headers: { "sec-fetch-dest": "document" } }),
+    );
+    expect(page.cookies.get(REF_COOKIE)?.value).toBe("selfhost-landing");
   });
 });

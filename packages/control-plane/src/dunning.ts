@@ -13,7 +13,7 @@
  * credit-covered account is never touched (velsa's hard constraint, 2026-09-14).
  */
 import { billingDelinquencies, user, eq, type Database } from "@podway/db";
-import { priceForSize, isPodSize, ramGbForSize, noCardRamGb, offerRamGb, type PodSize } from "@podway/shared";
+import { priceForSize, isPodSize, ramGbForSize, noCardRamGb, freePodGb, type PodSize } from "@podway/shared";
 import { createLogger, type Logger } from "@podway/shared/log";
 import { freePodId, type BillingService } from "./billing.js";
 import type { PodService } from "./service.js";
@@ -92,10 +92,10 @@ export class DunningService {
     suspendedDueCents = 0,
   ): Promise<{ delinquent: boolean; amountDueCents: number }> {
     const [row] = await this.db
-      .select({ ref: user.ref, offer: user.freeOffer })
+      .select({ ref: user.ref, offer: user.freeOffer, createdAt: user.createdAt })
       .from(user)
       .where(eq(user.id, ownerId));
-    const offerGb = offerRamGb(row?.offer);
+    const offerGb = freePodGb(row ?? {}); // a claimed offer or the grandfathered early-access pod
     // Free-pod offer: one pod up to the offer's size is free FOR LIFE, card or not — it is not on the bill.
     const free = freePodId(billablePods.map((p, i) => ({ podId: String(i), size: p.size as PodSize })), offerGb);
     const owed = billablePods.filter((_, i) => String(i) !== free);

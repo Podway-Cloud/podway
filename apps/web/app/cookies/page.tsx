@@ -39,12 +39,20 @@ export default function CookiesPage() {
         legitimate interest in improving the site; you can opt out by declining analytics below or by
         clearing these cookies.
       </p>
+      <p>
+        When you arrive through a partner&rsquo;s link (a URL with <code>?ref=</code>), a first-party
+        cookie <code>pw_ref</code> remembers that link&rsquo;s name for 30 days, so the partner is credited
+        if you sign up. It holds only the link&rsquo;s name, never anything about you, and stays on our
+        own servers.
+      </p>
 
       <h2>Analytics cookies (only with your consent)</h2>
       <p>
         With your consent, we use <strong>PostHog</strong> for product analytics — to see which
-        features are used and where the app is slow, so we can improve it. Until you accept, PostHog
-        runs in a cookieless, no-capture mode and sets <strong>no</strong> analytics cookies. When you
+        features are used and where the app is slow, so we can improve it. Until you accept (or if you
+        decline), PostHog only counts page visits in a cookieless mode: it sets <strong>no</strong>{" "}
+        cookies and stores nothing on your device, keeps no identifier that recognises you on another
+        day, and does not record your session. When you
         accept, it stores analytics identifiers to recognise your browser across sessions.
       </p>
       <p>

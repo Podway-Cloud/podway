@@ -60,7 +60,7 @@ export interface PodSpec {
    * wall went OFF silently, which is the worst failure this mechanism has — indistinguishable
    * from a wall with nothing to block.
    */
-  relentless: { hold: boolean; wake: boolean };
+  relentless: { hold: boolean; wake: boolean; autopick: boolean };
   egress: ResolvedPod["egress"];
   claudeFiles: string[]; // guest-relative paths of injected .claude files
 }
@@ -100,6 +100,7 @@ export async function buildInitFiles(
     /** Per-pod relentless switches; both default OFF when the caller says nothing. */
     relentlessHold?: boolean;
     relentlessWake?: boolean;
+    relentlessAutopick?: boolean;
     /** Pod-level auth-mode override; falls back to the env's default when absent. */
     agentAuth?: ResolvedPod["agentAuth"];
   },
@@ -217,6 +218,7 @@ export async function buildInitFiles(
     relentless: {
       hold: input.relentlessHold ?? false,
       wake: input.relentlessWake ?? false,
+      autopick: input.relentlessAutopick ?? false,
     },
     egress: input.resolved.egress,
     claudeFiles: claudeFiles.sort(),

@@ -12,5 +12,9 @@ services:
       - USER_UID=1000
       - USER_GID=1000
       - GITEA__database__DB_TYPE=sqlite3
+      # Skip the install wizard (it asked new users for database + server settings). With the install
+      # locked, the FIRST account registered on the web becomes the site admin.
+      - GITEA__security__INSTALL_LOCK=true
+      - GITEA__server__ROOT_URL=${MAIN_URL:-http://localhost:3000/}
 volumes:
   data: {}

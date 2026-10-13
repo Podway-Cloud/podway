@@ -94,11 +94,14 @@ export default function LaunchConfigure({
   freeRamGb = 0,
   freeOffer,
   minSize,
+  sizeNote,
   appName,
 }: {
   env: string;
   /** The env's minimum pod size — the picker floors to it (an app + DB needs more than a workspace). */
   minSize?: PodSize;
+  /** The env's one-line size hint (manifest `sizeNote`), shown under the size picker. */
+  sizeNote?: string;
   /** For a `kind: app` env, the app's display title — the launch stages show "Deploying <app>". */
   appName?: string;
   secrets: DeclaredSecret[];
@@ -310,9 +313,11 @@ export default function LaunchConfigure({
   // would not show here — pass it as a prop if prod ever sets one.
   // Free alpha Mini (owner, 2026-10-08): mirrors the dunning rule, so "free" here is never a lie.
   // (A free-pod offer covers one pod up to its size, card or not — control-plane billing.ts freePodId.)
-  const freeBudget = Math.max(hasCard ? 0 : freeRamGb, freeOffer?.ramGb ?? 0);
+  // ponytail: "fits in free RAM" is stricter than billing's one-free-pod rule (a carded owner whose
+  // free slot is unused because they only run big pods sees a price here, then isn't charged).
+  const freeBudget = Math.max(freeRamGb, freeOffer?.ramGb ?? 0);
   const freePod = !oss && billingEnabled && ram.used + ramCost <= freeBudget;
-  const freeLabel = freeOffer?.label ?? "Free during early access · no card needed";
+  const freeLabel = freeOffer?.label ?? (hasCard ? "Free during early access" : "Free during early access · no card needed");
   const canRaiseWithCard = billingEnabled && !hasCard && ram.cap < CARDED_RAM_GB && ramCost <= CARDED_RAM_GB - ram.used;
   // api-key mode needs a key before launch (there's no /login to fall back on).
   const keyProvided = agentAuth !== "api-key" || agentApiKey.trim().length > 0;
@@ -489,6 +494,7 @@ export default function LaunchConfigure({
                     Reserved compute for this pod. You can change it later (a brief restart).
                   </p>
                 )}
+                {!oss && sizeNote && <p className="text-[13px] text-warning">{sizeNote}</p>}
                 {freePod && <p className="text-[13px] font-medium text-success">{freeLabel}.</p>}
                 {!ram.unlimited && (
                   <p className={`text-[13px] ${ramFit ? "text-muted-foreground" : "text-destructive"}`}>

@@ -2,6 +2,8 @@ export * from "./types.js";
 export * from "./billing.js";
 export * from "./dunning.js";
 export * from "./login-reminders.js";
+export * from "./app-watch.js";
+export * from "./domain-cert-watch.js";
 export * from "./pod-reports.js";
 export * from "./store.js";
 export * from "./drizzle-store.js";

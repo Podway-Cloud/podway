@@ -35,6 +35,8 @@ function toRecord(row: Row): PodRecord {
     configHash: row.configHash ?? null,
     relentlessHold: row.relentlessHold,
     relentlessWake: row.relentlessWake,
+    relentlessAutopick: row.relentlessAutopick,
+    appWatch: row.appWatch,
     nonpaymentSuspendedAt: row.nonpaymentSuspendedAt ? row.nonpaymentSuspendedAt.toISOString() : null,
     claudeLoginExpiresAt: row.claudeLoginExpiresAt ? row.claudeLoginExpiresAt.toISOString() : null,
     updatingSince: row.updatingSince ? row.updatingSince.toISOString() : null,
@@ -90,6 +92,8 @@ export class DrizzlePodStore implements PodStore {
       configHash: record.configHash ?? null,
       relentlessHold: record.relentlessHold ?? false,
       relentlessWake: record.relentlessWake ?? false,
+      relentlessAutopick: record.relentlessAutopick ?? false,
+      appWatch: record.appWatch ?? true,
       nonpaymentSuspendedAt: record.nonpaymentSuspendedAt ? new Date(record.nonpaymentSuspendedAt) : null,
       claudeLoginExpiresAt: record.claudeLoginExpiresAt ? new Date(record.claudeLoginExpiresAt) : null,
       updatingSince: record.updatingSince ? new Date(record.updatingSince) : null,
@@ -160,6 +164,8 @@ export class DrizzlePodStore implements PodStore {
     if (patch.configHash !== undefined) set.configHash = patch.configHash;
     if (patch.relentlessHold !== undefined) set.relentlessHold = patch.relentlessHold;
     if (patch.relentlessWake !== undefined) set.relentlessWake = patch.relentlessWake;
+    if (patch.relentlessAutopick !== undefined) set.relentlessAutopick = patch.relentlessAutopick;
+    if (patch.appWatch !== undefined) set.appWatch = patch.appWatch;
     if (patch.nonpaymentSuspendedAt !== undefined)
       set.nonpaymentSuspendedAt = patch.nonpaymentSuspendedAt
         ? new Date(patch.nonpaymentSuspendedAt)

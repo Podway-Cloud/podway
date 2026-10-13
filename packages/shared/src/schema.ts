@@ -95,6 +95,9 @@ export const SecretDecl = z.object({
   /** Optional https link to where the user can obtain this value (e.g. the
    * provider's API-keys page). Shown as a "Get it ↗" link next to the field. */
   url: z.string().url().startsWith("https://").max(300).optional(),
+  /** Podway makes a random value at pod creation when the owner gives none (e.g. an app's first admin
+   * password). It lands in the pod's Secrets tab, where the owner can reveal it — no agent needed. */
+  generate: z.boolean().default(false),
 });
 
 export const LifecyclePolicyEnum = z.enum(["auto", "awake-hours", "always-on", "scheduled"]);
@@ -149,6 +152,9 @@ export const EnvironmentSchema = z
      * Postgres) needs more memory than a static workspace; a workspace omits this and launches at the
      * global default, as today. Must name a known pod size. */
     minSize: z.enum(["mini", "s", "m", "l", "xl"]).optional(),
+    /** One plain-language line shown under the launch size picker — e.g. that the app runs slowly at its
+     * minimum size (Twenty on Small thrashes: smoke 2026-10-11). */
+    sizeNote: z.string().max(200).optional(),
     /** Default preview visibility for pods of this env. `public` = the pod's
      * preview URL is reachable by anyone with the link from launch (for envs
      * whose whole point is a shareable page — e.g. a landing). Private surfaces

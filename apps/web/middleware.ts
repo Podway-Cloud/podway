@@ -3,10 +3,12 @@ import { canonicalRedirectHost } from "@/lib/canonical-host";
 import {
   ACTIVE_LANDING_EXPERIMENT,
   chooseLandingVariant,
+  crawlerLandingVariant,
   isCrawler,
   isLandingVisitorId,
   isVariantForExperiment,
 } from "@/lib/landing-experiment-config";
+import { REF_COOKIE, REF_COOKIE_MAX_AGE, sanitizeRef } from "@podway/shared";
 import { getHomepageTrafficCached } from "@/lib/homepage-traffic";
 
 const LANDING_EXPERIMENT = ACTIVE_LANDING_EXPERIMENT;
@@ -18,6 +20,26 @@ const LANDING_EXPERIMENT = ACTIVE_LANDING_EXPERIMENT;
  * sign-in. 308 preserves method/body for any non-GET that slips through.
  */
 export async function middleware(req: NextRequest) {
+  const res = await route(req);
+  // First-touch ref (see REF_COOKIE): remember ?ref= from ANY page, unless an earlier one is stored.
+  const ref = sanitizeRef(req.nextUrl.searchParams.get("ref"));
+  // Only a real page load (or a client without sec-fetch-*). Next's link prefetch is a fetch() of a
+  // ?ref= link before any click and stamped visitors who never followed it. Next strips its own
+  // router headers (next-router-prefetch, rsc) before middleware runs, so sec-fetch-dest is the
+  // signal. A client-side click is a fetch too; /start carries the ref in its own URL.
+  if (ref && !req.cookies.get(REF_COOKIE) && req.headers.get("sec-fetch-dest") !== "empty") {
+    res.cookies.set(REF_COOKIE, ref, {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: req.nextUrl.protocol === "https:",
+      path: "/",
+      maxAge: REF_COOKIE_MAX_AGE,
+    });
+  }
+  return res;
+}
+
+async function route(req: NextRequest): Promise<NextResponse> {
   const apex = canonicalRedirectHost(req.headers.get("host"));
   if (apex) {
     const url = req.nextUrl.clone();
@@ -44,14 +66,31 @@ export async function middleware(req: NextRequest) {
     return response;
   }
 
+  // A DIRECT visit to /agent-computer counts for the agent-computer landing (owner, 2026-10-12): it can
+  // get traffic of its own even at 0% of the home page split. The visitor is tagged with the landing
+  // they actually saw, so the page's exposure beacon and their later sign-up / pod count for it.
+  if (req.nextUrl.pathname === "/agent-computer") {
+    if (isCrawler(req.headers.get("user-agent")) || !isVariantForExperiment(LANDING_EXPERIMENT, "agent-computer")) {
+      return NextResponse.next();
+    }
+    const response = NextResponse.next();
+    const opts = landingCookieOptions(req);
+    response.cookies.set(LANDING_EXPERIMENT.cookie.variant, "agent-computer", opts);
+    if (!isLandingVisitorId(req.cookies.get(LANDING_EXPERIMENT.cookie.visitor)?.value)) {
+      response.cookies.set(LANDING_EXPERIMENT.cookie.visitor, crypto.randomUUID(), opts);
+    }
+    return response;
+  }
+
   if (req.nextUrl.pathname !== "/") return NextResponse.next();
 
   const requestHeaders = new Headers(req.headers);
   const crawler = isCrawler(req.headers.get("user-agent"));
   if (crawler) {
+    // Crawlers see what most people see (never a different product): crawlerLandingVariant.
     requestHeaders.set(
       LANDING_EXPERIMENT.requestHeaders.variant,
-      LANDING_EXPERIMENT.crawlerVariant,
+      crawlerLandingVariant(await getHomepageTrafficCached(), LANDING_EXPERIMENT),
     );
     requestHeaders.set(LANDING_EXPERIMENT.requestHeaders.eligible, "0");
     return NextResponse.next({ request: { headers: requestHeaders } });
@@ -74,13 +113,7 @@ export async function middleware(req: NextRequest) {
   requestHeaders.set(LANDING_EXPERIMENT.requestHeaders.visitor, visitorId);
   requestHeaders.set(LANDING_EXPERIMENT.requestHeaders.eligible, "1");
   const response = NextResponse.next({ request: { headers: requestHeaders } });
-  const cookieOptions = {
-    httpOnly: true,
-    sameSite: "lax" as const,
-    secure: req.nextUrl.protocol === "https:",
-    path: "/",
-    maxAge: LANDING_EXPERIMENT.cookie.maxAgeSeconds,
-  };
+  const cookieOptions = landingCookieOptions(req);
   if (!sticky && !oneLanding) {
     response.cookies.set(LANDING_EXPERIMENT.cookie.variant, variant, cookieOptions);
   }
@@ -91,6 +124,16 @@ export async function middleware(req: NextRequest) {
 }
 
 // Run on everything except Next internals and static assets.
+function landingCookieOptions(req: NextRequest) {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: req.nextUrl.protocol === "https:",
+    path: "/",
+    maxAge: LANDING_EXPERIMENT.cookie.maxAgeSeconds,
+  };
+}
+
 export const config = {
   // Node runtime (stable in Next 15.5): the live split is read from the DB (lib/homepage-traffic.ts).
   runtime: "nodejs",

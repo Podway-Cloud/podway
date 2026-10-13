@@ -64,17 +64,20 @@ The automatic rollback inside `safe-upgrade` does not take this extra snapshot.
   the one pinned on first deploy
 - **THEN** the engine refuses the operation rather than proceed
 
-### Requirement: A landing-lineup app installs an exact, tested version
+### Requirement: Every app installs an exact, tested version
 
-Every app on the self-host landing lineup (`apps/web/app/selfhost/selfhost-lineup.ts`) SHALL install an
-EXACT image tag — never `latest` or a moving alias — so the version a pod runs is known, a new install
+Every app env (owner, 2026-10-11 — extended from the landing lineup to ALL apps) SHALL install an
+EXACT image tag, including helper images in its compose file — never `latest` or a moving alias — so the version a pod runs is known, a new install
 never jumps a major version the day it is released, and "big jumps wait for you" holds. A version bump
 is a reviewed change to the env's `podway.yaml`, smoke-tested (`scripts/incus/app-smoke.sh`) before it
-lands. Guarded by `apps/web/test/selfhost-lineup.test.ts`.
+lands. Guarded by `apps/web/test/selfhost-lineup.test.ts` and, for every env,
+`packages/provider/test/env-pins.test.ts`. The one exception is Excalidraw, which publishes no version
+tags. A manifest MAY carry a one-line `sizeNote` that the launch wizard shows under the size picker
+(Twenty: "runs slowly on Small" — kept at Small by owner decision after a 2 GB smoke swapped 47%).
 
 #### Scenario: A lineup app cannot drift back to latest
-- **WHEN** a lineup app's install default is changed to a `latest` tag
-- **THEN** the lineup test SHALL fail
+- **WHEN** any app's install default (or a compose helper image) is changed to `latest` or no tag
+- **THEN** the env-pins test SHALL fail
 
 ### Requirement: App data survives restart AND image-update
 

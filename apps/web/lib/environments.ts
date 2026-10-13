@@ -36,6 +36,8 @@ export interface CatalogEntry {
   kind: "playbook" | "workspace" | "app";
   /** The smallest pod size this env's stack runs on; the picker floors to it. Absent = global default. */
   minSize?: "mini" | "s" | "m" | "l" | "xl";
+  /** A one-line size hint shown under the launch size picker (manifest `sizeNote`). */
+  sizeNote?: string;
   description: string;
   /** Longer description (2-3 sentences) for the new-pod page; falls back to `description`. */
   descriptionLong: string;
@@ -97,10 +99,11 @@ function baseKind(base: { image?: string; dockerfile?: string; devcontainer?: st
 
 function toDeclaredSecrets(
   secrets:
-    | { key: string; description?: string | null; required?: boolean; url?: string | null }[]
+    | { key: string; description?: string | null; required?: boolean; url?: string | null; generate?: boolean }[]
     | undefined,
 ): DeclaredSecret[] {
-  return (secrets ?? []).map((s) => ({
+  // A `generate: true` secret is made by Podway at creation, so the launch form never asks for it.
+  return (secrets ?? []).filter((s) => !s.generate).map((s) => ({
     key: s.key,
     description: s.description ?? null,
     required: s.required ?? false,
@@ -203,6 +206,7 @@ export async function getEnvironmentDetail(
     title: meta.title ?? resolved.name,
     kind: normalizeKind(result.value.kind),
     minSize: result.value.minSize,
+    sizeNote: result.value.sizeNote,
     description: meta.description ?? "",
     descriptionLong: meta.descriptionLong ?? meta.description ?? "",
     author: meta.author ?? null,

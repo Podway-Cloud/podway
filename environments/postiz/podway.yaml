@@ -52,7 +52,7 @@ setup:
     if [ ! -f .env ]; then
     URL="$(podway preview 2>/dev/null | grep -oE 'https://[^ )]+' | head -1)"; [ -z "$URL" ] && URL="http://localhost:3000";
     printf 'POSTIZ_IMAGE=%s\nDB_PASSWORD=%s\nJWT_SECRET=%s\nMAIN_URL=%s\n'
-    "ghcr.io/gitroomhq/postiz-app:latest" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$URL" > .env;
+    "ghcr.io/gitroomhq/postiz-app:v2.25.1" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$URL" > .env;
     chmod 600 .env; fi
   - chmod +x bin/app-admin.sh bin/postiz-cli.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
@@ -86,6 +86,8 @@ kickoff: |
      to set and point the owner at the dashboard; never invent credentials.
 
   Ongoing duties:
+  - LOG every change you make to the app (config, plugins, fixes, restarts): `APP_ADMIN_DIR=~/work bin/app-admin.sh log "<what>" "<who asked / why>" "<how to undo>"`. The engine logs its own snapshots, upgrades and restores; ~/work/admin-log.md is the owner's record. A weekly report + upkeep job runs on Mondays (podway schedule "Weekly app report").
+  - BEFORE ANY UPGRADE run `APP_ADMIN_DIR=~/work bin/app-admin.sh check-upgrade` and follow its ADVICE (SAFE / WAIT / REVIEW / RISKY = ask the owner). Tell the owner in plain words why you upgrade now or wait.
   - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot` (dumps the postiz
     DB + the config/uploads volumes + image tag). NOTE: in-flight Temporal scheduling state is NOT in
     the snapshot — accounts, posts and connections are; scheduled workflows would be re-created.

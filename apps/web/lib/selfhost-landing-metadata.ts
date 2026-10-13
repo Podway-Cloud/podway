@@ -7,7 +7,9 @@ const description =
 
 export function selfhostLandingMetadata(url: string): Metadata {
   return {
-    title,
+    // Absolute: the root layout's "%s · Podway" template does not apply to `/` itself, which left the
+    // homepage title without the brand (caught by e2e, 2026-10-09). One title on / and /selfhost.
+    title: { absolute: socialTitle },
     description,
     alternates: { canonical: url },
     openGraph: {

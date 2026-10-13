@@ -642,7 +642,10 @@ session followed by Enter.
 
 The scheduler SHALL only inject when the agent can take a turn: it SHALL defer to a later tick
 when the session is busy or in a shell, or when it is waiting on a dialog. At most one turn SHALL
-be injected per tick.
+be injected per tick. A busy session SHALL NOT starve jobs forever: once due jobs have been deferred
+for 30 minutes ONLY because the session is busy or in a shell (no dialog, no `waitingFor`), the
+earliest one SHALL be typed in anyway (the agent queues it as its next message), and the 30-minute
+clock SHALL restart for the next job.
 
 #### Scenario: Due job injects a run turn
 
@@ -654,6 +657,14 @@ be injected per tick.
 
 - **WHEN** a job is due but the session is busy, in a shell, or waiting on a dialog
 - **THEN** the scheduler SHALL inject nothing and re-evaluate the job on a later tick
+
+#### Scenario: A session that is busy for hours still runs its jobs
+
+- **WHEN** a job has been deferred for 30 minutes because the session is busy (a turn waiting on
+  background agents), with no dialog or question open
+- **THEN** the scheduler SHALL type the job in as a queued message, and SHALL wait another 30 minutes
+  before forcing the next due job
+- **AND** a session waiting on the owner (question box, dialog) SHALL never be typed into, however long
 
 #### Scenario: At most one turn per tick
 

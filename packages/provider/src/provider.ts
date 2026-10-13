@@ -102,7 +102,7 @@ export interface SandboxProvider {
        * with a perfectly valid token already in its secrets.env (owner report 2026-09-07). */
       agentAuth?: string | null;
       /** DB relentless switch — same verbatim-spec reasoning as `name`/`agentAuth`. */
-      relentless?: { hold: boolean; wake: boolean };
+      relentless?: { hold: boolean; wake: boolean; autopick?: boolean };
     },
   ): Promise<PodInfo>;
   /** Write the pod's app secrets to /etc/podway/secrets.env (0600, dev-owned) on
@@ -168,7 +168,7 @@ export interface SandboxProvider {
       claudeFiles?: { guest_path: string; raw_value: string }[];
       permissions?: unknown;
       /** DB relentless switch, re-synced into the live spec (the spec is otherwise kept verbatim). */
-      relentless?: { hold: boolean; wake: boolean };
+      relentless?: { hold: boolean; wake: boolean; autopick?: boolean };
     },
   ): Promise<{ refreshed: boolean; note?: string }>;
   /** Mint a short-lived Codex pairing code (the codex analog of the Claude session

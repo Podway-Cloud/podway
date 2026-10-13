@@ -1,7 +1,8 @@
 import "server-only";
 import { eq, and, isNull, isNotNull, sql } from "drizzle-orm";
 import { createAppDb, user as userTable } from "@podway/db";
-import { sanitizeRef, FREE_POD_OFFERS } from "@podway/shared";
+import { sanitizeRef, FREE_POD_OFFERS, REF_COOKIE, freePodGb } from "@podway/shared";
+import { cookies } from "next/headers";
 
 /**
  * Deep-link referral attribution (deeplink-onboarding). `ref` lives on the account as FIRST-TOUCH
@@ -87,4 +88,22 @@ export async function offerCounts(): Promise<Record<string, number>> {
 export async function accountOffer(userId: string): Promise<string | null> {
   const [r] = await createAppDb().select({ o: userTable.freeOffer }).from(userTable).where(eq(userTable.id, userId));
   return r?.o ?? null;
+}
+
+/** The free pod's size (GB) billing never charges for this account, card or not (shared/tiers.ts freePodGb). */
+export async function accountFreePodGb(userId: string): Promise<number> {
+  const [r] = await createAppDb()
+    .select({ offer: userTable.freeOffer, ref: userTable.ref, createdAt: userTable.createdAt })
+    .from(userTable)
+    .where(eq(userTable.id, userId));
+  return freePodGb(r ?? {});
+}
+
+/** Credit the first-touch ref cookie (REF_COOKIE) to this account: set its ref if it has none, and claim
+ * an offer the ref names. Both are set-once, so calling it on every /start or dashboard visit is safe. */
+export async function applyRefCookie(userId: string): Promise<void> {
+  const ref = sanitizeRef((await cookies()).get(REF_COOKIE)?.value);
+  if (!ref) return;
+  await recordFirstTouchRef(userId, ref);
+  await claimOffer(userId, ref);
 }

@@ -124,6 +124,24 @@ describe("DunningService.evaluateOwner (the rule)", () => {
     expect((await tile.evaluateOwner("tile", [pod("p1", "tile", "s")])).delinquent).toBe(false);
   });
 
+  it("grandfathered early access: the first Mini stays free for life, even with a card; ending early access only affects NEW accounts", async () => {
+    const db = await freshDb();
+    await db.insert(user).values({ id: "ea", name: "ea", email: "ea@example.com", createdAt: new Date("2026-10-01T00:00:00Z") });
+    await db.insert(user).values({ id: "late", name: "late", email: "late@example.com", createdAt: new Date("2027-02-01T00:00:00Z") });
+    // Carded, a payment failed, no credit: the Mini is not on the bill — only the Small ($7) is owed.
+    const billing = fakeBilling({ ea: { creditCents: 0, hasCard: true, openInvoice: true }, late: { creditCents: 0, hasCard: true, openInvoice: true } });
+    const svc = new DunningService(db, billing, fakePods([]));
+    expect(await svc.evaluateOwner("ea", [pod("p1", "ea", "mini"), pod("p2", "ea", "s")])).toEqual({ delinquent: true, amountDueCents: 700 });
+    vi.stubEnv("PODWAY_EARLY_ACCESS_ENDED_AT", "2027-01-01T00:00:00Z");
+    try {
+      // Early access ended: the early account keeps its free Mini; an account created after pays for both.
+      expect((await svc.evaluateOwner("ea", [pod("p1", "ea", "mini"), pod("p2", "ea", "s")])).amountDueCents).toBe(700);
+      expect((await svc.evaluateOwner("late", [pod("p1", "late", "mini"), pod("p2", "late", "s")])).amountDueCents).toBe(1100);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it("no card but credit covers the bill → not delinquent", async () => {
     const db = await freshDb();
     const svc = new DunningService(db, fakeBilling({ u1: { creditCents: 5000, hasCard: false } }), fakePods([]));

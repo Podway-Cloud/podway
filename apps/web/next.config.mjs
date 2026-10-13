@@ -25,6 +25,8 @@ const nextConfig = {
       { source: "/apps", destination: "/#apps", permanent: false },
       { source: "/apps/:slug", destination: "/#apps", permanent: false },
       { source: "/radar", destination: "/", permanent: false },
+      // The agent-computer landing has its own short address (owner, 2026-10-12).
+      { source: "/preview/landing/agent-computer", destination: "/agent-computer", permanent: true },
     ];
   },
   async rewrites() {

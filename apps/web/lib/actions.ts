@@ -1084,11 +1084,22 @@ const IDLE_UPDATE_DWELL_MS = 10 * 60 * 1000;
  */
 export async function setPodAgenticBehavior(
   slug: string,
-  next: { hold: boolean; wake: boolean },
+  next: { hold: boolean; wake: boolean; autopick: boolean },
 ): Promise<ActionResult> {
   const user = await requireUser();
   try {
     await getPodService().setAgenticBehavior(user.id, slug, next);
+    revalidatePath("/dashboard");
+  } catch (e) {
+    return { error: message(e) };
+  }
+}
+
+/** App watch on/off for an app pod, from the pod Settings toggle. */
+export async function setPodAppWatch(slug: string, on: boolean): Promise<ActionResult> {
+  const user = await requireUser();
+  try {
+    await getPodService().setAppWatch(user.id, slug, on);
     revalidatePath("/dashboard");
   } catch (e) {
     return { error: message(e) };

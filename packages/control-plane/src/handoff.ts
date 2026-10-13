@@ -27,6 +27,9 @@ export const T3_HANDOFF_REQUEST =
  * user-acknowledged interruption with visible progress; a completed note is
  * worth more than 40 saved seconds. */
 export const HANDOFF_TIMEOUT_MS = 60_000;
+/** An agent idle this long has nothing in flight: no note to write, so no wait and no line typed into
+ * the owner's chat (owner, 2026-10-13: the handoff added up to a minute to every update). */
+export const HANDOFF_IDLE_SKIP_MS = 3 * 60_000;
 
 const POLL_MS = 1_000;
 
@@ -39,6 +42,9 @@ export interface RequestHandoffOptions {
    * different trigger (e.g. yielding control to T3 Code) pass their own so the note's framing is
    * honest about WHY the handoff is being written. */
   request?: string;
+  /** Skip the handoff when the agent has been idle HANDOFF_IDLE_SKIP_MS (default true). The T3 yield
+   * passes false: a FRESH session takes over there, and even an idle agent's context is worth a note. */
+  skipWhenIdle?: boolean;
   /** Injectable clock for tests. */
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -93,6 +99,13 @@ export async function requestHandoff(opts: RequestHandoffOptions): Promise<strin
 
   try {
     if (typeof provider.exec !== "function") return written;
+    if (opts.skipWhenIdle !== false) {
+      const idleMs = await provider.agentIdleMs?.(podId).catch(() => null);
+      if (idleMs != null && idleMs >= HANDOFF_IDLE_SKIP_MS) {
+        log.info("handoff_skipped", { podId, reason: "agent_idle", idleMs });
+        return written;
+      }
+    }
 
     const windows = await listWindows(provider, podId);
     if (windows.length === 0) {

@@ -9,7 +9,7 @@ import { editionOss } from "@/lib/session";
 import { harnessEnabled } from "@/lib/agent-harness";
 import { getBillingSummary } from "@/lib/billing-actions";
 import { accountRamCapGb } from "@/lib/account-limits";
-import { accountOffer } from "@/lib/attribution";
+import { accountFreePodGb, accountOffer } from "@/lib/attribution";
 import { FREE_POD_OFFERS } from "@podway/shared";
 import { sanitizeRef } from "@podway/shared";
 import { POD_SIZES, type PodSize } from "@podway/shared/tiers";
@@ -45,7 +45,9 @@ export default async function NewPodPage({
   // Deep link may preset a pod name (?name=…); otherwise the friendly "my <app>" default. Light
   // sanitize (trim/collapse-whitespace/cap) — the wizard + launchPod validate on submit.
   const presetName = rawName?.trim().replace(/\s+/g, " ").slice(0, 60);
-  const initialName = deeplink ? (presetName || `my ${detail.title}`) : undefined;
+  // Every create path, not only deep links: an empty required name kept Next grey until the visitor
+  // typed something (launch-readiness test on podway.io, 2026-10-13).
+  const initialName = presetName || `my ${detail.title}`;
   const ref = sanitizeRef(rawRef);
   // A pricing card / campaign link can preselect a size (?size=m). Validate against the tier list;
   // LaunchConfigure floors it to the env's minSize. Unknown ⇒ ignored (env default stands).
@@ -81,6 +83,7 @@ export default async function NewPodPage({
         secrets={detail.secrets}
         byoRepo={detail.byoRepo}
         minSize={detail.minSize}
+        sizeNote={detail.sizeNote}
         appName={detail.kind === "app" ? detail.title : undefined}
         agentIds={detail.agentIds}
         enabled={isProvisioningEnabled()}
@@ -97,7 +100,10 @@ export default async function NewPodPage({
         creditCents={billing?.creditCents ?? 0}
         hasCard={billing?.hasCard ?? false}
         // A no-card account's cap IS its free-in-alpha budget (one Mini; one Small for an email-* lead).
-        freeRamGb={ramCap === Infinity ? 0 : ramCap}
+        // A carded account keeps its grandfathered free pod (billing.ts syncSubscription → freePodGb).
+        freeRamGb={
+          ramCap === Infinity ? 0 : billing?.hasCard ? await accountFreePodGb(user.id).catch(() => 0) : ramCap
+        }
         freeOffer={await (async () => {
           const o = oss ? null : await accountOffer(user.id).catch(() => null);
           return o && Object.hasOwn(FREE_POD_OFFERS, o) ? FREE_POD_OFFERS[o] : undefined;

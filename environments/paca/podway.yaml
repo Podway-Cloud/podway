@@ -43,13 +43,20 @@ preview: private
 # All secrets are GENERATED per-pod at setup into ~/work/.env — never committed, never a value the user
 # must paste. MAIN_URL is the pod's preview URL (from `podway preview`) so uploads and realtime resolve;
 # a scratch pod without one falls back to plain-http localhost (and so non-secure cookies).
+# The app's first admin password: Podway makes it at pod creation and keeps it in the Secrets tab, so
+# the owner can reveal it there even without the agent. The setup below falls back to a local random one.
+secrets:
+  - key: ADMIN_PASSWORD
+    description: "First sign-in password (user: admin). Change it in the app after you sign in."
+    generate: true
+
 setup:
   - >-
     if [ ! -f .env ]; then
     URL="$(podway preview 2>/dev/null | grep -oE 'https://[^ )]+' | head -1)"; [ -z "$URL" ] && URL="http://localhost:3000";
     case "$URL" in https://*) SECURE=true;; *) SECURE=false;; esac;
     printf 'PACA_VERSION=%s\nMAIN_URL=%s\nCOOKIE_SECURE=%s\nDB_PASSWORD=%s\nJWT_SECRET=%s\nADMIN_PASSWORD=%s\nENCRYPTION_KEY=%s\nSTORAGE_ACCESS_KEY_ID=%s\nSTORAGE_SECRET_ACCESS_KEY=%s\nAGENT_API_KEY=%s\nINTERNAL_API_KEY=%s\n'
-    "0.18.6" "$URL" "$SECURE" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$(openssl rand -hex 12)" "$(openssl rand -hex 32)" "$(openssl rand -hex 10)" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env;
+    "0.18.6" "$URL" "$SECURE" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "${ADMIN_PASSWORD:-$(openssl rand -hex 12)}" "$(openssl rand -hex 32)" "$(openssl rand -hex 10)" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > .env;
     chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
@@ -74,8 +81,8 @@ kickoff: |
   First turn:
   1. Confirm health: `APP_ADMIN_DIR=~/work bin/app-admin.sh status` and open the preview. If Paca is
      up, tell the owner it is live and give them the preview link.
-  2. Give the owner the first sign-in ONCE, in this chat: username `admin`, password = ADMIN_PASSWORD
-     from ~/work/.env. Tell them to change it in Paca's settings after signing in.
+  2. Give the owner the first sign-in: username `admin`; the password is the ADMIN_PASSWORD secret.
+     Send the Secrets-tab link (the `cockpit:` link from `podway info`, plus `?tab=secrets`), where they click Reveal. Tell them to change it in Paca's settings after signing in.
   3. Offer to join the board as their AI teammate: after they sign in, they create an API key in Paca
      (Settings → API Keys) and add it as the pod secret PACA_API_KEY — run
      `podway secrets request PACA_API_KEY "Paca API key so I can work on your board"` and hand them the
@@ -84,6 +91,8 @@ kickoff: |
      (the gateway forwards /api/* to the API). Then you can read and update projects, sprints and tasks.
 
   Ongoing duties:
+  - LOG every change you make to the app (config, plugins, fixes, restarts): `APP_ADMIN_DIR=~/work bin/app-admin.sh log "<what>" "<who asked / why>" "<how to undo>"`. The engine logs its own snapshots, upgrades and restores; ~/work/admin-log.md is the owner's record. A weekly report + upkeep job runs on Mondays (podway schedule "Weekly app report").
+  - BEFORE ANY UPGRADE run `APP_ADMIN_DIR=~/work bin/app-admin.sh check-upgrade` and follow its ADVICE (SAFE / WAIT / REVIEW / RISKY = ask the owner). Tell the owner in plain words why you upgrade now or wait.
   - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot` (dumps the Paca
     DB + the file and plugin volumes + the version).
   - UPGRADES: NEVER just `docker compose pull`. Use

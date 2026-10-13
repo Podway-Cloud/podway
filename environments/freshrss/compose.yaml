@@ -8,5 +8,10 @@ services:
     # The cockpit preview forwards ONLY port 3000 → map the app's internal 80 onto 3000.
     ports: [ "3000:80" ]
     volumes: [ "data:/var/www/FreshRSS/data" ]
+    # Install on first start (the image runs cli/do-install.php + create-user.php only when not yet
+    # installed), so a new pod opens on the login page, not the 5-step install wizard.
+    environment:
+      FRESHRSS_INSTALL: "--api-enabled --db-type sqlite --default-user admin --language en"
+      FRESHRSS_USER: "--user admin --password ${ADMIN_PASSWORD} --language en"
 volumes:
   data: {}

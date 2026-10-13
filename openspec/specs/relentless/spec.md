@@ -153,34 +153,40 @@ this whole capability keeps having. Saying so is cheaper than an owner discoveri
 - **WHEN** the per-pod settings are absent or unparseable
 - **THEN** both switches SHALL be treated as OFF
 
-### Requirement: An idle pod is woken only when there is something to do
+### Requirement: An idle pod is woken like an owner typing "next?"
 
-A fleet-wide sweep MAY wake an idle pod, and SHALL do so only when the pod is running, its agent is
-idle, it is not waiting on its owner, it has been idle past a threshold, its register holds actionable
-work, and it is within its cooldown and per-pod daily cap.
+When the pod's `relentless.wake` is on, the pod-agent (autopilot, every 30 s) SHALL type a "next?" wake
+into the agent only when: the agent is idle (not busy/shell) for at least 20 minutes, it is NOT waiting
+on its owner (no open question or dialog), at least 20 minutes have passed since the last wake, and fewer
+than 8 wakes happened that day. The agent judges what to do — no register is required (owner, 2026-10-11:
+"next?" works because the agent finds work itself). Two wakes in a row after which nothing changed in
+`~/work` (git HEAD + dirty files, or the newest file times when `~/work` is not a repo) SHALL pause waking until the owner writes again. The pod rules tell the agent
+that when nothing is worth doing it asks ONE question with no "(Recommended)" option and stops.
 
 #### Scenario: A pod waiting on its owner is left alone
+- **WHEN** the agent has an open question or dialog
+- **THEN** it SHALL NOT be woken
 
-- **WHEN** a pod's agent state is "waiting for you" or "needs you"
-- **THEN** the sweep SHALL NOT wake it, because that state means the agent asked the OWNER something
-  and waking it would train the agent to work around the human
+#### Scenario: Wakes that produce nothing stop
+- **WHEN** two consecutive wakes leave `~/work` unchanged
+- **THEN** waking pauses until a new owner message appears in the transcript
 
-#### Scenario: A suspended pod is never woken
+### Requirement: "Always choose recommended" only answers safe questions
 
-- **WHEN** a pod is suspended
-- **THEN** the sweep SHALL NOT wake it, because suspension is the owner's explicit choice and waking
-  it spends their money against that choice
+When the pod's `relentless.autopick` is on (off by default, warned in the cockpit), the pod-agent SHALL
+answer an open AskUserQuestion only after it has waited 10 minutes with no reply, and only when EVERY
+question's FIRST option ends in "(Recommended)", no question is multi-select, and no question or option
+mentions a gated action (push, deploy, merge, delete, spend, publish, production, secrets…). It SHALL read
+the question box from the agent's SCREEN (Claude Code writes the question to the transcript only after it
+is answered) and check EACH screen before each Enter — the highlighted option 1 must end in
+"(Recommended)", and a review screen must list only recommended answers — stopping at the first screen that
+fails (nothing is submitted then) or when the box closes (verified on Claude Code 2.1.283: one Enter per
+question, plus one on the review screen for 2+ questions). It SHALL try each question box only once. The pod rules tell agents to mark NO option "(Recommended)" on an owner decision, so
+those always wait for the owner. (Background: the same selection happened by ACCIDENT on 2026-10-06.)
 
-#### Scenario: An idle pod with nothing to do stays idle
-
-- **WHEN** a pod is idle and its register holds no actionable work
-- **THEN** the sweep SHALL NOT wake it
-
-#### Scenario: Waking is bounded
-
-- **WHEN** a pod has already been woken within its cooldown, or has reached its daily cap
-- **THEN** the sweep SHALL NOT wake it again, because each wake is a billed turn and a pod that
-  ignores nudges must not be hammered
+#### Scenario: An owner decision is never auto-answered
+- **WHEN** a question's options carry no "(Recommended)", or it mentions deploying
+- **THEN** it waits for the owner, however long
 
 ### Requirement: The hold switch governs the rules and skill for every agent
 

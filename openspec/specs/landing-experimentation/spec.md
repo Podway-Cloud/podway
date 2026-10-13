@@ -14,7 +14,10 @@ eligible visitor regardless of their assigned arm — the split validates the pi
 content difference (an A/A); only a `measured` mode renders the assigned arm. The active experiment
 (2026-10, owner decision) is `landing-computer-vs-selfhost-2026-10`: a MEASURED 50/50 A/B whose arms are
 `agent-computer` and `selfhost` — each visitor SEES their assigned arm, and the `selfhost` arm renders the
-self-hosted AI admin landing at `/`. Crawlers get `agent-computer`. The previous real-home/cloud A/A
+self-hosted AI admin landing at `/`. Crawlers get the landing most PEOPLE get (one-landing mode, else
+the biggest share of the live split; the coded `agent-computer` only when no live traffic is known), and
+the page's title/description/OG follow the landing actually served (SEO fix, 2026-10-08); the
+self-host title always carries the brand ("Podway: Host open-source apps with an AI admin"). The previous real-home/cloud A/A
 (`landing-agent-computer-2026-08-real-home-cloud`, whose second arm `outcomes` was never rendered) and the
 earlier `landing-agent-computer-2026-08-taxonomy` and `landing-agent-computer-2026-08` definitions SHALL
 remain registered as historical so their assignments and events stay queryable. A visitor in the
@@ -52,8 +55,8 @@ distinguishable from acquisition traffic and excluded from the primary signed-ou
 #### Scenario: Automated crawler requests the canonical landing
 - **GIVEN** the request is recognized as an automated crawler
 - **WHEN** it requests `/`
-- **THEN** the system SHALL render the configured canonical variant without creating a measured
-  experiment participant
+- **THEN** the system SHALL render the landing most visitors get under the live traffic setting (never a
+  different product from people) without creating a measured experiment participant
 
 #### Scenario: Authenticated user opens the landing
 - **GIVEN** the visitor is already authenticated
@@ -62,7 +65,8 @@ distinguishable from acquisition traffic and excluded from the primary signed-ou
   for primary acquisition analysis
 
 ### Requirement: Semantic forced-preview routes
-The system SHALL expose `/preview/landing/outcomes`, `/preview/landing/agent-computer`, and
+The system SHALL expose `/preview/landing/outcomes`, `/agent-computer` (the old `/preview/landing/agent-computer`
+permanently redirects there), and
 `/preview/landing/agent-home` as deterministic review surfaces. Preview requests SHALL NOT create
 or mutate assignment cookies and SHALL NOT emit experiment exposure or interaction events.
 `agent-home` SHALL NOT become an assignable variant of `landing-positioning-2026-07` merely by
@@ -241,3 +245,27 @@ Earlier periods SHALL stay available, collapsed.
 #### Scenario: A leading landing below the confidence bar
 - **WHEN** a landing leads on conversion but confidence is under 95%
 - **THEN** the verdict SHALL say "Not decided yet" and SHALL NOT present it as a winner
+
+### Requirement: A direct visit to /agent-computer counts for that landing
+
+A direct visit to `/agent-computer` SHALL tag the visitor with the `agent-computer` variant (and a visitor
+id if missing) and record a landing exposure, so its visits and later conversions are counted even when
+the home-page split sends it 0%. Crawlers are not tagged.
+
+#### Scenario: Direct traffic at 0% weight
+
+- **WHEN** a visitor opens `/agent-computer` directly while the home-page split gives it 0%
+- **THEN** the visitor's landing cookie is `agent-computer` and an exposure is recorded for that variant
+
+### Requirement: The first link's ref is credited from any landing
+
+A page opened with `?ref=` SHALL store that ref in a first-party `pw_ref` cookie for 30 days, unless one
+is already stored (first touch wins). `/start` and the dashboard SHALL credit it to the account (set-once
+`ref`, and an offer it names), so a landing whose buttons drop the ref — or a direct sign-in — still
+credits the link that brought the visitor.
+
+#### Scenario: Creator link to a landing, then direct sign-in
+
+- **WHEN** a visitor opens `/agent-computer?ref=creator-evan`, signs in, and opens the dashboard
+- **THEN** the account's ref is `creator-evan`
+

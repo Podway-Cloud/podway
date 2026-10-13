@@ -192,3 +192,16 @@ test.describe("deep-link onboarding (/start)", () => {
     expect(await accountRef(USERS.approved.email)).toBeNull();
   });
 });
+
+test.describe("first-touch ref from ANY landing (the ref cookie)", () => {
+  test("a landing opened with ?ref= credits that ref even when its button drops it", async ({ page }) => {
+    await clearAccountRef(USERS.approved.email);
+    // A creator links to /agent-computer?ref=…; its Start button goes to /signin with no ref.
+    await page.goto("/agent-computer?ref=e2e-creator-cookie");
+    await page.goto("/agent-computer?ref=e2e-later-link"); // a later link never replaces the first touch
+    await login(page, "approved");
+    await page.goto("/dashboard");
+    await expect.poll(() => accountRef(USERS.approved.email)).toBe("e2e-creator-cookie");
+    expect(await accountRef(USERS.approved.email)).toBe("e2e-creator-cookie"); // and it stays
+  });
+});

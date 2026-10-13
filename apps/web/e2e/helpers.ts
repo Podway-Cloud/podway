@@ -108,13 +108,18 @@ export async function acceptCookies(page: Page): Promise<void> {
  */
 export async function login(page: Page, key: UserKey): Promise<void> {
   const u = USERS[key];
+  // Send Origin like a browser does: a page that already set a cookie (the landing A/B or the first-touch
+  // ref cookie) makes these calls "credentialed", and better-auth's CSRF check then needs Origin.
+  const headers = { Origin: `http://localhost:${WEB_PORT}` };
   const signup = await page.request.post("/api/auth/sign-up/email", {
     data: { email: u.email, password: u.password, name: u.name },
+    headers,
     failOnStatusCode: false,
   });
   if (!signup.ok()) {
     const signin = await page.request.post("/api/auth/sign-in/email", {
       data: { email: u.email, password: u.password },
+      headers,
       failOnStatusCode: false,
     });
     if (!signin.ok()) {
@@ -166,7 +171,8 @@ export async function launchPod(
   for (let guard = 0; guard < 6; guard++) {
     // Basics requires a name before Next enables — fill it when the field is present.
     const nameInput = page.locator("#pod-name");
-    if ((await nameInput.count()) > 0 && !(await nameInput.inputValue())) {
+    // Set it whenever it differs: every create path now opens with a default "my <app>" name.
+    if ((await nameInput.count()) > 0 && (await nameInput.inputValue()) !== podName) {
       await nameInput.fill(podName);
     }
     const secretInputs = page.locator('input[type="password"]');

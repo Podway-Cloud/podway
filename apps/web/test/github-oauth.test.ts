@@ -27,11 +27,11 @@ describe("github-oauth", () => {
 
   it("buildAuthorizeUrl carries client_id, repo scope, redirect_uri, state, and no-signup", async () => {
     const { buildAuthorizeUrl } = await import("../lib/github-oauth");
-    const u = new URL(buildAuthorizeUrl("st4te", "https://podway.cloud/api/github/oauth/callback"));
+    const u = new URL(buildAuthorizeUrl("st4te", "https://podway.io/api/auth/callback/github/connect"));
     expect(u.origin + u.pathname).toBe("https://github.com/login/oauth/authorize");
     expect(u.searchParams.get("client_id")).toBe("test-client-id");
     expect(u.searchParams.get("scope")).toContain("repo");
-    expect(u.searchParams.get("redirect_uri")).toBe("https://podway.cloud/api/github/oauth/callback");
+    expect(u.searchParams.get("redirect_uri")).toBe("https://podway.io/api/auth/callback/github/connect");
     expect(u.searchParams.get("state")).toBe("st4te");
     expect(u.searchParams.get("allow_signup")).toBe("false");
   });

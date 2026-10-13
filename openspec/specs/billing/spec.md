@@ -163,6 +163,13 @@ free signup credit. Self-host (no per-pod price) SHALL NOT show this card.
   and sign-in shows "You're setting up <App> — free during early access, no card needed." when the `next` app fits
   the visitor's no-card budget (`apps/web/lib/free-setup-note.ts`)
 
+#### Scenario: A carded early-access owner creates their free pod
+
+- **WHEN** an owner with a card on file, whose grandfathered free pod (`freePodGb`) is not yet used, creates a pod
+  that fits it
+- **THEN** the size step and Review say "Free during early access" (without "no card needed") instead of a price,
+  matching billing, which never charges that pod
+
 ### Requirement: The signup-credit figure has a single source of truth
 
 The advertised signup-credit dollar figure and the amount actually granted SHALL derive from one
@@ -270,3 +277,29 @@ that it is suspended.
 
 - **WHEN** a delinquent account pays or gains enough credit during the grace period
 - **THEN** the grace clock SHALL stop and no suspension SHALL occur
+
+### Requirement: Per-app monthly revenue for the app-maker revenue share
+
+When billing adds a pod to a Stripe subscription it SHALL record a `billing_item` pod event with the
+subscription item id (Stripe invoice lines carry no pod id, and a removed item can no longer be fetched).
+`/admin/revenue?month=YYYY-MM` SHALL show, per app: active pods in the month, paying pods, paid revenue
+(each paid invoice line's share of the cash the invoice actually collected — credit-paid and free pods are
+$0), and the 30% app-maker share (owner, 2026-10-09). Lines that cannot be matched to a pod SHALL show as
+"(unmatched)", never be dropped. Cloud-only.
+
+#### Scenario: A Medium pod paid half by credit
+- **WHEN** a $12 invoice line is on an invoice that collected $6 in cash
+- **THEN** that pod's app gets $6.00 of paid revenue and a $1.80 share
+
+
+### Requirement: Early-access accounts keep one free pod for life
+
+An account created during early access SHALL keep ONE free pod for life — a Mini, or a Small for an
+`email-`/`selfhst-tile-` lead — even after it adds a card: that pod is never a subscription item and never
+counted as owed (a bigger claimed offer wins). Early access ends when `PODWAY_EARLY_ACCESS_ENDED_AT` is set;
+accounts created before that instant stay grandfathered, accounts created after it do not get the pod.
+
+#### Scenario: A grandfathered account adds a card
+
+- **WHEN** an early-access account with a card runs a Mini and a Small
+- **THEN** only the Small is billed, before and after early access ends

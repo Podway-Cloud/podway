@@ -65,6 +65,13 @@ rendered as trusted markup.
 - **THEN** the account's `ref` SHALL be set to `partnerX`, and a later arrival via `?ref=partnerY` for
   the same account SHALL NOT overwrite it
 
+#### Scenario: A link prefetch does not set the ref cookie
+
+- **WHEN** the browser fetches a `?ref=` URL in the background (`Sec-Fetch-Dest: empty`: a Next link prefetch
+  or client-side navigation)
+- **THEN** the first-touch `pw_ref` cookie SHALL NOT be set; only a page load of a `?ref=` URL sets it (Next
+  strips its own router headers before middleware, so they cannot be the signal)
+
 #### Scenario: Ref is copied onto the created pod
 
 - **WHEN** that user creates a pod while their session carries `ref=partnerX`

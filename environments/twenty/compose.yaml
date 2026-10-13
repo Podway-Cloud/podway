@@ -16,7 +16,7 @@ services:
       interval: 5s
       retries: 20
   redis:
-    image: redis
+    image: redis:8
     restart: unless-stopped
     command: ["--maxmemory-policy", "noeviction"]
     healthcheck:

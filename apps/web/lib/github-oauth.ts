@@ -6,7 +6,7 @@ import "server-only";
  * whenever a CLIENT SECRET is configured; the device flow stays the fallback (and the ONLY path on
  * self-host, where the pod runs its own `gh` device login). Reuses the same OAuth app as the device
  * flow (`PODWAY_GITHUB_OAUTH_CLIENT_ID`) — that app now also needs a secret + an Authorization
- * callback URL of `<origin>/api/github/oauth/callback`.
+ * callback URL that is a parent of `<origin>/api/auth/callback/github/connect`.
  */
 
 const CLIENT_ID = process.env.PODWAY_GITHUB_OAUTH_CLIENT_ID;
@@ -14,8 +14,10 @@ const CLIENT_SECRET = process.env.PODWAY_GITHUB_OAUTH_CLIENT_SECRET;
 // `repo` = clone/push private repos; `read:org` = see org-owned private repos (same as the device flow).
 const SCOPE = "repo read:org";
 
-/** The path GitHub redirects back to; must match the OAuth app's Authorization callback URL. */
-export const OAUTH_CALLBACK_PATH = "/api/github/oauth/callback";
+// Under sign-in's callback (/api/auth/callback/github): GitHub accepts any SUB-path of the registered
+// callback URL, so repo-connect works with the one OAuth app sign-in uses ("redirect_uri is not
+// associated", user David, 2026-10). Its own static route wins over better-auth's [...all].
+export const OAUTH_CALLBACK_PATH = "/api/auth/callback/github/connect";
 
 /** The web flow is available only when BOTH the client id and secret are set. Without the secret we
  * fall back to the device flow, so shipping this never breaks an env that hasn't added the secret. */

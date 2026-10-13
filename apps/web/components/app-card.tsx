@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Code2, FolderGit2 } from "lucide-react";
+import { ArrowUpRight, Code2, FolderGit2 } from "lucide-react";
 import type { CatalogEntry } from "@/lib/environments";
 import { categoriesFor, formatStars, formatUpdated } from "@/lib/catalog-tags";
 // Import from the `./tiers` subpath, NOT the package root: the root barrel pulls in server-only
@@ -42,7 +42,7 @@ function TagGlyph({ className }: { className?: string }) {
 /**
  * A single catalog card (selfh.st layout): big logo left, name + one-line description, a divider, then
  * a footer with ★ stars → GitHub, last-updated, and category. The WHOLE card is the launch target (a
- * stretched-link overlay); the name links to the app's site and the ★ link goes to GitHub — both lifted
+ * stretched-link overlay), name included; a small ↗ beside the name opens the app's site and the ★ link goes to GitHub — both lifted
  * above the overlay. Presentational + client so the grid can sort/filter without a server round-trip.
  */
 export default function AppCard({
@@ -63,7 +63,7 @@ export default function AppCard({
   const cost = priceForSize(e.minSize ?? DEFAULT_POD_SIZE);
   return (
     // A div, not an anchor: the launch link is an absolute OVERLAY (a positioned sibling) so the whole
-    // card taps to launch, while the name→site and ★→GitHub links sit above it (relative z-10) and stay
+    // card taps to launch, while the ↗→site and ★→GitHub links sit above it (relative z-10) and stay
     // independently clickable. Nesting anchors would be invalid HTML — hence the overlay pattern.
     <div
       className={
@@ -101,18 +101,21 @@ export default function AppCard({
         )}
         <div className="min-w-0 flex-1">
           <h3 className="text-[17px] font-semibold leading-tight">
-            {e.siteUrl ? (
+            {e.title}
+            {/* The name itself launches (the card overlay) — a name that left podway lost users who
+                clicked it to install. The app's own site is the small arrow, lifted above the overlay. */}
+            {e.siteUrl && (
               <a
                 href={e.siteUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(ev) => ev.stopPropagation()}
-                className="relative z-10 hover:text-[var(--link-accent)] hover:underline"
+                aria-label={`${e.title} website`}
+                title={`${e.title} website`}
+                className="relative z-10 ml-1 inline-flex align-middle text-muted-foreground hover:text-[var(--link-accent)]"
               >
-                {e.title}
+                <ArrowUpRight className="size-3.5" />
               </a>
-            ) : (
-              e.title
             )}
           </h3>
           {e.description && (

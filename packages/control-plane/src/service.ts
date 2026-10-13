@@ -1,6 +1,6 @@
 import path from "node:path";
-import { access } from "node:fs/promises";
-import { randomUUID, createHash } from "node:crypto";
+import { access, readFile } from "node:fs/promises";
+import { randomUUID, createHash, randomBytes } from "node:crypto";
 import {
   resolveWithConfig,
   POD_TIERS,
@@ -37,6 +37,7 @@ import {
   type ClaudeSettings,
 } from "./claude-settings.js";
 import { formatWarnDigest } from "./warn-digest.js";
+import { parseAppHealth } from "./app-watch.js";
 import { createLogger, type Logger } from "@podway/shared/log";
 import { legacyAgentAuthState, type AgentAuthState, type PodAgentState, type PodIssue } from "@podway/shared";
 import { freePodId } from "./billing.js";
@@ -352,6 +353,10 @@ export function reloginSucceeded(exitCode: number, stdout: string): boolean {
   }
 }
 
+/** Shell prefix for app-watch commands: enter the app dir and load its compose project from app.manifest
+ * (a pod with no app.manifest exits 0 with no output, which reads as healthy). */
+const APP_ENV = "cd ~/work 2>/dev/null && [ -f app.manifest ] || exit 0; . ./app.manifest; export COMPOSE_PROJECT_NAME=\"$APP_PROJECT\";";
+
 export class PodService {
   private readonly log: Logger;
   /** Optional: without it the fleet simply does not learn, and every pod climbs the
@@ -456,7 +461,10 @@ export class PodService {
 
     // Validate launch-time secrets against what the env declares, BEFORE any
     // provisioning: only declared keys accepted; required ones must be non-blank.
-    const secrets = this.validateLaunchSecrets(resolved.secrets, opts.secrets);
+    const given = this.validateLaunchSecrets(resolved.secrets, opts.secrets);
+    // `generate: true` secrets the owner left blank get a random value (an app's first admin password).
+    const made = resolved.secrets.filter((d) => d.generate && !given?.[d.key]).map((d) => [d.key, randomBytes(12).toString("hex")] as const);
+    const secrets = given || made.length ? { ...given, ...Object.fromEntries(made) } : undefined;
 
     const id = await this.uniqueSlug();
     const name = opts.name?.trim().slice(0, 60) || null;
@@ -519,6 +527,8 @@ export class PodService {
       configHash: null,
       relentlessHold: false,
       relentlessWake: false,
+      relentlessAutopick: false,
+      appWatch: true,
       updatingSince: null,
       updateQueuedSince: null,
       updateStage: null,
@@ -2134,12 +2144,14 @@ export class PodService {
   async setAgenticBehavior(
     ownerId: string,
     id: string,
-    next: { hold: boolean; wake: boolean },
+    next: { hold: boolean; wake: boolean; autopick?: boolean },
   ): Promise<PodRecord> {
     const rec = await this.owned(ownerId, id);
+    const autopick = next.autopick ?? rec.relentlessAutopick ?? false;
     const updated = await this.store.update(id, {
       relentlessHold: next.hold,
       relentlessWake: next.wake,
+      relentlessAutopick: autopick,
     });
     // Push it to the RUNNING pod, not just the row. The Stop hook reads this flag on every stop, so
     // a change that only landed in the DB would not take effect until the pod next rebooted — a
@@ -2148,7 +2160,7 @@ export class PodService {
     // Best-effort by contract: a suspended or unreachable pod must not fail the mutation. The DB is
     // the source of truth and the pod re-reads the spec on its next boot, so the two converge.
     await this.providerFor(rec.provider)
-      .patchPodSpec?.(id, { relentless: { hold: next.hold, wake: next.wake } })
+      .patchPodSpec?.(id, { relentless: { hold: next.hold, wake: next.wake, autopick } })
       .catch(() => undefined);
     // The rule + skill files follow the switch too (codex-first-class): push the re-gated .claude layer
     // and run podway-refresh in place, so both agents gain/lose them without a restart.
@@ -2263,7 +2275,7 @@ export class PodService {
     // Full handoff budget (default HANDOFF_TIMEOUT_MS, 60s — same as an update), NOT a shortened one:
     // now that the handoff overlaps the multi-minute download, capping it early saves nothing and would
     // only risk cutting off a busy agent mid-note (owner asked why it was shorter, 2026-08-24).
-    const handoffP = requestHandoff({ provider: prov, podId: id, log: this.log, request: T3_HANDOFF_REQUEST })
+    const handoffP = requestHandoff({ provider: prov, podId: id, log: this.log, request: T3_HANDOFF_REQUEST, skipWhenIdle: false })
       .catch(() => undefined)
       .then(() =>
         writeT3HandoffNote({ provider: prov, podId: id, direction: "to-t3", at: new Date().toISOString(), log: this.log }),
@@ -2582,6 +2594,56 @@ export class PodService {
 
   /** Fleet-updates (C): the pod's auto-update opt-out. "off" excludes it from the "update idle pods"
    * bulk action (a pod running a service the owner updates deliberately); "inherit" includes it. */
+  /** App watch on/off for one pod (Settings → Watch app). Owner-scoped. */
+  async setAppWatch(ownerId: string, id: string, on: boolean): Promise<PodRecord> {
+    await this.owned(ownerId, id);
+    return this.store.update(id, { appWatch: on });
+  }
+
+  /** Running app pods with app watch on (an app env ships an app.manifest), with the app's title. */
+  async listWatchedAppPods(): Promise<{ id: string; name: string | null; ownerId: string; app: string }[]> {
+    const root = this.config.environmentsRoot;
+    const out = [];
+    for (const p of await this.store.list()) {
+      if (p.status !== "running" || p.appWatch === false || !isSafeName(p.environmentName)) continue;
+      const dir = path.join(root, p.environmentName);
+      if (!(await access(path.join(dir, "app.manifest")).then(() => true, () => false))) continue;
+      // ponytail: the title by regex, not a full env parse — a missing title falls back to the env name.
+      const yaml = await readFile(path.join(dir, "podway.yaml"), "utf8").catch(() => "");
+      const title = /^\s+title:\s*"?([^"\n]+?)"?\s*$/m.exec(yaml)?.[1] ?? p.environmentName;
+      out.push({ id: p.id, name: p.name, ownerId: p.ownerId, app: title });
+    }
+    return out;
+  }
+
+  /** One app-watch check, run in the pod as `dev`: does the app answer, are its containers running, is
+   * the home disk full? Plain words for the owner's email. An unreachable pod reads as healthy here —
+   * the pod itself being down is the reconciler's job, not an app incident. */
+  async appHealth(id: string): Promise<{ down: string | null; warn: string | null }> {
+    const rec = await this.store.get(id);
+    if (!rec) return { down: null, warn: null };
+    // The app's own compose project + health URL come from its app.manifest, exactly as app-admin.sh
+    // reads them — a bare `docker compose` in ~/work would address a DIFFERENT (empty) project "work".
+    const script =
+      `${APP_ENV} ` +
+      "printf 'http=%s\\n' \"$(curl -s -o /dev/null -m 15 -H 'Accept: text/html' -w '%{http_code}' \"${APP_HEALTH_URL:-http://127.0.0.1:3000/}\")\"; " +
+      "docker compose ps -a --format '{{.Service}} {{.State}} {{.ExitCode}}' 2>/dev/null | awk -v main=\"$APP_SERVICE\" " +
+      "'$2==\"restarting\"||$2==\"dead\"||$2==\"paused\"||($2==\"exited\"&&($3!=0||$1==main)){print \"bad=\"$1\"(\"$2\")\"}'; " +
+      "df -P /home/dev | awk 'NR==2{gsub(\"%\",\"\",$5);print \"disk=\"$5}'";
+    const r = await this.providerFor(rec.provider).exec(id, ["su", "-", "dev", "-c", script]).catch(() => null);
+    if (!r || r.exitCode !== 0) return { down: null, warn: null };
+    return parseAppHealth(r.stdout ?? "");
+  }
+
+  /** The safe fix for a down app: start what is missing, then restart the stack. Volumes (data) are kept. */
+  async restartApp(id: string): Promise<void> {
+    const rec = await this.store.get(id);
+    if (!rec) return;
+    await this.providerFor(rec.provider)
+      .exec(id, ["su", "-", "dev", "-c", `${APP_ENV} docker compose unpause >/dev/null 2>&1; docker compose up -d >/dev/null 2>&1; docker compose restart >/dev/null 2>&1`])
+      .catch(() => undefined);
+  }
+
   async setAutoUpdate(ownerId: string, id: string, autoUpdate: "inherit" | "off"): Promise<PodRecord> {
     await this.owned(ownerId, id);
     return this.store.update(id, { autoUpdate });
@@ -3512,7 +3574,7 @@ export class PodService {
     const result = await provider.refreshConfig(id, {
       claudeFiles: payload.claudeFiles,
       permissions: payload.permissions,
-      relentless: { hold: rec.relentlessHold, wake: rec.relentlessWake },
+      relentless: { hold: rec.relentlessHold, wake: rec.relentlessWake, autopick: rec.relentlessAutopick ?? false },
     });
     // Record the delivered hash so the drift sweep treats the pod as in-sync (skip on a resolve
     // failure — we didn't actually deliver the current layer, so don't claim we did).
@@ -3587,7 +3649,7 @@ export class PodService {
     const result = await prov.refreshConfig(rec.id, {
       claudeFiles: payload.claudeFiles,
       permissions: payload.permissions,
-      relentless: { hold: rec.relentlessHold, wake: rec.relentlessWake },
+      relentless: { hold: rec.relentlessHold, wake: rec.relentlessWake, autopick: rec.relentlessAutopick ?? false },
     });
     // Only record the new hash once the layer was actually delivered; a false record would suppress
     // future retries. `refreshed:false` (image predates the in-pod script) still DELIVERED the bytes,
@@ -3890,7 +3952,7 @@ export class PodService {
         permissions,
         name: rec.name ?? null,
         agentAuth: rec.agentAuth ?? null,
-        relentless: { hold: rec.relentlessHold, wake: rec.relentlessWake },
+        relentless: { hold: rec.relentlessHold, wake: rec.relentlessWake, autopick: rec.relentlessAutopick ?? false },
       },
     ));
     const to = info.imageDigest ?? image.split("@")[1] ?? null;

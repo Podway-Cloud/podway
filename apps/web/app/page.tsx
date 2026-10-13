@@ -77,8 +77,10 @@ const acquisitionJsonLd = {
   ],
 };
 
+// Title/description/OG follow the landing actually served on this request (the live split, or the
+// promote switch) — link previews and search snippets must describe what the visitor sees.
 export async function generateMetadata(): Promise<Metadata> {
-  return (await isSelfhostHomepageEnabled())
+  return (await isSelfhostHomepageEnabled()) || (await assignedVariant()) === "selfhost"
     ? selfhostLandingMetadata("https://podway.io/")
     : acquisitionMetadata;
 }

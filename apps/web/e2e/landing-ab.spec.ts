@@ -20,3 +20,27 @@ for (const [variant, heading] of [
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
   });
 }
+
+test("a DIRECT visit to /agent-computer is counted for that landing (even at 0% of the home split)", async ({ page, context }) => {
+  await page.goto("/agent-computer");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/always-on computer/);
+  const variant = (await context.cookies()).find((c) => c.name === COOKIE)?.value;
+  expect(variant).toBe("agent-computer");
+  const visitor = (await context.cookies()).find((c) => c.name === "pb_landing_visitor")!.value;
+  // The exposure beacon lands in the experiment table under the agent-computer arm.
+  const { Client } = await import("pg");
+  const { readFileSync } = await import("node:fs");
+  const path = await import("node:path");
+  const { dbUrl } = JSON.parse(readFileSync(path.join(process.cwd(), ".e2e-state.json"), "utf8")) as { dbUrl: string };
+  const c = new Client({ connectionString: dbUrl });
+  await c.connect();
+  try {
+    await expect
+      .poll(async () => (await c.query(
+        `select variant from landing_experiment_events where visitor_id = $1 and type = 'landing_exposure'`, [visitor],
+      )).rows.map((r) => r.variant))
+      .toEqual(["agent-computer"]);
+  } finally {
+    await c.end();
+  }
+});

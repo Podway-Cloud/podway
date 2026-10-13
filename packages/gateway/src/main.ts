@@ -2,7 +2,7 @@ import path from "node:path";
 import type { IncomingMessage } from "node:http";
 import { createAuth, getSessionUserId, notifyOps, sendDunningEmail, sendEmail, type AuthEnv } from "@podway/auth";
 import { verifyBridgeToken, PREVIEW_SESSION_COOKIE, BRIDGE_TOKEN_PARAM } from "@podway/auth/bridge-token";
-import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService, FlyCertIssuer, BillingService, DunningService, LoginReminderService, drizzleReminderDeps, PodReports, SYSTEM_SENDER, stripeConfigured } from "@podway/control-plane";
+import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService, FlyCertIssuer, BillingService, DunningService, LoginReminderService, drizzleReminderDeps, AppWatchService, DomainCertWatch, PodReports, SYSTEM_SENDER, stripeConfigured } from "@podway/control-plane";
 import { RelayRegistry } from "./relay-registry.js";
 import {
   IncusProvider,
@@ -12,7 +12,8 @@ import {
   loadIncusConfig,
   type SandboxProvider,
 } from "@podway/provider";
-import { createAppDb, user, eq, isNotNull, pods } from "@podway/db";
+import { createAppDb, user, eq, isNotNull, pods, customDomains as customDomainsTable } from "@podway/db";
+import tls from "node:tls";
 import { credKeyFromEnv } from "@podway/shared/crypto";
 import { offerRamGb } from "@podway/shared";
 import { GatewayServer } from "./server.js";
@@ -322,6 +323,66 @@ async function main(): Promise<void> {
     setTimeout(runDunning, 60_000).unref();
     setInterval(runDunning, dunningMs).unref();
     console.log(`podway-gateway dunning sweep every ${dunningMs}ms`);
+  }
+
+  // App watch (owner, 2026-10-12): Podway checks every running app pod; 2 failed checks in a row →
+  // safe restart, one email to the owner, and the agent is woken to find the cause. See app-watch.ts.
+  const appWatchMs = Number(process.env.PODWAY_APP_WATCH_MS ?? 5 * 60_000);
+  if (appWatchMs > 0) {
+    const appWatch = new AppWatchService({
+      listPods: () => control.listWatchedAppPods(),
+      check: (id) => control.appHealth(id),
+      restart: (id) => control.restartApp(id),
+      sendPodMessage: async (podId, ownerId, body) => {
+        await agentMessages.route({ id: crypto.randomUUID(), ownerId, fromPod: SYSTEM_SENDER, toPod: podId, body });
+      },
+      owner: async (ownerId) => (await db.select({ name: user.name, email: user.email }).from(user).where(eq(user.id, ownerId)))[0] ?? null,
+      sendEmail: (to, subject, content) => sendEmail(to, subject, content),
+      appUrl: reminderAppUrl,
+    });
+    let watching = false;
+    setInterval(() => {
+      if (watching) return; // a slow sweep (restart + settle) never stacks
+      watching = true;
+      void appWatch
+        .sweep()
+        .then((r) => r.restarted.length && console.log("app_watch_restarted", JSON.stringify(r)))
+        .catch((e) => console.error("app_watch_sweep_failed", e))
+        .finally(() => (watching = false));
+    }, appWatchMs).unref();
+    console.log(`podway-gateway app watch every ${appWatchMs}ms`);
+  }
+
+  // Custom-domain certificates (owner, 2026-10-12): a real TLS handshake per active domain, daily; under
+  // 14 days left means Fly's auto-renewal failed — email the owner (domain-cert-watch.ts).
+  const certWatchMs = Number(process.env.PODWAY_DOMAIN_CERT_WATCH_MS ?? 24 * 60 * 60_000);
+  if (certWatchMs > 0) {
+    const certWatch = new DomainCertWatch({
+      listActive: () =>
+        db.select({ id: customDomainsTable.id, hostname: customDomainsTable.hostname, podId: customDomainsTable.podId, ownerId: customDomainsTable.ownerId })
+          .from(customDomainsTable).where(eq(customDomainsTable.status, "active")),
+      probe: (hostname) =>
+        new Promise((resolve) => {
+          const sock = tls.connect({ host: hostname, port: 443, servername: hostname, timeout: 15_000 }, () => {
+            const cert = sock.getPeerCertificate();
+            const ok = sock.authorized;
+            sock.end();
+            resolve(ok && cert?.valid_to ? { validTo: new Date(cert.valid_to) } : { error: String(sock.authorizationError ?? "no certificate") });
+          });
+          sock.on("error", (e) => resolve({ error: e.message }));
+          sock.on("timeout", () => (sock.destroy(), resolve({ error: "no answer on port 443" })));
+        }),
+      owner: async (ownerId) => (await db.select({ name: user.name, email: user.email }).from(user).where(eq(user.id, ownerId)))[0] ?? null,
+      sendEmail: (to, subject, content) => sendEmail(to, subject, content),
+      appUrl: reminderAppUrl,
+    });
+    const runCertWatch = () =>
+      void certWatch.sweep()
+        .then((r) => r.warned.length && console.log("domain_cert_warned", JSON.stringify(r)))
+        .catch((e) => console.error("domain_cert_watch_failed", e));
+    setTimeout(runCertWatch, 5 * 60_000).unref();
+    setInterval(runCertWatch, certWatchMs).unref();
+    console.log(`podway-gateway domain cert watch every ${certWatchMs}ms`);
   }
 
   const reminderMs = Number(process.env.PODWAY_LOGIN_REMINDER_SWEEP_MS ?? 60 * 60_000);

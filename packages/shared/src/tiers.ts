@@ -85,11 +85,36 @@ export const FREE_POD_OFFERS: Record<string, FreePodOffer> = {
   "selfhst-insider": { ramGb: 2, cap: 100, label: "Free for life · selfh.st insider" },
   "noted-jeremy": { ramGb: 4, cap: 100, label: "Free pod · Noted.lol partner" },
   "selfhst-ethan": { ramGb: 4, cap: 100, label: "Free pod · selfh.st partner" },
+  // Creator deal (owner, 2026-10-12): the creator's own Medium is free + 30% of revenue from their ref.
+  // cap 1 = only the FIRST account on the link (the creator, who signs up first) gets the free pod;
+  // their viewers keep the ref (for the revenue share) but get the normal free Mini.
+  "creator-evan": { ramGb: 4, cap: 1, label: "Free pod · Podway creator" },
+  "creator-mike": { ramGb: 4, cap: 1, label: "Free pod · Podway creator" },
+  "creator-rajeev": { ramGb: 4, cap: 1, label: "Free pod · Podway creator" },
 };
 
 /** The free-pod size (GB) an account's claimed offer grants; 0 for none / an unknown key. */
 export function offerRamGb(offer: string | null | undefined): number {
   return (offer && Object.hasOwn(FREE_POD_OFFERS, offer) ? FREE_POD_OFFERS[offer]!.ramGb : 0);
+}
+
+/**
+ * Grandfathered free pod (owner, 2026-10-12): an account created during early access keeps ONE free pod
+ * for life — a Mini (a Small for an email- or selfhst-tile- lead) — even after it adds a card and pays for
+ * more. Early access ends when PODWAY_EARLY_ACCESS_ENDED_AT (ISO date) is set; accounts created before it
+ * stay grandfathered. Server-side only.
+ */
+export function earlyAccessFreeGb(ref: string | null | undefined, createdAt: Date | null | undefined): number {
+  if (!createdAt) return 0;
+  const raw = typeof process !== "undefined" ? process.env?.PODWAY_EARLY_ACCESS_ENDED_AT : undefined;
+  const ended = raw ? Date.parse(raw) : NaN;
+  if (!Number.isNaN(ended) && createdAt.getTime() >= ended) return 0;
+  return LEAD_REF_PREFIXES.some((p) => ref?.startsWith(p)) ? LEAD_RAM_GB : POD_TIERS.mini.memoryGb;
+}
+
+/** The free pod's size (GB) an account gets for life: the bigger of its claimed offer and early access. */
+export function freePodGb(u: { ref?: string | null; offer?: string | null; createdAt?: Date | null }): number {
+  return Math.max(offerRamGb(u.offer), earlyAccessFreeGb(u.ref, u.createdAt));
 }
 
 /** The no-card RAM budget (GB) for an account with this first-touch ref (+ any claimed offer's free pod)

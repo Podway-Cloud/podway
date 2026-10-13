@@ -39,7 +39,7 @@ preview: private
 
 setup:
   - >-
-    if [ ! -f .env ]; then printf 'OUTLINE_IMAGE=%s\nDB_PASSWORD=%s\nSECRET_KEY=%s\nUTILS_SECRET=%s\nMAIN_URL=%s\n' "outlinewiki/outline:latest" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(U=$(podway preview 2>/dev/null | grep -o 'https://[^ )]*' | head -1); echo "${U:-http://localhost:3000}")" > .env; chmod 600 .env; fi
+    if [ ! -f .env ]; then printf 'OUTLINE_IMAGE=%s\nDB_PASSWORD=%s\nSECRET_KEY=%s\nUTILS_SECRET=%s\nMAIN_URL=%s\n' "outlinewiki/outline:1.10.1" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(U=$(podway preview 2>/dev/null | grep -o 'https://[^ )]*' | head -1); echo "${U:-http://localhost:3000}")" > .env; chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - APP_ADMIN_DIR="$PWD" bin/app-admin.sh deploy
 
@@ -65,6 +65,8 @@ kickoff: |
   2. Offer, don't assume: back up now? Keep it to 1-2 sharp questions.
 
   Ongoing duties:
+  - LOG every change you make to the app (config, plugins, fixes, restarts): `APP_ADMIN_DIR=~/work bin/app-admin.sh log "<what>" "<who asked / why>" "<how to undo>"`. The engine logs its own snapshots, upgrades and restores; ~/work/admin-log.md is the owner's record. A weekly report + upkeep job runs on Mondays (podway schedule "Weekly app report").
+  - BEFORE ANY UPGRADE run `APP_ADMIN_DIR=~/work bin/app-admin.sh check-upgrade` and follow its ADVICE (SAFE / WAIT / REVIEW / RISKY = ask the owner). Tell the owner in plain words why you upgrade now or wait.
   - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot`.
   - UPGRADES: NEVER just `docker compose pull`. Use
     `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <tag>` — it snapshots, pulls, health-checks and

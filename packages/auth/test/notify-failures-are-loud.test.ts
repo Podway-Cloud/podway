@@ -57,4 +57,23 @@ describe("a notification that does not go out says so", () => {
     await notifyOps("something broke", { fetchImpl: f as never, token: "t", chatId: "c" });
     expect(errs.some((l) => l.includes("notification_send_failed"))).toBe(true);
   });
+
+  it("ALERTS the ops chat when an email fails — a log line nobody reads is still silent", async () => {
+    vi.stubEnv("TELEGRAM_OPS_BOT_TOKEN", "opsbot");
+    vi.stubEnv("TELEGRAM_OPS_CHAT_ID", "opschat");
+    try {
+      const f = vi.fn(async (url: string) =>
+        new Response(url.includes("gmail") ? "denied" : "{}", { status: url.includes("gmail") ? 401 : 200 }),
+      );
+      await sendApprovalEmail(
+        { name: "Ada", email: "ada@x.com" },
+        { ...CFG, fetchImpl: f as never, tokenFn: async () => "tok" },
+      );
+      const tg = f.mock.calls.filter(([u]) => String(u).includes("api.telegram.org/botopsbot"));
+      expect(tg).toHaveLength(1);
+      expect(String((tg[0] as unknown[])[1] && (tg[0][1] as RequestInit).body)).toContain("ada@x.com");
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

@@ -42,6 +42,8 @@ function sample(id: string, ownerId: string, over: Partial<PodRecord> = {}): Pod
     // Durable image-update progress (migration 0021).
     relentlessHold: true,
     relentlessWake: false,
+    relentlessAutopick: false,
+    appWatch: true,
     // Non-payment safety-net marker (migration 0062).
     nonpaymentSuspendedAt: "2026-01-02T03:04:05.000Z",
     claudeLoginExpiresAt: "2026-02-03T04:05:06.000Z",

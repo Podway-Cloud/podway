@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, History, MessageSquare, ShieldCheck, Wrench } from "lucide-react";
+import { Activity, Check, DatabaseBackup, History, MessageSquare, ShieldCheck, Wrench } from "lucide-react";
 import LandingAccountLink from "@/components/landing-account-link";
 import { TrackedLink } from "../landing-examples";
 import type { getCurrentUser } from "@/lib/session";
@@ -21,6 +21,8 @@ const PRICING_COPY: Record<string, string> = {
 const INCLUDED = [
   "Always on, 24/7",
   "Your AI admin, in Claude",
+  "App checked every 5 minutes",
+  "Nightly encrypted backups",
   "Snapshot before every upgrade",
   "Automatic rollback after a failed upgrade",
   "Custom domain + automatic HTTPS",
@@ -44,8 +46,20 @@ const SUPPORT = [
     text: "Add passwords and API keys in pod settings so your admin can use them without pasting them into a conversation.",
   },
   {
+    // Both true since 2026-10-12: app watch (control-plane/src/app-watch.ts) and the nightly off-server
+    // backup (scripts/incus/backup-to-storagebox.sh, restore proven).
+    icon: Activity,
+    title: "Watches your app",
+    text: "Podway checks it every 5 minutes. If it's down, it restarts it and emails you what happened.",
+  },
+  {
+    icon: DatabaseBackup,
+    title: "Nightly backups",
+    text: "Your app's data is backed up every night to separate storage, encrypted.",
+  },
+  {
     icon: History,
-    title: "Back up and roll back",
+    title: "Upgrade safely",
     text: "Before upgrades, it snapshots data and settings. If the new version fails its health check, it restores the previous version and data.",
   },
 ];
@@ -90,6 +104,7 @@ export default function SelfhostLanding({
 
   return (
     <div className={styles.landing}>
+      <p className={styles.offerBanner}>{freeLine}</p>
       <header className={styles.wrap}>
         <div className={styles.top}>
           <Link className={styles.brand} href="/" aria-label="Podway home">
@@ -109,9 +124,6 @@ export default function SelfhostLanding({
       <main>
         <section className={`${styles.wrap} ${styles.hero}`}>
           <div>
-            <p className={styles.offer}>
-              {freeLine}
-            </p>
             <p className={styles.eyebrow}>open-source apps · hosted on Podway</p>
             <h1>
               Self-host anything.<br />
@@ -119,7 +131,7 @@ export default function SelfhostLanding({
             </h1>
             <p className={styles.sub}>
               Choose an app like n8n, Ghost or Umami. Podway runs it 24/7 in a cloud pod.
-              Your AI admin handles setup, backups and upgrades, helps investigate problems and steer your app.
+              Your AI admin handles setup, snapshots and upgrades, helps investigate problems and steer your app.
             </p>
             <div className={styles.cta}>
               <TrackedLink className={styles.btnPrimary} href={primaryHref} eventName="landing_primary_cta" item="selfhost-hero">
@@ -198,8 +210,8 @@ export default function SelfhostLanding({
         <section id="trust" className={styles.band}>
           <div className={styles.wrap}>
             <p className={styles.eyebrow}>features</p>
-            <h2 className={styles.secH}>From setup to the next fix.</h2>
-            <p className={styles.secP}>Ask in Claude when you need a change, help with a problem or a safer upgrade.</p>
+            <h2 className={styles.secH}>A sysadmin, without hiring one.</h2>
+            <p className={styles.secP}>Setup, monitoring, backups, safe upgrades and fixes, handled. Just ask in Claude.</p>
             <div className={styles.steps}>
               {SUPPORT.map(({ icon: Icon, title, text }) => (
                 <article key={title} className={styles.step}>

@@ -16,6 +16,12 @@ const REF_RE = /^[A-Za-z0-9_.-]{1,128}$/;
 
 /** Validate + normalize a `ref` value from a query param, cookie, or stored column. Returns null
  * for anything missing, oversized, or outside the allowed charset. */
+/** First-touch ref cookie (2026-10-13): any page opened with ?ref= remembers it, so a landing whose
+ * buttons do not carry the ref (/, /selfhost, /agent-computer) still credits the link that brought
+ * the visitor. Set once (first touch wins), 30 days; read when the account is ready (/start, dashboard). */
+export const REF_COOKIE = "pw_ref";
+export const REF_COOKIE_MAX_AGE = 30 * 24 * 3600;
+
 export function sanitizeRef(raw: string | null | undefined): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim().slice(0, REF_MAX_LEN);

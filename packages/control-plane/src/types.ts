@@ -56,6 +56,9 @@ export type PodEventType =
   // An out-of-memory kill. meta: { victim, rss, victimIsAgent }. Even when the agent
   // survives (a child build/browser process was the victim), it is worth recording.
   | "oom_killed"
+  /** Billing added this pod to the owner's Stripe subscription; meta.subscriptionItem maps invoice lines
+   * back to the pod (Stripe lines carry no pod id) — the per-app revenue report needs it. */
+  | "billing_item"
   | "update_started"
   | "update_stage"
   | "update_failed"
@@ -147,6 +150,10 @@ export interface PodRecord {
    */
   relentlessHold: boolean;
   relentlessWake: boolean;
+  /** "Always choose recommended" — see packages/pod-agent/src/autopilot.ts. */
+  relentlessAutopick: boolean;
+  /** App watch (control-plane/src/app-watch.ts): Podway health-checks this app pod. */
+  appWatch?: boolean;
   /** ISO time this pod was auto-suspended by the non-payment safety net (null otherwise). Set so the
    * dunning sweep resumes exactly the pods it suspended and never touches a manual/owner suspend. */
   nonpaymentSuspendedAt: string | null;

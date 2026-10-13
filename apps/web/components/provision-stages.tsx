@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 /**
  * The staged "your pod is being created" checklist (machine → boot → agent),
  * shown both during the pre-pod launch call and on the setup page's "creating"
- * step. Times are approximate — real machine events are a follow-up; `sinceMs`
- * lets the setup page anchor progress to the pod's createdAt so a refresh keeps
+ * step. Times are approximate — real machine events are a follow-up; `startedAt`
+ * (epoch ms) lets the setup page anchor progress to the pod's createdAt so a refresh keeps
  * the stages roughly in place rather than restarting. The active stage shows a
  * live elapsed counter; the open-ended last stage ("Starting <agent>") also shows
  * a hint, since first boot legitimately takes up to ~a minute and a silent
@@ -36,22 +36,26 @@ function stages(agentName: string, appName?: string): { label: string; doneAt: n
 }
 
 export default function ProvisionStages({
-  sinceMs = 0,
+  startedAt,
   agent,
   appName,
 }: {
-  sinceMs?: number;
+  /** Epoch ms the build started; default = mount time. Read on the client only (no hydration drift). */
+  startedAt?: number;
   /** Active agent id, so the last stage names the right CLI. */
   agent?: string;
   /** When this pod is a `kind: app` env, the app's title — the last stage becomes "Deploying <app>". */
   appName?: string;
 }) {
   const STAGES = stages(agent === "codex" ? "Codex" : "Claude", appName);
-  const [secs, setSecs] = useState(Math.floor(sinceMs / 1000));
+  const [secs, setSecs] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setSecs((s) => s + 1), 1000);
+    const t0 = startedAt ?? Date.now();
+    const tick = () => setSecs(Math.max(0, Math.floor((Date.now() - t0) / 1000)));
+    tick();
+    const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [startedAt]);
   const firstPending = STAGES.findIndex((s) => s.doneAt === null || secs < s.doneAt);
   // Elapsed within the active stage (since the previous stage's doneAt).
   const prevDoneAt = firstPending > 0 ? (STAGES[firstPending - 1].doneAt ?? 0) : 0;

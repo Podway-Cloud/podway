@@ -11,6 +11,8 @@ The page SHALL pair the headline "Self-host anything. Your AI admin runs it." wi
 that identify Podway's cloud as the hosting location. Its availability at `/selfhost` SHALL NOT
 depend on whether administrators also promote it to `/`.
 All FAQ questions and answers SHALL be visible in a static Q&A layout without collapse controls.
+The public sitemap SHALL list only indexable pages (no /signin) without a fake "now" lastmod, and every
+web deploy SHALL ping IndexNow with the sitemap URLs (best-effort; key file served from the site root).
 The example Claude conversation SHALL show realistic jobs on an app that is ALREADY installed (never
 "deploy it" — owner, 2026-10-08), one scene per app (today: Uptime Kuma monitoring, an n8n
 Stripe→Slack automation, a Ghost upgrade that fails and rolls back), in plain words, one scene at a
@@ -113,6 +115,12 @@ the first viewport.
 - **THEN** the first viewport SHALL identify the build outcome, handled infrastructure setup,
   primary access CTA, and representative conceptual proof without claiming that every user action
   or credential step disappears
+
+#### Scenario: Search engines index /agent-computer
+
+- **WHEN** a crawler reads `https://podway.io/agent-computer` or `sitemap.xml`
+- **THEN** the page SHALL be indexable with its own URL as canonical, and SHALL be listed in the sitemap
+  (owner, 2026-10-13; it was noindex with canonical "/" while it was only an experiment arm)
 
 #### Scenario: Visitor reads the agent-computer first viewport
 - **GIVEN** the `agent-computer` variant is rendered

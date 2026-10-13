@@ -3753,7 +3753,10 @@ export class AgentServer {
     for (const ws of this.clients) ws.terminate();
     this.clients.clear();
     await new Promise<void>((resolve) => this.wss.close(() => resolve()));
-    await new Promise<void>((resolve) => this.http.close(() => resolve()));
+    // http.close() waits for EVERY open connection to end; a keep-alive client never does.
+    const closed = new Promise<void>((resolve) => this.http.close(() => resolve()));
+    this.http.closeAllConnections();
+    await closed;
     await this.session.killSession();
   }
 }

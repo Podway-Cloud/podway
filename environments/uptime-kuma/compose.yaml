@@ -12,5 +12,7 @@ services:
     ports: [ "3000:3001" ]
     # SQLite + config live here (survives restart + image update).
     volumes: [ "kuma:/app/data" ]
+    # v2 otherwise opens on a "choose your database" page; SQLite is what this pod uses.
+    environment: [ "UPTIME_KUMA_DB_TYPE=sqlite" ]
 volumes:
   kuma: {}

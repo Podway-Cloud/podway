@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
-import { createTestDb, user, billingAccounts, creditGrants, eq, type Database } from "@podway/db";
+import { createTestDb, user, billingAccounts, creditGrants, podEvents, eq, type Database } from "@podway/db";
 import type Stripe from "stripe";
 import { BillingService, REFERRAL_CENTS } from "../src/billing.js";
 
@@ -370,3 +370,46 @@ describe("syncSubscription — the charge orchestration", () => {
     expect(r).toMatchObject({ items: 0 });
   });
 });
+
+describe("per-app revenue support (app-maker revenue share, 2026-10-09)", () => {
+  const prices = { list: async ({ lookup_keys }: { lookup_keys: string[] }) => ({ data: lookup_keys.map((lk) => ({ lookup_key: lk, id: `price_${lk}` })) }), create: vi.fn() };
+
+  it("records which Stripe subscription item bills which pod (Stripe invoice lines carry no pod id)", async () => {
+    const db = await freshDb();
+    await seedUser(db, "u1");
+    await seedAccount(db, "u1", "cus_1", true);
+    const stripe = fakeStripe({
+      prices,
+      subscriptions: {
+        list: async () => ({ data: [] }),
+        create: async (p: { items: { metadata: { podId: string } }[] }) => ({
+          id: "sub_1",
+          items: { data: p.items.map((it, i) => ({ id: `si_${i}`, metadata: it.metadata })) },
+        }),
+      },
+    });
+    await new BillingService(db, stripe).syncSubscription("u1", [{ podId: "pod-a", size: "s", status: "running" }]);
+    const rows = await db.select().from(podEvents).where(eq(podEvents.type, "billing_item"));
+    expect(rows.map((r) => ({ pod: r.podId, owner: r.ownerId, meta: r.meta }))).toEqual([{ pod: "pod-a", owner: "u1", meta: { subscriptionItem: "si_0" } }]);
+  });
+
+  it("paid lines count only the CASH collected (credit-paid share is $0)", async () => {
+    const db = await freshDb();
+    const page = (data: unknown[]) => ({ autoPagingToArray: async () => data });
+    const stripe = fakeStripe({
+      invoices: {
+        list: () => page([
+          // $7 Small fully paid by card; $12 Medium where $6 came from credit (amount_paid 600 of 1200)
+          { total: 700, amount_paid: 700, lines: { data: [{ amount: 700, parent: { subscription_item_details: { subscription_item: "si_a" } } }] } },
+          { total: 1200, amount_paid: 600, lines: { data: [{ amount: 1200, parent: { subscription_item_details: { subscription_item: "si_b" } } }] } },
+          { total: 400, amount_paid: 0, lines: { data: [{ amount: 400, parent: { subscription_item_details: { subscription_item: "si_c" } } }] } },
+        ]),
+      },
+      subscriptions: { list: () => page([{ items: { data: [{ id: "si_a", metadata: { podId: "pod-a" } }] } }]) },
+    });
+    const r = await new BillingService(db, stripe).paidLinesBetween(new Date("2026-10-01"), new Date("2026-11-01"));
+    expect(r.lines).toEqual([{ item: "si_a", cashCents: 700 }, { item: "si_b", cashCents: 600 }, { item: "si_c", cashCents: 0 }]);
+    expect([...r.itemPods]).toEqual([["si_a", "pod-a"]]);
+  });
+});
+

@@ -633,3 +633,75 @@ the owner decides. A counter reset (VM restart) SHALL NOT produce an alert.
 - **GIVEN** a running pod at near-100% CPU
 - **WHEN** 2 hours pass
 - **THEN** exactly one ops alert names the pod, its owner and a link to the admin pod page
+
+### Requirement: App watch — Podway checks app pods, restarts a down app, and tells the owner
+
+The gateway SHALL check every running app pod (an env with an `app.manifest`) whose `app_watch` is on
+(default on; the owner switches it per pod in Settings → Watch app) every 5 minutes, in the pod as `dev`,
+using the app's own compose project from its `app.manifest`: the app page answers (no answer or a 5xx is
+down), no container is restarting/dead/paused/crashed, and the home disk is under 90%. Two failed checks
+in a row SHALL trigger the safe fix (unpause, start missing, restart the stack; data volumes kept), a
+re-check, ONE email to the owner (what broke, what was done, back or not), and a message that wakes the
+agent to find the root cause. A restart that did not fix it SHALL send one "back up" email on recovery.
+A full disk SHALL warn (email + agent message) at most once a day and never restart. Incident state is in
+memory (a gateway restart during an outage may repeat one email).
+
+#### Scenario: A hung app is restarted and the owner is emailed
+
+- **WHEN** an app pod's page stops answering for two checks in a row
+- **THEN** Podway restarts the app, re-checks, emails the owner "<App> was down — Podway restarted it",
+  and messages the agent to find the cause; no further email while it stays healthy
+
+### Requirement: Custom-domain certificate watch
+
+The gateway SHALL, daily, complete a real TLS handshake with every active custom domain and email the
+owner (at most once a day per domain) when the certificate is invalid, expired, or has under 14 days left
+(Fly renews ~30 days ahead, so this means renewal failed).
+
+#### Scenario: Renewal failed
+
+- **WHEN** an active custom domain's certificate has 3 days left
+- **THEN** the owner gets one email that day naming the domain and what to do; none once it renews
+
+### Requirement: App admin log, weekly upkeep and report
+
+Every app pod's engine (`app-admin.sh`) SHALL keep `~/work/admin-log.md`: each deploy, snapshot, upgrade
+(and rollback), restore, upkeep, and each change the agent logs with `app-admin.sh log`, with time, why
+and how to undo it. `upkeep` SHALL reclaim only rebuildable space (dangling images, build cache,
+snapshots past the newest 10 and older than 14 days) and VACUUM ANALYZE Postgres; `report` SHALL print
+health, version, snapshots, disk and the week's changes. First deploy SHALL register a durable
+`podway schedule` job, "Weekly app report" (Mondays 09:00 UTC), that runs upkeep + report and sends the
+owner one short report with upgrade advice; it never upgrades.
+
+#### Scenario: A change is recorded with its undo
+
+- **WHEN** the agent changes an app setting at the owner's request and logs it
+- **THEN** `admin-log.md` gains a line with the time, the change, who asked, and how to undo it
+
+### Requirement: Smart updates — upgrade advice before any app upgrade
+
+`app-admin.sh check-upgrade` SHALL read the app's GitHub releases (its `sourceUrl`) and print the running
+version, the newer stable releases with their age, and ONE advice line: UP TO DATE; RISKY (a new major —
+ask the owner); WAIT (nothing settled yet: a release settles at 7 days, a patch at 2); REVIEW (open
+upgrade/regression issues name the candidate — listed); or SAFE (with the exact `safe-upgrade` command).
+It never changes anything. App kickoffs SHALL run it before any upgrade and explain the decision to the
+owner; the weekly app report SHALL include it.
+
+#### Scenario: A brand-new release
+
+- **WHEN** the newest release of the app is 0 days old
+- **THEN** the advice is WAIT, and the admin tells the owner it waits for a fix release
+
+### Requirement: Fast, quiet restarts — no handoff for an idle agent, a pod-agent that stops at once
+
+Before an update, resize or suspend, the control plane SHALL skip the handoff request when the agent has
+been idle at least 3 minutes (nothing in flight: no wait, nothing typed into the owner's chat); a working
+agent still gets its full handoff budget, and the T3 Code yield always asks. The pod-agent SHALL exit
+within 3 s of SIGTERM (it drops open connections instead of waiting for them), and its unit SHALL cap a
+hung stop at 15 s — measured 2026-10-13: a plain stop went from 90 s (systemd's timeout, then SIGKILL)
+to 1.8 s.
+
+#### Scenario: Updating an idle pod
+
+- **WHEN** the owner updates a pod whose agent has been idle for 10 minutes
+- **THEN** no handoff line is typed, the update starts at once, and the pod stops in a few seconds

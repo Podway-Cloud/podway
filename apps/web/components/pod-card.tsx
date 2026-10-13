@@ -111,6 +111,8 @@ export default function PodCard({
   const { confirm, dialog } = useConfirm();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // No thumbnail yet (204) or a failed capture → no image box at all, never a broken-image icon.
+  const [shotFailed, setShotFailed] = useState(false);
   const display = name?.trim() || slug;
   // Lifecycle from the live poll when we have it (keeps the card current between full
   // reloads — an update starting reflects on the next poll), else the server-rendered
@@ -293,7 +295,7 @@ export default function PodCard({
       className={cn(
         // [-webkit-touch-callout:none]: no iOS link-preview pop-up on long-press (that is the long-press
         // gesture we use to pick the card up). touch-manipulation: no double-tap zoom delay on taps.
-        "relative cursor-pointer select-none touch-manipulation overflow-hidden rounded-2xl border border-border bg-card transition-[colors,transform,box-shadow] [-webkit-touch-callout:none] hover:border-primary/55 has-[a:focus-visible]:border-primary",
+        "@container relative cursor-pointer select-none touch-manipulation overflow-hidden rounded-2xl border border-border bg-card transition-[colors,transform,box-shadow] [-webkit-touch-callout:none] hover:border-primary/55 has-[a:focus-visible]:border-primary",
         drag?.dragging && "z-10 scale-[1.02] opacity-95 shadow-2xl ring-2 ring-primary/40",
         state.ribbon && "border-destructive/40",
       )}
@@ -335,10 +337,45 @@ export default function PodCard({
         </button>
 
         <div className="pointer-events-none min-w-0 flex-1">
-          {/* Header: name (+ update badge) on the left, state pill on the right. */}
-          <div className="flex items-start justify-between gap-3">
+          {/* Header: name, then the state pill, then any update badge — all on the left. */}
+          <div className="flex items-start gap-3">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="break-words text-[15.5px] font-semibold">{display}</span>
+              {/* Status pill right after the name (owner, 2026-10-11) — reads as part of the title. */}
+              {state.chip ? (
+                <span
+                  data-testid="pod-status"
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11.5px] font-semibold",
+                    state.chip.className,
+                  )}
+                >
+                  {state.chip.pulse && <span className={cn("size-1.5 animate-pulse rounded-full", state.chip.dot)} aria-hidden />}
+                  {state.chip.label}
+                </span>
+              ) : codexChip ? (
+                <span
+                  data-testid="pod-status"
+                  title="Codex activity (inferred from its rollout log)"
+                  className={cn(
+                    "inline-flex shrink-0 items-center rounded-full border border-transparent px-2.5 py-0.5 text-[11.5px] font-semibold",
+                    codexChip.className,
+                  )}
+                >
+                  {codexChip.label}
+                </span>
+              ) : status === "running" && !updating && !live ? (
+                // First paint, before the live agent signal lands: a neutral skeleton, NOT the
+                // lifecycle word "Running" — which would otherwise flash to Idle/Working a beat
+                // later once the poll returns. Keeps the pod-status testid so nothing regresses.
+                <span
+                  data-testid="pod-status"
+                  aria-hidden
+                  className="inline-flex h-[22px] w-16 shrink-0 animate-pulse items-center rounded-full border border-border bg-surface-2"
+                />
+              ) : (
+                <StatusBadge status={updating ? "updating" : status} />
+              )}
               {/* Only on a RUNNING pod — the badge is a call to update, which you can't act on for a
                   suspended/waking pod (a suspended pod picks up the image on its next resume anyway,
                   so surfacing it there is just noise). */}
@@ -358,40 +395,6 @@ export default function PodCard({
                 </span>
               )}
             </div>
-            {state.chip ? (
-              <span
-                data-testid="pod-status"
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11.5px] font-semibold",
-                  state.chip.className,
-                )}
-              >
-                {state.chip.pulse && <span className={cn("size-1.5 animate-pulse rounded-full", state.chip.dot)} aria-hidden />}
-                {state.chip.label}
-              </span>
-            ) : codexChip ? (
-              <span
-                data-testid="pod-status"
-                title="Codex activity (inferred from its rollout log)"
-                className={cn(
-                  "inline-flex shrink-0 items-center rounded-full border border-transparent px-2.5 py-0.5 text-[11.5px] font-semibold",
-                  codexChip.className,
-                )}
-              >
-                {codexChip.label}
-              </span>
-            ) : status === "running" && !updating && !live ? (
-              // First paint, before the live agent signal lands: a neutral skeleton, NOT the
-              // lifecycle word "Running" — which would otherwise flash to Idle/Working a beat
-              // later once the poll returns. Keeps the pod-status testid so nothing regresses.
-              <span
-                data-testid="pod-status"
-                aria-hidden
-                className="inline-flex h-[22px] w-16 shrink-0 animate-pulse items-center rounded-full border border-border bg-surface-2"
-              />
-            ) : (
-              <StatusBadge status={updating ? "updating" : status} />
-            )}
           </div>
 
           <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
@@ -461,21 +464,38 @@ export default function PodCard({
             </div>
           )}
 
-          {/* Divider + footer: preview truth on the left (truncates), actions pinned
-              right. NO wrap — on a phone the status shrinks rather than dropping the
-              buttons onto a second, left-aligned line. */}
-          {actions && (
-            <div className="pointer-events-auto relative z-[2] mt-3.5 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
-              <span className="min-w-0 truncate text-[12.5px] text-muted-foreground">{previewStatus}</span>
-              <div className="flex shrink-0 items-center gap-2">{actions}</div>
-            </div>
-          )}
-          {error && (
-            <p className="pointer-events-auto relative z-[2] mt-2 truncate text-xs text-destructive" title={error}>
-              {error}
-            </p>
-          )}
         </div>
+        {/* Preview thumbnail on the right — only when the CARD is wide enough (container query, so a
+            two-column grid on a laptop doesn't squeeze it) and the app is really serving. The pod shoots
+            its own app at 1200×750, so the frame is 16:10: the whole shot fits, nothing cropped. */}
+        {previewLive && status === "running" && !updating && !shotFailed && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/pods/${slug}/preview-shot`}
+            alt=""
+            loading="lazy"
+            onError={() => setShotFailed(true)}
+            className="hidden aspect-[16/10] w-[208px] shrink-0 self-start rounded-lg border border-border/70 bg-surface-2 object-cover object-top @[620px]:block"
+          />
+        )}
+      </div>
+      {/* Footer spans the FULL card width (below the thumbnail too), so the actions sit at the right
+          edge; left padding lines it up with the text column (card 18px + grip + gap). */}
+      <div className="pointer-events-none relative z-[1] -mt-3 pb-3 pl-[46px] pr-[18px]">
+        {/* Divider + footer: preview truth on the left (truncates), actions pinned
+            right. NO wrap — on a phone the status shrinks rather than dropping the
+            buttons onto a second, left-aligned line. */}
+        {actions && (
+          <div className="pointer-events-auto relative z-[2] mt-3.5 flex items-center justify-between gap-2 border-t border-border/70 pt-3">
+            <span className="min-w-0 truncate text-[12.5px] text-muted-foreground">{previewStatus}</span>
+            <div className="flex shrink-0 items-center gap-2">{actions}</div>
+          </div>
+        )}
+        {error && (
+          <p className="pointer-events-auto relative z-[2] mt-2 truncate text-xs text-destructive" title={error}>
+            {error}
+          </p>
+        )}
       </div>
       {dialog}
     </li>

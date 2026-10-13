@@ -29,6 +29,10 @@ const DEFAULT_INTERVAL_MS = 30_000;
 /** A run that started but hasn't reported a terminal event in this long is
  * presumed stalled (dead-man). Generous — real routines can be slow. */
 const DEFAULT_STALL_GRACE_MS = 30 * 60_000;
+/** A due job deferred this long ONLY because the agent is busy is typed in anyway: Claude queues it as
+ * the next message. A pod that never goes idle (a turn waiting on background agents) starved every
+ * job for 19 h (podway GTM, 2026-10-13). Never applies while the agent waits on the owner. */
+const BUSY_FORCE_MS = 30 * 60_000;
 
 export type JobMode = "brief" | "watch" | "routine";
 
@@ -67,6 +71,8 @@ interface JobsConfig {
 interface SchedulerState {
   jobs: Record<string, { ranDates?: Record<string, string[]>; lastRunAt?: string }>;
   stallAlerted?: string[];
+  /** When the current run of busy-only deferrals began (ISO). Cleared when a job fires. */
+  busySince?: string;
 }
 
 interface RunEvent {
@@ -313,10 +319,19 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
 
   // 1) Fire the earliest-due job (one per tick).
   if (due.length > 0) {
-    if (!canInject) {
+    // Busy (working), not waiting on the owner: after BUSY_FORCE_MS, type it in as a queued message.
+    const busyOnly = (s.status === "busy" || s.status === "shell") && !s.waitingFor;
+    if (!canInject && busyOnly) {
+      state.busySince ??= now().toISOString();
+      writeJson(opts.statePath, state, opts.uid, opts.gid);
+    }
+    const forced = !canInject && busyOnly && now().getTime() - Date.parse(state.busySince!) >= BUSY_FORCE_MS;
+    if (!canInject && !forced) {
       log.info("ops_run_deferred", { due: due.map((d) => d.job.id), status: s.status });
       return { fired: false, reason: "deferred" };
     }
+    delete state.busySince;
+    if (forced) log.info("ops_run_forced_busy", { jobId: due[0].job.id });
     const { job, markTime } = due[0];
     const runId = makeRunId(job.id);
     await inject(runTrigger(job, runId));
@@ -330,6 +345,11 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
     appendEvent(opts, { runId, jobId: job.id, jobName: job.name, event: "started", at: now().toISOString() });
     log.info("ops_run_injected", { jobId: job.id, runId, mode: job.mode });
     return { fired: true, kind: "run", jobId: job.id, runId };
+  }
+
+  if (state.busySince) {
+    delete state.busySince; // nothing due: a later job starts a fresh 30-min clock
+    writeJson(opts.statePath, state, opts.uid, opts.gid);
   }
 
   // 2) No job due → dead-man: a run that started but never reported back.

@@ -711,6 +711,38 @@ describe("pod-base runtime-literacy layer", () => {
     });
   });
 
+  describe("codex standalone pin: a CUT-SHORT binary is replaced (podway GTM, 2026-10-12)", () => {
+    it("replaces a pinned release whose binary differs from the image's, via a temp dir", async () => {
+      const src = await fs.readFile(initSh, "utf8");
+      const after = src.split(">>> podway:codex-standalone-pin")[1]!;
+      const block = after.slice(after.indexOf("\n") + 1).split("<<< podway:codex-standalone-pin")[0];
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "podway-pin-trunc-"));
+      try {
+        const srcTree = path.join(dir, "src", "standalone");
+        const dst = path.join(dir, "dst", "standalone");
+        const rel = "0.162.1-x86_64-unknown-linux-musl";
+        for (const root of [srcTree, dst]) {
+          await fs.mkdir(path.join(root, "releases", rel, "bin"), { recursive: true });
+          await fs.symlink("bin/codex", path.join(root, "releases", rel, "codex"));
+        }
+        await fs.writeFile(path.join(srcTree, "releases", rel, "bin", "codex"), "#!/bin/sh\necho full binary\n", { mode: 0o755 });
+        // An interrupted copy: the file exists and is executable, but it is cut short.
+        await fs.writeFile(path.join(dst, "releases", rel, "bin", "codex"), "#!/bin/sh\necho fu", { mode: 0o755 });
+        await fs.symlink(`releases/${rel}`, path.join(dst, "current"));
+        const script = path.join(dir, "pin.sh");
+        await fs.writeFile(script, `#!/usr/bin/env bash\nset -u\n${block}\n`);
+        execFileSync("bash", [script], {
+          env: { ...process.env, CODEX_SA_SRC: srcTree, CODEX_SA_DST: dst, CODEX_SA_OWNER: os.userInfo().username, CODEX_SA_PIN: rel },
+        });
+        expect(await fs.readFile(path.join(dst, "releases", rel, "bin", "codex"), "utf8")).toContain("full binary");
+        // No temp dir is left behind.
+        expect((await fs.readdir(path.join(dst, "releases"))).filter((n) => n.startsWith("."))).toEqual([]);
+      } finally {
+        await fs.rm(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
   describe("pb_pid_alive — a pidfile from a previous boot never counts (makore.app prod tunnel)", () => {
     it("live pid + pidfile older than boot → NOT alive; written this boot → alive", async () => {
       const src = await fs.readFile(initSh, "utf8");

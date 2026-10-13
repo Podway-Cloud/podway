@@ -301,11 +301,20 @@ CODEX_SA_PIN_FILE="${CODEX_SA_PIN_FILE:-/home/dev/.config/podway/codex-pin}"
 CODEX_SA_PIN="${CODEX_SA_PIN:-$(cat "$CODEX_SA_PIN_FILE" 2>/dev/null | head -1)}"
 [ -n "$CODEX_SA_PIN" ] || CODEX_SA_PIN="$(ls -1 "$CODEX_SA_SRC/releases" 2>/dev/null | head -1)"
 if [ -n "$CODEX_SA_PIN" ] && [ -d "$CODEX_SA_DST/releases" ]; then
-  # Present means RUNNABLE, not "the directory exists": a release that lost its bin/ (GTM) passed the
-  # old -d check forever. Replace a broken pinned release with the image's copy.
-  if [ ! -x "$CODEX_SA_DST/releases/$CODEX_SA_PIN/codex" ] && [ -d "$CODEX_SA_SRC/releases/$CODEX_SA_PIN" ]; then
-    rm -rf "$CODEX_SA_DST/releases/$CODEX_SA_PIN"
-    cp -a "$CODEX_SA_SRC/releases/$CODEX_SA_PIN" "$CODEX_SA_DST/releases/$CODEX_SA_PIN" 2>/dev/null || true
+  # Present means IDENTICAL to the image's copy, not "the directory exists" or "it is executable": a
+  # release that lost its bin/ (GTM, 2026-09) passed the old -d check forever, and an interrupted copy
+  # left a cut-short binary that is still executable and segfaults (GTM, 2026-10-12). So compare the
+  # binary with the image's, and copy through a temp dir + one rename — never into the live path.
+  _sa_src="$CODEX_SA_SRC/releases/$CODEX_SA_PIN" _sa_dst="$CODEX_SA_DST/releases/$CODEX_SA_PIN"
+  if [ -d "$_sa_src" ] && ! cmp -s "$_sa_src/bin/codex" "$_sa_dst/bin/codex" 2>/dev/null; then
+    _sa_tmp="$CODEX_SA_DST/releases/.$CODEX_SA_PIN.tmp.$$"
+    rm -rf "$_sa_tmp"
+    if cp -a "$_sa_src" "$_sa_tmp" 2>/dev/null && cmp -s "$_sa_src/bin/codex" "$_sa_tmp/bin/codex"; then
+      chown -R "$CODEX_SA_OWNER" "$_sa_tmp" 2>/dev/null || true
+      rm -rf "$_sa_dst" && mv "$_sa_tmp" "$_sa_dst"
+    else
+      rm -rf "$_sa_tmp"; echo "podway: codex standalone copy of $CODEX_SA_PIN FAILED (disk?)"
+    fi
   fi
   if [ -d "$CODEX_SA_DST/releases/$CODEX_SA_PIN" ] &&
      [ "$(readlink "$CODEX_SA_DST/current" 2>/dev/null)" != "releases/$CODEX_SA_PIN" ]; then

@@ -39,7 +39,7 @@ preview: private
 
 setup:
   - >-
-    if [ ! -f .env ]; then printf 'DOCUMENSO_IMAGE=%s\nDB_PASSWORD=%s\nNEXTAUTH_SECRET=%s\nENC_KEY=%s\nENC_KEY2=%s\nMAIN_URL=%s\n' "documenso/documenso:latest" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(U=$(podway preview 2>/dev/null | grep -o 'https://[^ )]*' | head -1); echo "${U:-http://localhost:3000}")" > .env; chmod 600 .env; fi
+    if [ ! -f .env ]; then printf 'DOCUMENSO_IMAGE=%s\nDB_PASSWORD=%s\nNEXTAUTH_SECRET=%s\nENC_KEY=%s\nENC_KEY2=%s\nMAIN_URL=%s\n' "documenso/documenso:v2.20.0" "$(openssl rand -hex 24)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" "$(U=$(podway preview 2>/dev/null | grep -o 'https://[^ )]*' | head -1); echo "${U:-http://localhost:3000}")" > .env; chmod 600 .env; fi
   - chmod +x bin/app-admin.sh
   - >-
     if [ ! -f cert.p12 ]; then openssl req -x509 -newkey rsa:2048 -keyout /tmp/dk.pem -out /tmp/dc.pem -days 3650 -nodes -subj '/CN=Documenso' && openssl pkcs12 -export -out cert.p12 -inkey /tmp/dk.pem -in /tmp/dc.pem -passout pass: && chmod 644 cert.p12 && rm -f /tmp/dk.pem /tmp/dc.pem; fi
@@ -62,6 +62,8 @@ kickoff: |
   2. Offer, don't assume: back up now? Keep it to 1-2 sharp questions.
 
   Ongoing duties:
+  - LOG every change you make to the app (config, plugins, fixes, restarts): `APP_ADMIN_DIR=~/work bin/app-admin.sh log "<what>" "<who asked / why>" "<how to undo>"`. The engine logs its own snapshots, upgrades and restores; ~/work/admin-log.md is the owner's record. A weekly report + upkeep job runs on Mondays (podway schedule "Weekly app report").
+  - BEFORE ANY UPGRADE run `APP_ADMIN_DIR=~/work bin/app-admin.sh check-upgrade` and follow its ADVICE (SAFE / WAIT / REVIEW / RISKY = ask the owner). Tell the owner in plain words why you upgrade now or wait.
   - BACKUPS before any risky change: `APP_ADMIN_DIR=~/work bin/app-admin.sh snapshot`.
   - UPGRADES: NEVER just `docker compose pull`. Use
     `APP_ADMIN_DIR=~/work bin/app-admin.sh safe-upgrade <tag>` — it snapshots, pulls, health-checks and

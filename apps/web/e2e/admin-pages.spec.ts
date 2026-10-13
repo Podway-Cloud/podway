@@ -57,6 +57,16 @@ test.describe("admin backoffice pages", () => {
     await expect(page.getByRole("link", { name: "7 days" })).toHaveAttribute("href", "/admin/funnel?days=7");
   });
 
+  test("Revenue page shows paid revenue by app AND by sign-up ref, with the 30% share", async ({ page }) => {
+    await login(page, "admin");
+    await page.goto("/admin/revenue?month=2026-10");
+    await expect(page.getByRole("heading", { name: "Revenue", exact: true })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "App", exact: true })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Sign-up ref" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "30% share" })).toHaveCount(2);
+    await expect(page.getByRole("link", { name: /2026-09/ })).toHaveAttribute("href", "/admin/revenue?month=2026-09");
+  });
+
   test("Incidents page renders its fleet view", async ({ page }) => {
     await login(page, "admin");
     await page.goto("/admin/incidents");

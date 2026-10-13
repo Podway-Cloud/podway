@@ -32,6 +32,11 @@ if (!token || !host) {
     // No cookies + no capture until consent (banner flips these on Accept).
     persistence: granted ? "localStorage+cookie" : "memory",
     opt_out_capturing_by_default: !granted,
+    // Until (or unless) they accept, still COUNT the visit — cookieless: no cookie or storage, the
+    // server hashes the visitor (needs "Cookieless server hash mode" on in the PostHog project). Opt-out
+    // by default alone dropped every visitor who ignored the banner, incl. a real sign-up (2026-10-08).
+    // Replay still records only after Accept.
+    cookieless_mode: "on_reject",
     /**
      * Session replay on THIS app would otherwise record the most private material
      * in the product. The pod cockpit embeds a live terminal — the owner's source

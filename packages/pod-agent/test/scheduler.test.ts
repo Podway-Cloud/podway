@@ -210,6 +210,32 @@ describe("runSchedulerTick", () => {
     expect(await runSchedulerTick(o)).toEqual({ fired: false, reason: "deferred" });
   });
 
+  // podway GTM, 2026-10-13: a turn that waits on background agents stays "busy" all day, and every job
+  // starved for 19 h. After 30 min busy-only, the job is typed in (Claude queues it); one per 30 min.
+  it("types a job in after 30 min of busy-only deferral, then waits again for the next one", async () => {
+    const p = tmp();
+    writeJobs(p, [brief, { ...brief, id: "b2" }]);
+    let now = new Date("2026-07-22T08:00:30Z");
+    const { o, injected } = opts(p, now, { now: () => now, status: () => ({ status: "busy" }) });
+    expect(await runSchedulerTick(o)).toEqual({ fired: false, reason: "deferred" });
+    now = new Date("2026-07-22T08:29:00Z");
+    expect(await runSchedulerTick(o)).toEqual({ fired: false, reason: "deferred" });
+    now = new Date("2026-07-22T08:31:00Z");
+    expect((await runSchedulerTick(o)).fired).toBe(true);
+    expect(injected).toHaveLength(1);
+    now = new Date("2026-07-22T08:32:00Z");
+    expect(await runSchedulerTick(o)).toEqual({ fired: false, reason: "deferred" }); // clock restarts
+    // A question box is never typed into, however long it has waited.
+    const q = tmp();
+    writeJobs(q, [brief]);
+    let t = new Date("2026-07-22T08:00:30Z");
+    const w = opts(q, t, { now: () => t, status: () => ({ status: "waiting", waitingFor: "input needed" }) });
+    await runSchedulerTick(w.o);
+    t = new Date("2026-07-22T10:00:00Z");
+    expect(await runSchedulerTick(w.o)).toEqual({ fired: false, reason: "deferred" });
+    expect(w.injected).toHaveLength(0);
+  });
+
   // afisha crawler, 2026-10-06: an open AskUserQuestion reports status "waiting" / waitingFor "input
   // needed". Typing a run into it was lost AND its newlines picked the "(Recommended)" options — the
   // scheduler answered the owner's questions (merges, live-data writes) on their behalf.

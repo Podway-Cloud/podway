@@ -12,6 +12,7 @@ const NAV: NavItem[] = [
   { href: "/admin/users", label: "Users", icon: "Users" },
   { href: "/admin/funnel", label: "Funnel", icon: "Filter" },
   { href: "/admin/billing", label: "Billing", icon: "CreditCard" },
+  { href: "/admin/revenue", label: "Revenue", icon: "CircleDollarSign" },
   { href: "/admin/pods", label: "Pods", icon: "LayoutGrid" },
   { href: "/admin/incidents", label: "Incidents", icon: "TriangleAlert" },
   { href: "/admin/reports", label: "Bug reports", icon: "Bug" },
