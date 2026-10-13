@@ -569,6 +569,11 @@ can show the current stage and elapsed time, and a failure SHALL surface to the 
 - **THEN** the failure is recorded against the pod and shown to the owner instead of the control
   appearing to succeed
 
+#### Scenario: An old failure is not shown after a later update
+
+- **WHEN** a pod's last update failed, and a LATER update started or succeeded
+- **THEN** the cockpit SHALL NOT show the old failure, and SHALL refresh to the pod's current version
+
 ### Requirement: The update control explains what the update contains
 
 Next to the pod's Update control, an info affordance SHALL open a modal describing the update: the

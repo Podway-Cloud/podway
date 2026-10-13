@@ -1334,6 +1334,18 @@ describe("pod image update (P2.5)", () => {
     expect((await svc.podUpdateProgress("u", rec.id)).active).toBe(false);
   });
 
+  it("does not report an OLD update failure once a later update succeeded", async () => {
+    const rec = await svc.launchPod("u", ENV);
+    await svc.provisionPending();
+    await store.appendEvent({
+      id: "old-fail", podId: rec.id, ownerId: "u", type: "update_failed",
+      at: new Date(Date.now() - 30 * 86_400_000).toISOString(), meta: { error: "image update hung" },
+    });
+    expect((await svc.podUpdateProgress("u", rec.id)).error).toBe("image update hung"); // still the latest word
+    await runUpdate("u", rec.id, NEW_IMAGE);
+    expect((await svc.podUpdateProgress("u", rec.id)).error).toBeNull();
+  });
+
   it("swaps the image in place, records the digest, and emits from→to", async () => {
     const rec = await svc.launchPod("u", ENV);
     await svc.provisionPending();

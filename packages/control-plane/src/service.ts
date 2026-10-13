@@ -3876,7 +3876,10 @@ export class PodService {
     // Not updating: surface the most recent update_failed (if any) so the cockpit
     // can show why the last attempt didn't take, even after a reload.
     const events = await this.store.listEvents(id);
-    const lastFailed = [...events].reverse().find((e) => e.type === "update_failed");
+    // Only if no update started or finished SINCE: a month-old failure was shown again after a later
+    // update succeeded (ogo.co.il growth, 2026-10-13).
+    const last = [...events].reverse().find((e) => e.type === "update_failed" || e.type === "updated" || e.type === "update_started");
+    const lastFailed = last?.type === "update_failed" ? last : undefined;
     return {
       active: false,
       stage: null,
