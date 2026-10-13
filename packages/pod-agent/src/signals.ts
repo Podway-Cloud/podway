@@ -379,14 +379,14 @@ function pidAlive(name: string): boolean {
  * sleeps) or its `bridgeSessionId` (we believe remote control is on when it
  * isn't, and hand out a dead URL).
  */
-export function sessionStateFromDisk(): { url?: string; status?: string; waitingFor?: string } {
+export function sessionStateFromDisk(): { url?: string; status?: string; waitingFor?: string; startedAt?: number } {
   let files: string[];
   try {
     files = readdirSync(sessionsDir());
   } catch {
     return {};
   }
-  const out: { url?: string; status?: string; waitingFor?: string } = {};
+  const out: { url?: string; status?: string; waitingFor?: string; startedAt?: number } = {};
   for (const f of files) {
     if (!f.endsWith(".json")) continue;
     if (!pidAlive(f.slice(0, -".json".length))) continue;
@@ -395,7 +395,10 @@ export function sessionStateFromDisk(): { url?: string; status?: string; waiting
         bridgeSessionId?: unknown;
         status?: unknown;
         waitingFor?: unknown;
+        startedAt?: unknown;
       };
+      // Newest live claude start (rc-heartbeat.ts: a just-restarted claude has no heartbeat yet).
+      if (typeof j.startedAt === "number" && (out.startedAt == null || j.startedAt > out.startedAt)) out.startedAt = j.startedAt;
       // `waitingFor: "dialog open"` — the CLI telling us a modal is blocking the
       // session. Read live 2026-07-17 off a pod stuck on the Remote Control menu.
       if (!out.waitingFor && typeof j.waitingFor === "string") out.waitingFor = j.waitingFor;

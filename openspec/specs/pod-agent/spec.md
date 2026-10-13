@@ -1120,6 +1120,17 @@ active.
 - **THEN** the pod reports remote control as inactive (`rcActive: false`), with `rcState` reflecting
   the reason (`down` or `login-required`), and the cockpit/doctor no longer show it active
 
+#### Scenario: A silently dropped link is detected by its heartbeat and re-linked
+
+- **GIVEN** claude is launched with `--debug-file ~/.podway/claude-debug.log`, which logs
+  `CCRClient: Heartbeat sent` about every 20 s while Remote Control is linked
+- **WHEN** claude has run for 3 minutes and its newest heartbeat is older than 3 minutes (the link
+  dropped with no error, anthropics/claude-code#34255), and RC is not yielded to T3
+- **THEN** the pod SHALL read `recovering`, pick "Disconnect this session" on the `/remote-control`
+  menu, run `/remote-control` again (a NEW session link), and read `active` once heartbeats resume
+- **AND** it SHALL try at most 3 times, 30 s apart, then read `down`
+- **AND** a pod with no heartbeat ever logged SHALL NOT be judged (no evidence either way)
+
 #### Scenario: A stale URL is not reported as active
 
 - **GIVEN** a Claude session URL was captured earlier but the current TUI reports that RC is down

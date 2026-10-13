@@ -125,6 +125,41 @@ describe("greeter", () => {
     expect(t.calls.some((c) => c[0] === "send-keys")).toBe(false); // never typed blind
   });
 
+  // Silent-drop restore (rc-heartbeat.ts): the dead link still shows the "active" menu; its default
+  // (Continue) keeps the dead link, so the restore picks "Disconnect this session" (Up Up Enter) first.
+  it("rcDisconnectFirst: disconnects via the active menu, then links again", async () => {
+    const keys: string[] = [];
+    let draft = "";
+    let menu = false;
+    const tmux = async (args: string[]): Promise<string> => {
+      if (args[0] === "capture-pane") {
+        return menu
+          ? "Remote Control\n  Disconnect this session\n  Show QR code\n❯ Continue\nEnter to select"
+          : `❯ ${draft}\n  ⏵⏵ bypass permissions on`;
+      }
+      const k = args[args.length - 1];
+      if (args.includes("-l")) draft += k;
+      else {
+        keys.push(k);
+        if (k === "Enter" && menu) menu = false;
+        else if (k === "Enter" && draft.startsWith("/remote-control")) {
+          keys.push(`submitted:${draft}`);
+          menu = keys.filter((x) => x.startsWith("submitted:")).length === 1; // first one opens the menu
+          draft = "";
+        }
+      }
+      return "";
+    };
+    await runGreeter({
+      sessionName: "main", rcTitle: "T", rcDisconnectFirst: true,
+      greetedMarkerPath: tmpMarker(), rcSessionHashPath: tmpHashPath(), tmux, sleep: noSleep, ...fast,
+    });
+    const first = keys.indexOf("submitted:/remote-control");
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(keys.slice(first + 1, first + 4)).toEqual(["Up", "Up", "Enter"]);
+    expect(keys.slice(first + 4).some((k) => k === "submitted:/remote-control T")).toBe(true);
+  });
+
   it("RC failure doesn't block the greeting (best-effort remote control)", async () => {
     const t = fakeTmux({ rcActivates: false });
     const r = await runGreeter({

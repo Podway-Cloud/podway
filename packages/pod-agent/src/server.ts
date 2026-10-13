@@ -47,6 +47,7 @@ import type { RcState } from "@podway/shared/protocol";
 import { classifyRcState, isOrphanedRcYield, shouldAttemptRcRestore } from "./rc-state.js";
 import { parseLoginPane, nextLoginAttempt, type LoginAttempt } from "./login-capture.js";
 import { buildReport, ReportLimiter, REPORTS_OUTBOX, secretValuesFrom, type ReportInput } from "./bug-report.js";
+import { lastHeartbeatMs, rcSilentlyDropped, RC_SILENT_MS } from "./rc-heartbeat.js";
 import { credentialsPathForAgent, sanitizeSessionName, podNameFromSpec, loginCommandFor, RESERVED_ANTHROPIC_KEY, RESERVED_CLAUDE_OAUTH_TOKEN } from "./boot.js";
 import { shouldRepair, pruneHistory, isCapped, recoveryDue, type RepairAttempt } from "./repair-policy.js";
 import {
@@ -2809,6 +2810,8 @@ export class AgentServer {
   private primaryAuthFailTicks = 0;
   private primaryNeedsReauth = false;
   private pendingRcRestore = false;
+  /** The owed restore is for a silent drop: disconnect first, judge success by heartbeats. */
+  private rcRestoreCycle = false;
   private rcRestore = { attempts: 0, lastAt: 0, surfaced: false };
   /** Last-classified gate for the primary agent's pane, cached from failStateWatchdog's async tick
    * so the synchronous agentStates()/rcState computation can read it without its own pane capture
@@ -2858,6 +2861,18 @@ export class AgentServer {
     this.primaryNeedsReauth = needs;
     if (needs) return; // logged out — nothing to restore until the owner re-logs-in (surfaced on healthz)
 
+    // 1b. Silent drop (anthropics/claude-code#34255): RC heartbeats stopped while claude runs. The URL
+    // stays on disk, so only the heartbeat can tell; the restore must disconnect the dead link first.
+    if (
+      !this.pendingRcRestore &&
+      !existsSync(CLAUDE_RC_OFF) &&
+      rcSilentlyDropped(lastHeartbeatMs(), sessionStateFromDisk().startedAt ?? null, Date.now())
+    ) {
+      this.log.warn("rc_silent_drop_detected", { agent: this.credential.agent });
+      this.pendingRcRestore = true;
+      this.rcRestoreCycle = true;
+    }
+
     // 2. Recovery transition: we saw an auth failure, and the login is valid again → the RC bridge is
     // stale, re-establish it (this is the manual `/remote-control` velsa had to run).
     if (!this.pendingRcRestore) return;
@@ -2872,10 +2887,13 @@ export class AgentServer {
       this.log.info("rc_restore_skipped_login_required", { auto: true });
       return;
     }
-    if (sessionStateFromDisk().url) {
-      // RC is back (a fresh bridge session id appeared) → done, reset the budget.
-      this.log.info("rc_autorestore_ok", { attempts: this.rcRestore.attempts });
+    const beat = this.rcRestoreCycle ? lastHeartbeatMs() : null;
+    if (this.rcRestoreCycle ? beat != null && Date.now() - beat < RC_SILENT_MS : sessionStateFromDisk().url) {
+      // RC is back (heartbeats again / a fresh bridge session id appeared) → done, reset the budget.
+      this.log.info("rc_autorestore_ok", { attempts: this.rcRestore.attempts, silentDrop: this.rcRestoreCycle });
+      if (this.rcRestoreCycle) this.lastSessionUrl = undefined; // the cycle links a NEW session; re-capture it
       this.pendingRcRestore = false;
+      this.rcRestoreCycle = false;
       this.rcRestore = { attempts: 0, lastAt: 0, surfaced: false };
       return;
     }
@@ -2887,10 +2905,15 @@ export class AgentServer {
       return;
     }
     if (Date.now() - this.rcRestore.lastAt < 30_000) return; // backoff — a greeter run takes time
+    if (this.rcRestoreCycle) {
+      // Its Up/Up/Enter must hit the RC menu, never a running turn's input or history: wait for idle.
+      const st = sessionStateFromDisk();
+      if (st.status === "busy" || st.status === "shell" || st.status === "waiting" || st.waitingFor) return;
+    }
     this.rcRestore.attempts += 1;
     this.rcRestore.lastAt = Date.now();
     this.log.warn("rc_autorestore", { agent: this.credential.agent, attempt: this.rcRestore.attempts });
-    this.reenableRemoteControl(0); // RC-only greeter; its own guards skip a logged-out/yielded agent
+    this.reenableRemoteControl(0, this.rcRestoreCycle); // RC-only greeter; its own guards skip a logged-out/yielded agent
   }
 
   /** Per-window state for the menu watchdog: the last pane hash, how many ticks it has
@@ -3386,7 +3409,7 @@ export class AgentServer {
   /** Re-enable remote control after a suspend/resume: the process survives the
    * suspend, but RC's upstream connection dies, so the Claude app can't
    * reconnect until `/remote-control` runs again. RC only — never the kickoff. */
-  private reenableRemoteControl(gapMs: number): void {
+  private reenableRemoteControl(gapMs: number, disconnectFirst = false): void {
     if (!this.greeter || !this.credential || !existsSync(this.credential.path)) return;
     if (existsSync(CLAUDE_RC_OFF)) return; // control yielded to an external harness — don't re-drive Claude RC
     if (this.primaryLoginExpired()) {
@@ -3434,6 +3457,7 @@ export class AgentServer {
       // Lets the greeter restart a DEAD agent instead of typing into the bash
       // prompt its corpse left behind (see AGENT_EXITED_MARKER in boot.ts).
       respawnCommand: this.authedRespawn?.command,
+      rcDisconnectFirst: disconnectFirst,
     }).catch((e) => this.log.error("rc_reenable_failed", { err: e }));
   }
 

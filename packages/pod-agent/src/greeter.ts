@@ -65,6 +65,9 @@ export interface GreeterOptions {
    * ACCEPT it (pick Yes). Default "subscription": the key is stripped, so the prompt
    * never appears (and if it did, it's declined via the login menu). */
   agentAuth?: AgentAuth;
+  /** Restore of a silently dropped RC link (rc-heartbeat.ts): pick "Disconnect this session" before
+   * linking again — the dead link still shows the "active" menu, whose default (Continue) keeps it. */
+  rcDisconnectFirst?: boolean;
   /** Injectable tmux runner (tests). */
   tmux?: (args: string[]) => Promise<string>;
   /** Injectable sleep (tests). */
@@ -543,6 +546,23 @@ export async function runGreeter(opts: GreeterOptions): Promise<GreeterResult> {
   // stuck the session: it swallows keystrokes while the Claude app still shows
   // "connected" (live 2026-07-17), and it PRINTS the session URL, so
   // RC_ACTIVE_RE matched the menu text and we declared success and walked away.
+  // Menu order is "Disconnect this session / Show QR code / ❯ Continue": Up Up Enter disconnects, with no
+  // confirm; the /remote-control below then links a fresh session (claude 2.1.296, test:1 2026-10-13).
+  if (opts.rcDisconnectFirst && (await submitLine("/remote-control"))) {
+    const DISCONNECT_RE = /Disconnect this session/;
+    const deadline = Date.now() + rcConfirmMs;
+    while (Date.now() < deadline && !DISCONNECT_RE.test(await pane())) await sleep(pollMs);
+    if (DISCONNECT_RE.test(await pane())) {
+      for (const key of ["Up", "Up", "Enter"]) {
+        await tmux(["send-keys", "-t", opts.sessionName, key]);
+        await sleep(300);
+      }
+      await trace("rc_disconnected", {});
+      await sleep(2000);
+    } else if (isDialogOpen(sessionStateFromDisk().waitingFor)) {
+      await tmux(["send-keys", "-t", opts.sessionName, "Enter"]); // another modal: its default, as below
+    }
+  }
   let rcSubmitted = false;
   for (let rcAttempt = 0; rcAttempt < 3 && !result.rcActive; rcAttempt++) {
     if (rcAttempt > 0) await trace("rc_retry", { attempt: rcAttempt });

@@ -23,6 +23,9 @@
  * so a trusted first-party env can go fully open while the default stays guarded.
  */
 
+/** Claude's debug log; its RC heartbeats are read by rc-heartbeat.ts. */
+export const CLAUDE_DEBUG_LOG = "/home/dev/.podway/claude-debug.log";
+
 export const KICKOFF_PATH = "/home/dev/.podway-kickoff";
 /** The one short user turn shown in the transcript to start the kickoff (typed
  * by the greeter once remote control is up). */
@@ -233,11 +236,14 @@ function agentInvocation(cli: string, mode: string, agentAuth: AgentAuth = "subs
   // try `--continue`, and if it dies within 8s non-zero, drop it and start a FRESH session ONCE.
   // A genuinely resumable transcript continues normally; a bad one never bricks boot.
   const claudeBin = apiKey ? CLAUDE_APIKEY : setupToken ? CLAUDE_SETUP_TOKEN : CLAUDE;
+  // Debug log = the Remote Control heartbeat, the only signal a silently dropped link leaves
+  // (rc-heartbeat.ts, anthropics/claude-code#34255).
+  const debugFlag = `--debug-file ${CLAUDE_DEBUG_LOG}`;
   const runClaude =
-    `__cl() { __t=$(date +%s); ${claudeBin} $C ${permFlag} "$@"; __rc=$?; ` +
+    `__cl() { __t=$(date +%s); ${claudeBin} $C ${permFlag} ${debugFlag} "$@"; __rc=$?; ` +
     `if [ -n "$C" ] && [ "$__rc" -ne 0 ] && [ $(( $(date +%s) - __t )) -lt 8 ]; then ` +
     `echo "podway: --continue could not resume; starting a fresh session"; ` +
-    `${claudeBin} ${permFlag} "$@"; fi; }; `;
+    `${claudeBin} ${permFlag} ${debugFlag} "$@"; fi; }; `;
   return (
     `${WAIT_FOR_SETUP}; ${seedTheme}${resume}${runClaude}` +
     `if [ -s ${KICKOFF_PATH} ]; then __cl --append-system-prompt-file ${KICKOFF_PATH}; else __cl; fi`
