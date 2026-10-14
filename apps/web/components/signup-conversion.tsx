@@ -12,6 +12,8 @@ export default function SignupConversion() {
     const w = window as unknown as { gtag?: (...a: unknown[]) => void };
     try {
       w.gtag?.("event", "sign_up", { method: "podway" });
+      // The Google Ads sign-up conversion (conversion_action 7845502524, created 2026-10-14).
+      w.gtag?.("event", "conversion", { send_to: "AW-18501280601/fKyYCLy8g50dENnGjPZE" });
     } catch {
       /* never break the page for a metric */
     }
