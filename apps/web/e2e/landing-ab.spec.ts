@@ -72,3 +72,11 @@ test("a DIRECT visit to /agent-computer is counted for that landing (even at 0% 
     await c.end();
   }
 });
+
+// Signed out, the agent-computer CTA opens the public catalog (Workspaces), not the sign-in wall (2026-10-14).
+test("the /agent-computer main button opens the public catalog, signed out", async ({ page }) => {
+  await page.goto("/agent-computer");
+  await page.getByRole("link", { name: "Start with Podway" }).first().click();
+  await page.waitForURL(/\/start\?ref=agent-computer/);
+  await expect(page.getByRole("tab", { name: "Workspaces" })).toHaveAttribute("data-state", "active");
+});

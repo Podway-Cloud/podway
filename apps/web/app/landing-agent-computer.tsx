@@ -56,7 +56,9 @@ export default async function AgentComputerLanding({
   user?: Awaited<ReturnType<typeof getCurrentUser>>;
 }) {
   const user = suppliedUser === undefined ? await getCurrentUser() : suppliedUser;
-  const primaryHref = user ? "/dashboard" : "/signin";
+  // Signed out → the public catalog (Workspaces tab) and its signed-out wizard; sign-in comes at Create
+  // (landing-funnel-fixes, owner 2026-10-14).
+  const primaryHref = user ? "/dashboard" : "/start?ref=agent-computer";
   const primaryLabel = user ? "Open dashboard" : "Start with Podway";
 
   return (
