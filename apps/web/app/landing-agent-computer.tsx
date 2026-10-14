@@ -22,7 +22,6 @@ import GithubMark from "@/components/github-mark";
 import LandingAccountLink from "@/components/landing-account-link";
 import LandingFooter from "@/components/landing-footer";
 import LandingPodNetwork from "./landing-pod-network";
-import QuoteWall from "@/components/landing-quote-wall";
 import LandingDemoFrame from "./landing-demo-frame";
 import { LandingSection } from "./landing-section";
 import {
@@ -31,6 +30,25 @@ import {
   SIGNUP_CREDIT_USD,
   SUSPENDED_USD,
 } from "@/lib/pricing-catalog";
+
+// Owner-approved copy (via the podway GTM pod, confirmed in chat 2026-10-14). Cloud-session facts:
+// code.claude.com/docs/en/claude-code-on-the-web ("Environment expired": the VM is reclaimed when idle;
+// conversation restored, running background work not).
+const CLOUD_VS_POD: readonly (readonly [string, string, string])[] = [
+  ["Keeps working with the laptop closed", "Yes", "Yes"],
+  ["When it\u2019s idle", "The machine is reclaimed; your chat comes back, running work doesn\u2019t", "Stays on. Nothing is reclaimed"],
+  ["Dev servers, databases, workers", "Stop with the machine", "Keep running"],
+  ["Starts from", "A fresh copy of your GitHub repo", "Your files, tools and services, already there"],
+  ["Cost", "Included in your Claude plan", "Pods start at $4/month. First one free to start"],
+];
+
+const FAQ: readonly (readonly [string, string])[] = [
+  ["Do I need a Claude plan?", "Yes. You sign in with your own Claude Pro or Max plan. Podway runs the official Claude Code CLI and doesn\u2019t add any markup."],
+  ["Claude Code has cloud sessions now. Why would I need a pod?", "Cloud sessions are great for one-off tasks on a GitHub repo, and they\u2019re included in your plan. But they\u2019re sessions, not a computer you keep: when one goes idle, the machine is reclaimed and anything running in the background stops. A pod stays on. Your dev server, database and scheduled jobs keep running, and your files are still there tomorrow."],
+  ["Can I use it from my phone?", "Yes. Your Claude Code session is always running on the pod, so you open it from the Claude app on your phone, no PC needed."],
+  ["What if Remote Control drops?", "If Claude\u2019s login expires or the agent crashes, Podway restarts it and reconnects Remote Control on its own. If the connection drops without an error, Podway notices within about 3 minutes and reconnects. Pod restarts and updates reconnect too."],
+  ["Can I start several sessions from my phone?", "Each pod runs one always-on session. For several jobs at once, use several pods."],
+];
 
 export default async function AgentComputerLanding({
   user: suppliedUser,
@@ -43,6 +61,7 @@ export default async function AgentComputerLanding({
 
   return (
     <main className={styles.landing}>
+      <p className={styles.offerBanner}>Your first pod is free during early access. No card needed.</p>
       <header className={`${styles.shell} ${styles.header}`}>
         <Link className={styles.brand} href={user ? "/dashboard" : "/"} aria-label="Podway home">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -61,10 +80,10 @@ export default async function AgentComputerLanding({
 
       <section className={`${styles.shell} ${styles.hero}`}>
         <div className={styles.heroCopy}>
-          <p className={styles.eyebrow}>Claude is the interface. Podway is its computer.</p>
-          <h1>Give <span className={styles.noWrap}>Claude Code</span> an always-on computer.</h1>
+          <h1>Give <span className={styles.noWrap}>Claude Code</span> a computer that never sleeps.</h1>
           <p className={styles.heroText}>
-            We call it a pod: a private cloud computer with your project, tools, and services inside.
+            Your session, your dev server and your database keep running when your laptop is closed. Open it
+            from the Claude app on your phone.
           </p>
           <div className={styles.heroActions}>
             <TrackedLink
@@ -87,7 +106,7 @@ export default async function AgentComputerLanding({
           <div className={styles.subscriptionLine}>
             <KeyRound aria-hidden />
             <span className={styles.subscriptionCopy}>
-              <strong>Continue in the official Claude apps with your Pro or Max subscription.</strong>
+              <strong>You bring your Claude Pro or Max plan.</strong>
             </span>
           </div>
         </div>
@@ -183,6 +202,28 @@ export default async function AgentComputerLanding({
         </div>
       </LandingSection>
 
+      <LandingSection id="cloud-vs-pod">
+        <div className={styles.sectionHeading}>
+          <div>
+            <h2>Claude Code cloud sessions or a pod?</h2>
+          </div>
+          <p>Both keep Claude working when your laptop is closed. The difference is what&rsquo;s still there when you come back.</p>
+        </div>
+        <div className={styles.compareWrap}>
+          <table className={styles.compareTable}>
+            <thead>
+              <tr><th scope="col"><span className={styles.srOnly}>Question</span></th><th scope="col">Cloud session</th><th scope="col">Pod</th></tr>
+            </thead>
+            <tbody>
+              {CLOUD_VS_POD.map(([q, cloud, pod]) => (
+                <tr key={q}><th scope="row">{q}</th><td>{cloud}</td><td>{pod}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className={styles.compareNote}>Use cloud sessions for one-off repo tasks. Use a pod for work that has to keep running.</p>
+      </LandingSection>
+
       <LandingSection id="fleet">
         <LandingPodNetwork />
       </LandingSection>
@@ -213,7 +254,21 @@ export default async function AgentComputerLanding({
         </div>
       </LandingSection>
 
-      <QuoteWall />
+      <LandingSection id="faq">
+        <div className={styles.sectionHeading}>
+          <div>
+            <h2>Questions</h2>
+          </div>
+        </div>
+        <div className={styles.faqList}>
+          {FAQ.map(([q, a]) => (
+            <details key={q} className={styles.faqItem}>
+              <summary>{q}</summary>
+              <p>{a}</p>
+            </details>
+          ))}
+        </div>
+      </LandingSection>
 
       <LandingSection id="pricing">
           <div className={styles.sectionHeading}>
@@ -285,6 +340,11 @@ export default async function AgentComputerLanding({
         >
           {primaryLabel}
         </TrackedLink>
+        <p className={styles.founderNote}>
+          I built podway because I wanted Claude Code to keep working when I closed my laptop, and I didn&rsquo;t want
+          to babysit a server to get there. If you like podway, want to complain about something, or just want to
+          chitchat, <a href="mailto:itzhak@podway.io">drop me a note</a>. I read every email. <span>&mdash; Itzhak</span>
+        </p>
       </LandingSection>
 
       <LandingFooter

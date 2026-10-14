@@ -370,3 +370,22 @@
   background: transparent;
   color-scheme: dark;
 }
+
+/* /agent-computer copy update (owner via GTM pod, 2026-10-14). */
+.offerBanner { margin: 0; padding: 10px 16px; border-bottom: 1px solid color-mix(in srgb, var(--green) 35%, transparent); background: color-mix(in srgb, var(--green) 14%, transparent); color: var(--green); font-size: 14px; font-weight: 700; text-align: center; text-wrap: balance; }
+.compareWrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); }
+.compareTable { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.compareTable th, .compareTable td { padding: 14px 18px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+.compareTable thead th { border-top: 0; color: var(--muted); font-size: 12px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.compareTable tbody th { color: var(--text); font-weight: 650; }
+.compareTable td { color: #8b979c; }
+.compareTable td:last-child { color: var(--text); }
+.compareTable thead th:last-child { color: var(--blue-soft); }
+.compareNote { margin-top: 18px; color: var(--muted); font-size: 15px; }
+.faqList { display: grid; gap: 10px; max-width: 760px; }
+.faqItem { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); padding: 14px 18px; }
+.faqItem summary { cursor: pointer; color: var(--text); font-weight: 650; }
+.faqItem p { margin: 10px 0 0; color: var(--muted); font-size: 15px; line-height: 1.6; }
+.founderNote { max-width: 60ch; margin: 34px auto 0; color: var(--muted); font-size: 14.5px; line-height: 1.65; }
+.founderNote a { color: var(--blue-soft); }
+.founderNote span { display: block; margin-top: 6px; color: var(--text); font-weight: 650; }

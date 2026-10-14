@@ -9,7 +9,7 @@ const COOKIE = "pb_landing_computer_vs_selfhost_variant";
 
 for (const [variant, heading] of [
   ["selfhost", /Self-host anything/],
-  ["agent-computer", /always-on computer/],
+  ["agent-computer", /a computer that never sleeps/],
 ] as const) {
   test(`the ${variant} arm is served at /`, async ({ page, context, baseURL }) => {
     await context.addCookies([
@@ -51,7 +51,7 @@ test("half the selfhost arm sees the upkeep first screen, recorded on the exposu
 
 test("a DIRECT visit to /agent-computer is counted for that landing (even at 0% of the home split)", async ({ page, context }) => {
   await page.goto("/agent-computer");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/always-on computer/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(/a computer that never sleeps/);
   const variant = (await context.cookies()).find((c) => c.name === COOKIE)?.value;
   expect(variant).toBe("agent-computer");
   const visitor = (await context.cookies()).find((c) => c.name === "pb_landing_visitor")!.value;

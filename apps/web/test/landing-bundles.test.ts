@@ -43,10 +43,12 @@ describe("revised landing bundles", () => {
   });
 
   it("leads Agent Computer with the lasting-computer benefit and dashboard proof", () => {
-    expect(computer).toContain('Give <span className={styles.noWrap}>Claude Code</span> an always-on computer.');
-    expect(computer).toContain("We call it a pod: a private cloud computer with your project, tools, and services inside.");
-    expect(computer).not.toContain("a persistent computer with your project");
-    expect(computer).toContain("Claude is the interface. Podway is its computer.");
+    // Copy update (owner via the GTM pod, 2026-10-14): never-sleeps hero, free-pod banner, cloud vs pod, FAQ.
+    expect(computer).toContain('Give <span className={styles.noWrap}>Claude Code</span> a computer that never sleeps.');
+    expect(computer).toContain("Your first pod is free during early access. No card needed.");
+    expect(computer).toContain("Claude Code cloud sessions or a pod?");
+    expect(computer).toContain("If the connection drops without an error, Podway notices within about 3 minutes and reconnects.");
+    expect(computer).not.toContain("QuoteWall");
     expect(computer).toContain('import dashboardImage from "../../../docs/images/dashboard.png"');
     expect(computer).toContain("See every pod at a glance.");
     expect(computer).not.toContain("Open running apps and know when Claude is working or needs you.");
@@ -59,7 +61,7 @@ describe("revised landing bundles", () => {
     expect(computer).not.toContain('/landing/pod-computer-v1.jpg');
     expect(computer).toContain("Self-host Podway");
     expect(computer).toContain("Start with Podway");
-    expect(computer).toContain("Continue in the official Claude apps with your Pro or Max subscription.");
+    expect(computer).toContain("You bring your Claude Pro or Max plan.");
     expect(computer).not.toContain("No Anthropic API key or usage markup.");
     expect(computer).not.toContain("Codex support is in pilot.");
     expect(computer).toContain("className={styles.subscriptionCopy}");
