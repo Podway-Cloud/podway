@@ -3,6 +3,11 @@ import { canonicalRedirectHost } from "../lib/canonical-host";
 
 describe("canonicalRedirectHost", () => {
 
+  it("sends the old podbay.cloud (apex + www) to podway.io again (owner, 2026-10-14)", () => {
+    expect(canonicalRedirectHost("podbay.cloud")).toBe("podway.io");
+    expect(canonicalRedirectHost("www.podbay.cloud")).toBe("podway.io");
+  });
+
   it("sends podway.cloud (now previews-only, apex + www) to podway.io", () => {
     expect(canonicalRedirectHost("podway.cloud")).toBe("podway.io");
     expect(canonicalRedirectHost("www.podway.cloud")).toBe("podway.io");

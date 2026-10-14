@@ -15,14 +15,14 @@
  * Returns the host to redirect to, or null when the host is already canonical
  * (or is a host we shouldn't touch, e.g. *.fly.dev, localhost).
  */
-// The pre-rename hosts are deliberately ABSENT. Their redirect could never run anyway: the
-// certificate was never issued, so TLS fails before any request reaches this code and an old link
-// dies at the handshake. Keeping the entries only implied a fallback that does not exist. Owner
-// retired the domain outright (2026-09-06).
+// The pre-rename podbay.cloud is back as a redirect (owner, 2026-10-14): Fly certs for it and www on
+// podway-web, DNS → podway-web. Retired 2026-09-06 when its cert had never been issued.
 const APP_ALIAS_HOSTS = new Set([
   "podway.cloud",
   "www.podway.cloud",
   "www.podway.io",
+  "podbay.cloud",
+  "www.podbay.cloud",
 ]);
 
 export function canonicalRedirectHost(host: string | null | undefined): string | null {
