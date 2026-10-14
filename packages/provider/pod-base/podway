@@ -495,17 +495,24 @@ cmd_schedule_done() {
 cmd_schedule_list() {
   sched_ensure
   local n; n=$(jq '.jobs | length' "$SCHED_JOBS")
-  if [ "$n" = "0" ]; then echo "no scheduled jobs (add one: podway schedule add --name … --at HH:MM --do \"…\")"; return 0; fi
-  jq -r '.jobs[] | "\(if .enabled then "on " else "off" end)  \(.id)\t\(.name)\t" +
+  if [ "$n" = "0" ]; then echo "no scheduled jobs (add one: podway schedule add --name … --at HH:MM --exec \"…\" | --prompt-file F | --do \"…\")"; return 0; fi
+  # Last run per job (started → lateness; terminal → result), from the run log.
+  local runs='{}'
+  [ -f "$SCHED_RUNS" ] && runs=$(jq -sc 'reduce .[] as $e ({}; if $e.event=="started" then .[$e.runId]={job:$e.jobId,at:$e.at,late:$e.lateMin} elif .[$e.runId] then .[$e.runId].result=$e.event else . end)
+    | to_entries | map(.value) | group_by(.job) | map({key:.[0].job, value:(sort_by(.at)|last)}) | from_entries' "$SCHED_RUNS" 2>/dev/null || echo '{}')
+  jq -r --argjson runs "$runs" '.jobs[] | "\(if .enabled then "on " else "off" end)  \(.id)\t\(.name)\t[\(.kind // "chat")]\t" +
     (.schedule | if .at then "once at \(.at)" elif .times then (.times|join(",")) + (if .timezone then " "+.timezone else " UTC" end)
       + (if .days then " on " + ([.days[] | ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][.]] | join(",")) else "" end)
       else "every \(.everyMinutes)m" end)
-    + (if .instructions then "\n       do: " + (.instructions | gsub("\n"; " ") | if length > 160 then .[:157] + "…" else . end) else "" end)' "$SCHED_JOBS"
+    + (if .exec then "\n       exec: " + (.exec | if length > 160 then .[:157] + "…" else . end) else "" end)
+    + (if .promptFile then "\n       prompt: " + .promptFile else "" end)
+    + (if .instructions then "\n       do: " + (.instructions | gsub("\n"; " ") | if length > 160 then .[:157] + "…" else . end) else "" end)
+    + (($runs[.id]) as $r | if $r then "\n       last: \($r.at) (\($r.late // 0) min late) → \($r.result // "running/open")" else "" end)' "$SCHED_JOBS"
 }
 
 cmd_schedule_add() {
   sched_ensure
-  local name="" tz="" mode="routine" instr="" every="" id="" days_raw="" in_min="" once=""
+  local name="" tz="" mode="routine" instr="" every="" id="" days_raw="" in_min="" once="" exec_cmd="" pfile=""
   local -a times=()
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -517,12 +524,26 @@ cmd_schedule_add() {
       --tz) tz="${2:-}"; shift 2 ;;
       --days | --on) days_raw="${2:-}"; shift 2 ;;
       --do | --instructions) instr="${2:-}"; shift 2 ;;
+      --exec) exec_cmd="${2:-}"; shift 2 ;;
+      --prompt-file) pfile="${2:-}"; shift 2 ;;
       --mode) mode="${2:-}"; shift 2 ;;
       --id) id="${2:-}"; shift 2 ;;
       *) die "unknown flag '$1' (see: podway schedule)" ;;
     esac
   done
-  [ -n "$name" ] || die "usage: podway schedule add --name NAME (--at HH:MM [--at …] [--tz IANA] [--days mon,wed|weekdays|weekends] | --every MINUTES) --do \"what to do\""
+  [ -n "$name" ] || die "usage: podway schedule add --name NAME (--at HH:MM [--at …] [--tz IANA] [--days mon,wed|weekdays|weekends] | --every MINUTES) (--exec \"cmd\" | --prompt-file FILE | --do \"text\")"
+  # Exactly one kind (schedule-job-kinds): --exec = a script pod-agent runs itself (no AI, no chat);
+  # --prompt-file = a headless agent run (no chat); --do = a turn typed into your chat (waits until you're idle).
+  local kinds=0; [ -n "$exec_cmd" ] && kinds=$((kinds+1)); [ -n "$pfile" ] && kinds=$((kinds+1)); [ -n "$instr" ] && kinds=$((kinds+1))
+  [ "$kinds" -eq 1 ] || die "give exactly one of --exec \"cmd\" (script, no AI), --prompt-file FILE (headless agent run), --do \"text\" (a turn in your chat)"
+  local kind="chat"
+  if [ -n "$exec_cmd" ]; then kind="exec"; fi
+  if [ -n "$pfile" ]; then
+    kind="agent"
+    case "$pfile" in "~/"*) pfile="$HOME/${pfile#\~/}" ;; /*) ;; *) pfile="$PWD/$pfile" ;; esac
+    [ -r "$pfile" ] || die "--prompt-file '$pfile' is not a readable file"
+    if [ -n "$every" ]; then case "$every" in *[!0-9]*) ;; *) [ "$every" -ge 60 ] || die "agent jobs run at most hourly (--every 60 or more): each run uses your plan; use --exec for frequent checks" ;; esac; fi
+  fi
   # One-shot: fires once, then the pod-agent removes the job (no daily leftover). --in N = N minutes
   # from now; --once --at HH:MM = the next HH:MM in --tz.
   local at_iso=""
@@ -590,12 +611,19 @@ cmd_schedule_add() {
   ! jq -e --arg id "$id" '.jobs | any(.id==$id)' "$SCHED_JOBS" >/dev/null 2>&1 \
     || die "a job with id '$id' already exists (use --id to override, or 'podway schedule remove $id')"
   local job; job=$(jq -cn --arg id "$id" --arg name "$name" --arg mode "$mode" --argjson sched "$schedule" --arg instr "$instr" \
-    '{id:$id,name:$name,mode:$mode,schedule:$sched,enabled:true} + (if $instr=="" then {} else {instructions:$instr} end)')
+    --arg kind "$kind" --arg ex "$exec_cmd" --arg pf "$pfile" \
+    '{id:$id,name:$name,mode:$mode,kind:$kind,schedule:$sched,enabled:true} + (if $instr=="" then {} else {instructions:$instr} end)
+     + (if $ex=="" then {} else {exec:$ex} end) + (if $pf=="" then {} else {promptFile:$pf} end)')
   local tmp; tmp=$(mktemp)
   jq --argjson job "$job" '.jobs += [$job]' "$SCHED_JOBS" > "$tmp" && mv "$tmp" "$SCHED_JOBS"
   echo "scheduled '$name' (id $id) — survives restarts; the pod-agent runs it on schedule."
   [ -z "$at_iso" ] || echo "runs once at $at_iso, then removes itself."
-  [ ${#times[@]} -eq 0 ] || echo "note: times are ${tz:-UTC}; a due time catches up after a suspend, and fires only while you're idle."
+  [ ${#times[@]} -eq 0 ] || echo "note: times are ${tz:-UTC}; a due time catches up after a suspend."
+  case "$kind" in
+    exec) echo "kind: script — runs on time without the agent; you hear about it only when it fails. Logs: ~/.podway/jobs/runs/$id/" ;;
+    agent) echo "kind: agent — a headless run with $pfile; one summary line in your chat unless it ends with OK. Logs: ~/.podway/jobs/runs/$id/" ;;
+    chat) echo "kind: chat — typed into your chat as one line and fires only while you're idle; each run costs a turn. Prefer --exec / --prompt-file unless it needs the conversation." ;;
+  esac
 }
 
 cmd_schedule_set() { # enable|disable <id>
@@ -606,6 +634,14 @@ cmd_schedule_set() { # enable|disable <id>
   local tmp; tmp=$(mktemp)
   jq --arg id "$id" --argjson en "$en" '.jobs |= map(if .id==$id then .enabled=$en else . end)' "$SCHED_JOBS" > "$tmp" && mv "$tmp" "$SCHED_JOBS"
   echo "job '$id' ${want}d"
+}
+
+# Print a job's full definition (a chat job's one-line trigger points here for the instructions).
+cmd_schedule_show() {
+  sched_ensure
+  local id="${1:-}"; [ -n "$id" ] || die "usage: podway schedule show <id>"
+  local j; j=$(jq -e --arg id "$id" '.jobs[] | select(.id==$id)' "$SCHED_JOBS") || die "no job with id '$id' (see: podway schedule list)"
+  printf '%s\n' "$j" | jq -r '"\(.name) [\(.kind // "chat")]", (if .instructions then "\n" + .instructions else empty end), (if .exec then "exec: " + .exec else empty end), (if .promptFile then "prompt file: " + .promptFile else empty end)'
 }
 
 cmd_schedule_remove() {
@@ -625,7 +661,8 @@ cmd_schedule() {
     enable) shift; cmd_schedule_set enable "${1:-}" ;;
     disable) shift; cmd_schedule_set disable "${1:-}" ;;
     done) shift; cmd_schedule_done "$@" ;;
-    *) die "usage: podway schedule <list | add --name … --at HH:MM [--tz IANA] --do \"…\" | remove ID | enable ID | disable ID | done <runId> [ok|fail]>" ;;
+    show) shift; cmd_schedule_show "${1:-}" ;;
+    *) die "usage: podway schedule <list | show ID | add --name … (--at HH:MM [--tz IANA] | --every MIN) (--exec \"cmd\" | --prompt-file F | --do \"…\") | remove ID | enable ID | disable ID | done <runId> [ok|fail]>" ;;
   esac
 }
 
@@ -1247,7 +1284,9 @@ case "${1:-info}" in
     echo "              | fetch report <domain> <rung> <outcome>"
     echo "              | relay status"
     echo "              | secrets list | secrets get KEY | secrets env | secrets request KEY [why] | secrets withdraw KEY"
-    echo "              | schedule list | schedule add --name … (--at HH:MM [--tz IANA] [--days mon,wed|weekdays] | --every MIN | --in MIN | --once --at HH:MM [--tz IANA]) --do \"…\" | schedule remove ID"
+    echo "              | schedule list | schedule add --name … (--at HH:MM [--tz IANA] [--days mon,wed|weekdays] | --every MIN | --in MIN | --once --at HH:MM [--tz IANA]) (--exec \"cmd\" | --prompt-file F | --do \"…\") | schedule show ID | schedule remove ID"
+    echo "                --exec: a script, runs on time without AI, you hear only on failure · --prompt-file: a headless agent run, one summary line"
+    echo "                --do: a turn typed into your chat (costs a turn, waits until you are idle) — only when it needs the conversation"
     echo "              | startup list | startup add --do \"…\" [--slug NAME] [--port N] | startup restart|stop|start SLUG | startup remove SLUG"
     echo "              | dev restart | dev stop | dev start | dev disable | dev enable | dev logs [N] | dev status  (the SUPERVISED dev server — never hand-kill it; 'disable' if this pod serves its own :3000)"
     echo "              | agent versions | agent update [claude | codex [version] | --all]  (update the agent CLIs as dev; codex npm+standalone stay in lockstep)"

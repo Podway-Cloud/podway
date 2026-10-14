@@ -182,13 +182,124 @@ describe("runSchedulerTick", () => {
     expect((await runSchedulerTick(next.o)).fired).toBe(true);
   });
 
-  it("carries the job's instructions into the injected turn (env-neutral)", async () => {
+  // schedule-job-kinds: the pasted ~40-line block filled owners' chats (ogo.co.il, 2026-10-14). A chat job's
+  // turn is ONE line pointing at `podway schedule show`, plus how to close the run.
+  it("types a ONE-line chat trigger that points at the instructions, not the instructions themselves", async () => {
     const p = tmp();
     writeJobs(p, [{ ...brief, instructions: "pull GSC week-over-week and message me" }]);
-    const { o, injected } = opts(p, new Date("2026-07-22T08:00:30Z"));
+    const { o, injected } = opts(p, new Date("2026-07-22T08:00:30Z"), { home: p.dir });
     expect((await runSchedulerTick(o)).fired).toBe(true);
-    expect(injected[0]).toContain("pull GSC week-over-week and message me");
-    expect(injected[0]).not.toContain("/api/runs");
+    expect(injected[0]).not.toContain("pull GSC week-over-week");
+    expect(injected[0]).not.toContain("\n");
+    expect(injected[0]).toContain("podway schedule done brief-run");
+    // The instructions live in the run's own file (a one-shot job is already gone from the jobs file).
+    const file = injected[0].match(/cat ~\/(\S+)/)![1];
+    expect(readFileSync(path.join(p.dir, file), "utf8")).toBe("pull GSC week-over-week and message me");
+  });
+
+  it("runs an exec job ON TIME while the agent is busy, silently on success, one line on failure", async () => {
+    const p = tmp();
+    writeJobs(p, [{ ...watch, id: "ping", name: "ping", kind: "exec", exec: "curl -fsS x" }]);
+    let now = new Date("2026-07-22T08:00:00Z");
+    let busy = true;
+    const results = [{ ok: true, summary: "" }, { ok: false, summary: "exit 22: 404" }];
+    const ran: string[] = [];
+    const { o, injected } = opts(p, now, {
+      now: () => now,
+      status: () => ({ status: busy ? "busy" : "idle" }),
+      runBackground: async (job) => (ran.push(job.id), results.shift()!),
+    });
+    await runSchedulerTick(o); // busy, but the script still runs
+    await new Promise((r) => setImmediate(r));
+    expect(ran).toEqual(["ping"]);
+    busy = false;
+    expect(await runSchedulerTick(o)).toEqual({ fired: false, reason: "none-due" }); // success → nothing typed
+    now = new Date("2026-07-22T08:31:00Z");
+    busy = true;
+    await runSchedulerTick(o); // second run fails while busy: the notice WAITS (no busy fallback)
+    await new Promise((r) => setImmediate(r));
+    expect(injected).toHaveLength(0);
+    busy = false;
+    expect(await runSchedulerTick(o)).toEqual({ fired: true, kind: "notice" });
+    expect(injected).toHaveLength(1);
+    expect(injected[0]).toBe('[podway job] Script "ping" failed: exit 22: 404.');
+    const events = readFileSync(p.runsLogPath, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    expect(events.filter((e) => e.event === "failed")).toHaveLength(1);
+    expect(events.find((e) => e.event === "started").kind).toBe("exec");
+  });
+
+  it("a script that keeps failing says so once, then once when it works again", async () => {
+    const p = tmp();
+    writeJobs(p, [{ ...watch, id: "chk", name: "chk", kind: "exec", exec: "x" }]);
+    let now = new Date("2026-07-22T08:00:00Z");
+    const results = [false, false, false, true].map((ok) => ({ ok, summary: ok ? "" : "exit 1: down" }));
+    const { o, injected } = opts(p, now, { now: () => now, runBackground: async () => results.shift() ?? { ok: true, summary: "" } });
+    for (let i = 0; i < 4; i++) {
+      await runSchedulerTick(o);
+      await new Promise((r) => setImmediate(r));
+      now = new Date(now.getTime() + 31 * 60_000);
+    }
+    for (let i = 0; i < 4; i++) await runSchedulerTick(o);
+    expect(injected).toEqual(['[podway job] Script "chk" failed: exit 1: down.', '[podway job] Script "chk" works again.']);
+  });
+
+  it("agent job: quiet on OK, one summary line otherwise; one agent run at a time", async () => {
+    const p = tmp();
+    const a = { ...brief, id: "a1", name: "routine", kind: "agent" as const, promptFile: "~/ops/r.md" };
+    const b = { ...brief, id: "a2", name: "second", kind: "agent" as const, promptFile: "~/ops/s.md" };
+    writeJobs(p, [a, b]);
+    const pending: Array<(r: { ok: boolean; summary: string }) => void> = [];
+    const ran: string[] = [];
+    const { o, injected } = opts(p, new Date("2026-07-22T08:00:30Z"), {
+      runBackground: (job) => new Promise((res) => (ran.push(job.id), pending.push(res))),
+    });
+    await runSchedulerTick(o);
+    expect(ran).toEqual(["a1"]); // a2 waits for the agent slot
+    pending.shift()!({ ok: true, summary: "OK" });
+    await new Promise((r) => setImmediate(r));
+    await runSchedulerTick(o);
+    expect(ran).toEqual(["a1", "a2"]);
+    expect(injected).toHaveLength(0); // OK → silent
+    pending.shift()!({ ok: true, summary: "2 pages need a new description" });
+    await new Promise((r) => setImmediate(r));
+    expect(await runSchedulerTick(o)).toEqual({ fired: true, kind: "notice" });
+    expect(injected[0]).toBe('[podway job] "second": 2 pages need a new description');
+  });
+
+  it("the real runner: bash script fails with its exit code + log; agent run reads its prompt file on stdin", async () => {
+    const p = tmp();
+    const home = p.dir;
+    writeFileSync(path.join(home, "prompt.md"), "say hi");
+    writeJobs(p, [
+      { ...brief, id: "s1", name: "script", kind: "exec", exec: "echo partial; exit 3" },
+      { ...brief, id: "g1", name: "agent", kind: "agent", promptFile: "~/prompt.md" },
+    ]);
+    const { o, injected } = opts(p, new Date("2026-07-22T08:00:30Z"), {
+      home,
+      runBackground: undefined,
+      // stands in for `claude -p`: proves the preamble + file arrive on stdin, answers with its last line
+      agentCommand: () => "grep -q 'scheduled background job' && grep -c . >/dev/null; echo; echo 'agent saw the prompt'",
+    });
+    await runSchedulerTick(o);
+    for (let i = 0; i < 50 && injected.length < 2; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+      await runSchedulerTick(o);
+    }
+    expect(injected.some((t) => t.startsWith('[podway job] Script "script" failed: exit 3: partial.'))).toBe(true);
+    expect(injected.some((t) => t.startsWith('[podway job] "agent": agent saw the prompt'))).toBe(true);
+    const log = injected.find((t) => t.includes("script"))!.match(/Log: (\S+)/)![1];
+    expect(readFileSync(log, "utf8")).toContain("partial");
+  });
+
+  it("records how late a run started", async () => {
+    const p = tmp();
+    writeJobs(p, [{ ...brief, kind: "exec", exec: "true" }]);
+    const { o } = opts(p, new Date("2026-07-22T08:47:30Z"), { runBackground: async () => ({ ok: true, summary: "" }) });
+    // seed: the 08:00 slot passed before the job existed → mark state as seen yesterday so it is due
+    writeFileSync(p.statePath, JSON.stringify({ jobs: { brief: { ranDates: {} } } }));
+    await runSchedulerTick(o);
+    const started = JSON.parse(readFileSync(p.runsLogPath, "utf8").split("\n")[0]);
+    expect(started.lateMin).toBe(47);
   });
 
   it("re-fires an interval job after the interval elapses", async () => {

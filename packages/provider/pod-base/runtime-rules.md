@@ -79,7 +79,7 @@ laptop. Trust the `podway` CLI over any assumption about this environment.
     gets the path wrong: secrets is its OWN tab, not a child of Settings). And never hand over
     `…/pods/<slug>` — that is the bare web TERMINAL, a different page from the cockpit; the cockpit is
     always `…/dashboard/pods/<slug>`. Both mistakes were made to a real owner (2026-08-27).
-  - **`podway schedule …` / `podway startup …`** — durable recurring turns / boot processes (your
+  - **`podway schedule …` / `podway startup …`** — durable scheduled jobs / boot processes (your
     `CronCreate` is NOT durable — see below).
   - **`podway info` / `podway preview` / `podway doctor`** — where am I, the preview URL, health+repair.
 
@@ -138,8 +138,20 @@ laptop. Trust the `podway` CLI over any assumption about this environment.
   survive a pod restart — and you must **never tell the user an armed `CronCreate` job is persistent or
   will keep running**; saying "scheduled ✅, it'll run every Monday" when it won't is the exact false
   claim to avoid. For work that must outlive a restart:
-  - **A recurring turn** (a job that re-runs on a schedule): use **`podway schedule`** — it registers a
-    durable job the pod-agent scheduler fires by waking you on time, and it survives restarts.
+  - **Something that runs on a schedule:** use **`podway schedule add`** (durable, survives restarts) and
+    pick the KIND by one question — *does it need judgement, or the conversation?*
+    - **No judgement** (a curl, a script, a sync, a check): **`--exec "cmd"`**. The pod-agent runs it on
+      time, never waits for you, costs no turn, and tells you ONLY when it fails. Never wrap a script in a
+      `--do` job or hand-write a `podway startup` loop with your own clock math for it.
+    - **Judgement, but not the conversation** (write a report, triage, draft texts): **`--prompt-file
+      ~/ops/<job>.md`**. A separate headless agent run reads the file, works, and posts one summary line
+      (nothing if its last line is `OK`). At most hourly — each run uses the owner's plan. It may only
+      read, or write under its own `~/ops/` folder.
+    - **Needs the conversation or the owner** ("ask me every Monday…", changes code/DB): **`--do "…"`**.
+      It is typed into the chat as one line, **costs a turn, and fires only while you are idle**.
+    - **Batch** related periodic AI work into ONE `--prompt-file` job with a task list, not one job per task.
+    - Runs are logged in `~/.podway/ops-runs.jsonl` and `~/.podway/jobs/runs/<id>/`; `podway schedule list`
+      shows each job's last run, how late it started, and the result.
   - **A long-running process** (a server, worker, or daemon beyond the `:3000` dev server): use
     **`podway startup`** so it's relaunched on every boot. A bare `nohup … &` dies on the next restart,
     and you **cannot** self-install a systemd unit that sticks (`/etc` resets — only `~` persists).

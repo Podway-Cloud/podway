@@ -149,7 +149,8 @@ test.describe("admin backoffice pages", () => {
       try {
         const v = await visitor.newPage();
         await v.goto("/");
-        await expect(v.getByRole("heading", { level: 1 })).toHaveText(/Self-host anything/, { timeout: 5_000 });
+        // Either selfhost first screen: half the arm sees the "upkeep" hero (A/B by visitor id, #457).
+        await expect(v.getByRole("heading", { level: 1 })).toHaveText(/Self-host anything|without the sysadmin work/, { timeout: 5_000 });
       } finally {
         await visitor.close();
       }

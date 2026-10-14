@@ -35,6 +35,17 @@ const DEFAULT_STALL_GRACE_MS = 30 * 60_000;
 const BUSY_FORCE_MS = 30 * 60_000;
 
 export type JobMode = "brief" | "watch" | "routine";
+/** What a run IS (schedule-job-kinds): `exec` = a shell command pod-agent runs itself (no AI, no chat);
+ * `agent` = a headless agent run with a prompt file (no chat); `chat` = a turn typed into the main
+ * session (the original, and the default for jobs without a kind). */
+export type JobKind = "exec" | "agent" | "chat";
+/** Background runs (exec/agent) never wait for the main session. Defaults: script 10 min, agent 30 min. */
+const EXEC_TIMEOUT_MS = 10 * 60_000;
+const AGENT_TIMEOUT_MS = 30 * 60_000;
+const AGENT_PREAMBLE =
+  "You are a scheduled background job on this pod, not the main session. Only read, or write under your " +
+  "own ~/ops folder; changes to code or the database belong in a chat job. Do the task below, then end with " +
+  "ONE summary line for the owner; write exactly OK as the last line if nothing needs the owner.\n\n";
 
 export interface JobSchedule {
   /** OR one moment (ISO timestamp): the job fires once, then is removed from the jobs file. */
@@ -60,6 +71,11 @@ export interface OpsJob {
    * injected turn so a generic pod's agent knows the task without a dashboard. Optional
    * for back-compat (the operations-bot playbook keeps its behavior via its rules). */
   instructions?: string;
+  kind?: JobKind;
+  /** exec jobs: the shell command (run with `bash -lc` as the pod user, cwd ~/work or ~). */
+  exec?: string;
+  /** agent jobs: the prompt file (absolute or ~-relative). */
+  promptFile?: string;
 }
 
 interface JobsConfig {
@@ -85,6 +101,11 @@ interface RunEvent {
   event: "started" | "succeeded" | "failed";
   at: string;
   summary?: string;
+  kind?: JobKind;
+  /** started events: minutes after the scheduled slot (the lateness `podway schedule list` shows). */
+  lateMin?: number;
+  /** terminal events of background runs: the run's log file. */
+  log?: string;
 }
 
 export interface SchedulerOptions {
@@ -115,25 +136,71 @@ export interface SchedulerOptions {
   stallTrigger?: (run: { jobId: string; runId: string; startedAt: string }) => string;
   /** Generate a run id (override in tests for determinism). */
   makeRunId?: (jobId: string) => string;
+  /** The pod user's home (cwd + log root for background runs). Defaults to the parent of jobsPath's dir. */
+  home?: string;
+  /** Shell that runs a headless agent reading its prompt from stdin (boot.ts headlessCommandForAgent). */
+  agentCommand?: () => string;
+  /** Run one exec/agent job to completion (override in tests). */
+  runBackground?: (job: OpsJob, runId: string) => Promise<BackgroundResult>;
+}
+
+export interface BackgroundResult {
+  ok: boolean;
+  /** exec: the output tail on failure; agent: the last line of its answer. */
+  summary: string;
+  log?: string;
+}
+
+/** Per-scheduler in-memory state (keyed by statePath): runs in flight + one-line notices for the agent.
+ * ponytail: notices are in memory — a pod-agent restart drops an undelivered one (the run log keeps it). */
+const live = new Map<string, { inFlight: Set<string>; agentBusy: boolean; notices: string[]; failing: Set<string> }>();
+function liveFor(statePath: string) {
+  let l = live.get(statePath);
+  if (!l) live.set(statePath, (l = { inFlight: new Set(), agentBusy: false, notices: [], failing: new Set() }));
+  return l;
+}
+
+function kindOf(job: OpsJob): JobKind {
+  return job.kind ?? "chat";
+}
+
+/** Minutes after the scheduled slot this run starts (same-day slots; interval = since it fell due). */
+export function lateMinutes(job: OpsJob, markTime: string | undefined, lastRunAt: string | undefined, now: Date): number {
+  let ms = 0;
+  if (job.schedule?.at) ms = now.getTime() - Date.parse(job.schedule.at);
+  else if (markTime) {
+    const [h, m] = localParts(now, job.schedule.timezone).hhmm.split(":").map(Number);
+    const [sh, sm] = markTime.split(":").map(Number);
+    ms = ((h * 60 + m) - (sh * 60 + sm)) * 60_000;
+  } else if (lastRunAt && job.schedule?.everyMinutes) {
+    ms = now.getTime() - Date.parse(lastRunAt) - job.schedule.everyMinutes * 60_000;
+  }
+  return Math.max(0, Math.round(ms / 60_000));
+}
+
+/** The one line a finished background run sends the main session, or null when there is nothing to say. */
+export function noticeFor(job: OpsJob, r: BackgroundResult): string | null {
+  const flat = (t: string, n: number) => t.replace(/\s+/g, " ").trim().slice(0, n);
+  const log = r.log ? ` Log: ${r.log}` : "";
+  if (kindOf(job) === "exec") return r.ok ? null : `[podway job] Script "${job.name}" failed: ${flat(r.summary, 200)}.${log}`;
+  if (r.ok && r.summary.trim() === "OK") return null;
+  return `[podway job] "${job.name}"${r.ok ? "" : " failed"}: ${flat(r.summary, 300)}${log}`;
 }
 
 // The scheduler injects these as raw text into the agent's prompt (tmux), so they can't get the
 // Claude client's own envelope styling — but a clean, tagged block reads far better than the old
 // run-on paragraph. Keep the load-bearing tokens (job name, runId, the `podway schedule done`
 // commands, "Dead-man") — the dashboard/tests and the agent both key on them.
+// ONE line (schedule-job-kinds): the 40-line pasted block filled owners' chats (ogo.co.il, 2026-10-14). The
+// instructions are copied to the run's own file when it fires — a one-shot job is gone from the jobs file
+// by the time the agent reads them (test:1, 2026-10-14).
+function chatRunFile(job: OpsJob, runId: string): string {
+  return `.podway/jobs/runs/${job.id}/${runId}.md`;
+}
 function defaultRunTrigger(job: OpsJob, runId: string): string {
-  const what = job.instructions?.trim()
-    ? `\n<task>\n${job.instructions.trim()}\n</task>`
-    : `\nRun it per its definition in ~/.podway/ops-jobs.json.`;
   return (
-    `<podway-scheduled-job name="${job.name}" id="${job.id}" run="${runId}">\n` +
-    `A scheduled run just fired — do the job now, don't re-onboard.\n` +
-    `${what}\n\n` +
-    `When you finish, CLOSE THE RUN (or the dead-man flags it hours later):\n` +
-    `  done:    podway schedule done ${runId}\n` +
-    `  failed:  podway schedule done ${runId} fail\n` +
-    `Then report the result per any scheduled-run rules in your environment.\n` +
-    `</podway-scheduled-job>`
+    `[podway job] Scheduled job "${job.name}" (${runId}) — instructions: cat ~/${chatRunFile(job, runId)} . ` +
+    `When done: podway schedule done ${runId} (or: … ${runId} fail).`
   );
 }
 
@@ -217,11 +284,14 @@ function readRunEvents(file: string): RunEvent[] {
 }
 
 /** Reduce the event log to per-run state (last write wins for the terminal event). */
-export function reduceRuns(events: RunEvent[]): Map<string, { jobId: string; startedAt?: string; terminal?: boolean }> {
-  const runs = new Map<string, { jobId: string; startedAt?: string; terminal?: boolean }>();
+export function reduceRuns(events: RunEvent[]): Map<string, { jobId: string; startedAt?: string; terminal?: boolean; kind?: JobKind }> {
+  const runs = new Map<string, { jobId: string; startedAt?: string; terminal?: boolean; kind?: JobKind }>();
   for (const e of events) {
     const cur = runs.get(e.runId) ?? { jobId: e.jobId };
-    if (e.event === "started") cur.startedAt = e.at;
+    if (e.event === "started") {
+      cur.startedAt = e.at;
+      cur.kind = e.kind;
+    }
     else cur.terminal = true;
     runs.set(e.runId, cur);
   }
@@ -273,7 +343,8 @@ function markRan(state: SchedulerState, job: OpsJob, markTime: string | undefine
 export type TickResult =
   | { fired: false; reason: "no-config" | "no-jobs" | "none-due" | "deferred" }
   | { fired: true; kind: "run"; jobId: string; runId: string }
-  | { fired: true; kind: "stall"; runId: string };
+  | { fired: true; kind: "stall"; runId: string }
+  | { fired: true; kind: "notice" };
 
 /**
  * One scheduler check. Fires at most one turn per tick (a job run, or — if none is
@@ -309,6 +380,53 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
   }
   if (seeded) writeJson(opts.statePath, state, opts.uid, opts.gid);
   const due = dueJobs(jobs, state, now());
+  const l = liveFor(opts.statePath);
+  const runBg = opts.runBackground ?? defaultRunBackground(opts);
+  const dropOneShot = (job: OpsJob) => {
+    if (typeof job.schedule?.at !== "string") return;
+    // One-shot: done after firing. Re-read so a job the CLI added this tick is not lost.
+    const latest = readJson<JobsConfig>(opts.jobsPath, { jobs: [] });
+    writeJson(opts.jobsPath, { ...latest, jobs: (latest.jobs ?? []).filter((j) => j.id !== job.id) }, opts.uid, opts.gid);
+  };
+
+  // 0) Background jobs (exec/agent) start ON TIME — they never wait for the main session and never use
+  //    the busy fallback below. One run per job at a time; one agent run at a time per pod.
+  for (const { job, markTime } of due.filter((d) => kindOf(d.job) !== "chat")) {
+    const kind = kindOf(job);
+    if (l.inFlight.has(job.id) || (kind === "agent" && l.agentBusy)) continue;
+    const runId = makeRunId(job.id);
+    const lateMin = lateMinutes(job, markTime, state.jobs[job.id]?.lastRunAt, now());
+    markRan(state, job, markTime, now());
+    writeJson(opts.statePath, state, opts.uid, opts.gid);
+    dropOneShot(job);
+    appendEvent(opts, { runId, jobId: job.id, jobName: job.name, event: "started", at: now().toISOString(), kind, lateMin });
+    l.inFlight.add(job.id);
+    if (kind === "agent") l.agentBusy = true;
+    log.info("ops_run_background", { jobId: job.id, runId, kind, lateMin });
+    void runBg(job, runId)
+      .catch((e): BackgroundResult => ({ ok: false, summary: String(e) }))
+      .then((r) => {
+        l.inFlight.delete(job.id);
+        if (kind === "agent") l.agentBusy = false;
+        appendEvent(opts, {
+          runId, jobId: job.id, jobName: job.name, event: r.ok ? "succeeded" : "failed", at: now().toISOString(),
+          summary: r.summary.slice(0, 500), log: r.log, kind,
+        });
+        // A script that keeps failing says so ONCE, then once when it works again — not every run (a
+        // failing every-minute check queued a notice per run on test:1, 2026-10-14).
+        let n = noticeFor(job, r);
+        if (kind === "exec") {
+          const was = l.failing.has(job.id);
+          if (r.ok) l.failing.delete(job.id);
+          else l.failing.add(job.id);
+          if (!r.ok && was) n = null;
+          if (r.ok && was) n = `[podway job] Script "${job.name}" works again.`;
+        }
+        if (n) l.notices.push(n);
+        log.info("ops_run_background_done", { jobId: job.id, runId, ok: r.ok, notice: Boolean(n) });
+      });
+  }
+  const chatDue = due.filter((d) => kindOf(d.job) === "chat");
 
   // Only inject when the agent can take a turn. busy/shell = working. ANY waitingFor (or status
   // "waiting") means the CLI is waiting on the OWNER — a question box ("input needed"), a sandbox
@@ -320,8 +438,15 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
     !(s.status === "busy" || s.status === "shell" || s.status === "waiting") &&
     !(typeof s.waitingFor === "string" && s.waitingFor.length > 0);
 
-  // 1) Fire the earliest-due job (one per tick).
-  if (due.length > 0) {
+  // A finished background run's one-line notice, when the agent can take it (never the busy fallback).
+  if (l.notices.length > 0 && canInject) {
+    await inject(l.notices.shift()!);
+    log.info("ops_notice_sent", {});
+    return { fired: true, kind: "notice" };
+  }
+
+  // 1) Fire the earliest-due chat job (one per tick).
+  if (chatDue.length > 0) {
     // Busy (working), not waiting on the owner: after BUSY_FORCE_MS, type it in as a queued message.
     const busyOnly = (s.status === "busy" || s.status === "shell") && !s.waitingFor;
     if (!canInject && busyOnly) {
@@ -334,23 +459,28 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
         state.deferredSince = now().toISOString();
         writeJson(opts.statePath, state, opts.uid, opts.gid);
       }
-      log.info("ops_run_deferred", { due: due.map((d) => d.job.id), status: s.status });
+      log.info("ops_run_deferred", { due: chatDue.map((d) => d.job.id), status: s.status });
       return { fired: false, reason: "deferred" };
     }
     delete state.busySince;
     delete state.deferredSince;
-    if (forced) log.info("ops_run_forced_busy", { jobId: due[0].job.id });
-    const { job, markTime } = due[0];
+    if (forced) log.info("ops_run_forced_busy", { jobId: chatDue[0].job.id });
+    const { job, markTime } = chatDue[0];
     const runId = makeRunId(job.id);
+    const lateMin = lateMinutes(job, markTime, state.jobs[job.id]?.lastRunAt, now());
+    try {
+      const f = path.join(opts.home ?? path.dirname(path.dirname(opts.jobsPath)), chatRunFile(job, runId));
+      mkdirSync(path.dirname(f), { recursive: true });
+      writeFileSync(f, job.instructions?.trim() || "Run it per its definition in ~/.podway/ops-jobs.json.");
+      chownBestEffort(f, opts.uid, opts.gid);
+    } catch {
+      /* the trigger still names the job */
+    }
     await inject(runTrigger(job, runId));
     markRan(state, job, markTime, now());
     writeJson(opts.statePath, state, opts.uid, opts.gid);
-    if (typeof job.schedule?.at === "string") {
-      // One-shot: done after firing. Re-read so a job the CLI added this tick is not lost.
-      const latest = readJson<JobsConfig>(opts.jobsPath, { jobs: [] });
-      writeJson(opts.jobsPath, { ...latest, jobs: (latest.jobs ?? []).filter((j) => j.id !== job.id) }, opts.uid, opts.gid);
-    }
-    appendEvent(opts, { runId, jobId: job.id, jobName: job.name, event: "started", at: now().toISOString() });
+    dropOneShot(job);
+    appendEvent(opts, { runId, jobId: job.id, jobName: job.name, event: "started", at: now().toISOString(), kind: "chat", lateMin });
     log.info("ops_run_injected", { jobId: job.id, runId, mode: job.mode });
     return { fired: true, kind: "run", jobId: job.id, runId };
   }
@@ -372,7 +502,8 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
   // run trips a false "never reported back" alarm 30 min after any restart.
   const bootTimeMs = opts.bootTimeMs ?? Date.now() - Math.floor(os.uptime() * 1000);
   for (const [runId, r] of runs) {
-    if (r.terminal || alerted.has(runId) || !r.startedAt) continue;
+    // Background runs close themselves (their runner always writes the terminal event, timeout included).
+    if (r.terminal || alerted.has(runId) || !r.startedAt || r.kind === "exec" || r.kind === "agent") continue;
     if (Date.parse(r.startedAt) < bootTimeMs) {
       alerted.add(runId);
       state.stallAlerted = [...alerted];
@@ -400,6 +531,54 @@ function appendEvent(opts: SchedulerOptions, event: RunEvent): void {
   } catch {
     /* observability only */
   }
+}
+
+/** Runs an exec/agent job with `bash -lc` as the pod user, logs to ~/.podway/jobs/runs/<job>/<run>.log. */
+function defaultRunBackground(opts: SchedulerOptions) {
+  const home = opts.home ?? path.dirname(path.dirname(opts.jobsPath));
+  return (job: OpsJob, runId: string): Promise<BackgroundResult> =>
+    new Promise((resolve) => {
+      const dir = path.join(home, ".podway", "jobs", "runs", job.id);
+      const logFile = path.join(dir, `${runId}.log`);
+      const agent = kindOf(job) === "agent";
+      let input = "";
+      if (agent) {
+        const file = (job.promptFile ?? "").replace(/^~(?=\/|$)/, home);
+        try {
+          input = AGENT_PREAMBLE + readFileSync(file, "utf8");
+        } catch {
+          resolve({ ok: false, summary: `prompt file not readable: ${job.promptFile}` });
+          return;
+        }
+      }
+      const cmd = agent ? (opts.agentCommand?.() ?? "env -u ANTHROPIC_API_KEY claude -p --no-session-persistence") : job.exec ?? "false";
+      const child = execFile(
+        "bash",
+        ["-lc", `cd ~/work 2>/dev/null || cd ~; ${cmd}`],
+        {
+          uid: opts.uid, gid: opts.gid, cwd: home, maxBuffer: 8 * 1024 * 1024, killSignal: "SIGKILL",
+          timeout: agent ? AGENT_TIMEOUT_MS : EXEC_TIMEOUT_MS,
+          env: { ...process.env, HOME: home, USER: "dev", LOGNAME: "dev" },
+        },
+        (err, stdout, stderr) => {
+          const out = `${stdout}${stderr ? `\n[stderr]\n${stderr}` : ""}`;
+          try {
+            mkdirSync(dir, { recursive: true });
+            writeFileSync(logFile, out);
+            chownBestEffort(logFile, opts.uid, opts.gid);
+          } catch {
+            /* the run event still records the result */
+          }
+          const lines = (agent ? stdout : out).split("\n").map((x) => x.trim()).filter(Boolean);
+          const e = err as (NodeJS.ErrnoException & { killed?: boolean; code?: number | string }) | null;
+          const why = e?.killed ? "timed out" : e ? `exit ${e.code}` : "";
+          const summary = agent ? (lines.at(-1) ?? why) : [why, lines.slice(-2).join(" | ")].filter(Boolean).join(": ");
+          resolve({ ok: !e, summary: e && agent ? `${why}: ${summary}` : summary, log: logFile });
+        },
+      );
+      if (agent) child.stdin?.end(input);
+      else child.stdin?.end();
+    });
 }
 
 function defaultInject(sessionName: string, uid?: number, gid?: number) {

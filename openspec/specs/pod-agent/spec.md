@@ -547,6 +547,22 @@ job's timezone; absent means every day, so a `times` job can be weekly) OR a rep
 interval; and `instructions` is optional free text describing what the job should do when it runs. The
 jobs config is user-owned; the scheduler only reads it.
 
+A job MAY carry a `kind` (absent = `chat`): `exec` (a shell command in `exec`), `agent` (a prompt file in
+`promptFile`), or `chat` (schedule-job-kinds, 2026-10-14). `exec` and `agent` runs are BACKGROUND runs:
+they start on time whatever the agent is doing, run as the pod user with `bash -lc` from `~/work` (or `~`),
+log their output to `~/.podway/jobs/runs/<id>/<runId>.log`, write their own terminal event, and are never
+typed into the chat. An `exec` run times out after 10 minutes; an `agent` run is a headless agent process
+(`claude -p … --no-session-persistence` / `codex exec … --ephemeral`, same auth and env rules as the
+interactive launch) that reads a short preamble plus the prompt file on stdin, times out after 30
+minutes, and only one runs at a time. When a background run ends, the main session gets ONE line — an
+`exec` run only on failure, an `agent` run unless its last line is exactly `OK` — delivered only when the
+agent can take a turn (never through the busy fallback). A `chat` run is typed in as ONE line that points
+at a copy of its instructions in `~/.podway/jobs/runs/<id>/<runId>.md` (written when it fires, so a one-shot
+job removed from the jobs file still has them) instead of pasting the instructions. A script job that keeps
+failing reports it ONCE, and once more when it works again. Every `started` event records the
+run's `kind` and `lateMin` (minutes after its scheduled slot); `podway schedule list` shows each job's
+kind, last run, lateness and result.
+
 The scheduler SHALL type a run (or a stalled-run alert) into the agent ONLY when the agent can take a
 turn: never while it is `busy`, in a `shell`, `waiting`, or reports ANY `waitingFor` (a question box
 — "input needed" —, a sandbox request, a dialog). Typed keys go to that UI: on 2026-10-06 runs typed
@@ -643,7 +659,8 @@ session followed by Enter.
 The scheduler SHALL only inject when the agent can take a turn: it SHALL defer to a later tick
 when the session is busy or in a shell, or when it is waiting on a dialog. At most one turn SHALL
 be injected per tick. A busy session SHALL NOT starve jobs forever: once due jobs have been deferred
-for 30 minutes ONLY because the session is busy or in a shell (no dialog, no `waitingFor`), the
+for 30 minutes ONLY because the session is busy or in a shell (chat jobs only — background
+jobs never wait) (no dialog, no `waitingFor`), the
 earliest one SHALL be typed in anyway (the agent queues it as its next message), and the 30-minute
 clock SHALL restart for the next job.
 
@@ -1346,3 +1363,28 @@ this, `podway bug --help` filed a real bug report and `msg send <pod> --help` wo
 #### Scenario: Asking a command for help
 - **WHEN** an agent runs `podway bug --help`
 - **THEN** the usage SHALL print and no report SHALL be filed
+
+### Requirement: A scheduled job is a script, an agent run, or a chat turn
+
+`podway schedule add` SHALL accept exactly one of `--exec "<shell>"` (script job), `--prompt-file <path>`
+(agent job) or `--do "<text>"` (chat job), with the existing calendar flags. A script job SHALL run on time
+without waiting for the agent and SHALL message the agent only on a non-zero exit or timeout. An agent job
+SHALL run as a separate headless agent process with the file as its prompt, SHALL NOT type into the main
+session, and SHALL post one summary line when it ends unless its result is `OK`. A chat job keeps today's
+behavior, with a one-line trigger. Every run SHALL be logged with its scheduled and started time.
+
+#### Scenario: A plain HTTP call every hour
+
+- **WHEN** a job is added with `--every 60 --exec "curl -fsS …"` and the agent is busy
+- **THEN** it runs on time, nothing appears in the chat, and a failed call sends one short message
+
+#### Scenario: A daily AI routine
+
+- **WHEN** a job is added with `--at 08:30 --prompt-file ~/ops/daily-routine.md`
+- **THEN** a headless agent run does it at 08:30 even while the main session is busy, writes its log, and
+  posts one summary line (or nothing when the result is OK)
+
+#### Scenario: The busy fallback
+
+- **WHEN** a chat job waits 30 minutes on a busy session
+- **THEN** it is typed in as today; script and agent jobs never use this fallback

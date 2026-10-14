@@ -9,6 +9,7 @@ import { sessionStateFromDisk, lastAgentActivityMs, newestClaudeTranscript, agen
 import { startCacheTrim } from "./cache-trim.js";
 import {
   bootCommandForAgent,
+  headlessCommandForAgent,
   credentialsPathForAgent,
   sanitizeSessionName,
   KICKOFF_PATH,
@@ -201,6 +202,9 @@ async function main(): Promise<void> {
     runsLogPath: path.join(opsDir, "ops-runs.jsonl"),
     uid: isRoot ? 1000 : undefined,
     gid: isRoot ? 1000 : undefined,
+    home,
+    // Scheduled agent jobs run headless with the pod's own agent + auth (schedule-job-kinds).
+    agentCommand: () => headlessCommandForAgent(agent, mode, readAgentAuth()),
   });
 
   // Autopilot (owner, 2026-10-11): wake-to-work + opt-in "always choose recommended" — both off unless the

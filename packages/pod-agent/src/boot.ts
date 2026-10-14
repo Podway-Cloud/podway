@@ -164,6 +164,22 @@ function codexPermFlags(): string {
   return "-c check_for_update_on_startup=false --dangerously-bypass-approvals-and-sandbox";
 }
 
+function claudePermFlag(mode: string): string {
+  return mode === "bypassPermissions" ? "--dangerously-skip-permissions" : `--permission-mode ${mode}`;
+}
+
+/** A one-shot, NON-interactive agent run that reads its prompt from stdin (scheduled agent jobs,
+ * scheduler.ts). Same auth/env rules as the interactive launch (the app key is stripped in subscription
+ * mode — with it set, `claude -p` fails "Invalid API key", verified 2026-10-14). Nothing is saved as a
+ * session, so the main agent's `--continue` / `resume --last` never picks a job's transcript. */
+export function headlessCommandForAgent(agent: string, mode = DEFAULT_PERMISSION_MODE, agentAuth: AgentAuth = "subscription"): string {
+  if (agent === "codex") {
+    return `${agentAuth === "api-key" ? CODEX_APIKEY : CODEX} exec ${codexPermFlags()} --skip-git-repo-check --ephemeral -`;
+  }
+  const bin = agentAuth === "api-key" ? CLAUDE_APIKEY : agentAuth === "setup-token" ? CLAUDE_SETUP_TOKEN : CLAUDE;
+  return `${bin} -p ${claudePermFlag(mode)} --no-session-persistence`;
+}
+
 /** The agent CLI invocation for an authenticated session (kickoff if present). In
  * api-key mode the CLI runs ON the BYO key (set for this process only) instead of the
  * subscription login, and the app-key strip is deliberately NOT applied. */
@@ -226,10 +242,7 @@ function agentInvocation(cli: string, mode: string, agentAuth: AgentAuth = "subs
   // at the gate. `--dangerously-skip-permissions` is claude's NON-INTERACTIVE bypass:
   // it enters the same mode with NO gate (verified — straight to the prompt in an
   // already-trusted ~/work). Any other mode keeps the normal --permission-mode flag.
-  const permFlag =
-    mode === "bypassPermissions"
-      ? "--dangerously-skip-permissions"
-      : `--permission-mode ${mode}`;
+  const permFlag = claudePermFlag(mode);
   // A stale/foreign/corrupt transcript makes `--continue` exit FAST with "No conversation found
   // to continue" — which, retried as-is, crash-loops the pod to a dead shell (seen live 2026-08-20
   // when a second agent harness wrote the same ~/work transcript). So run claude through `__cl`:
