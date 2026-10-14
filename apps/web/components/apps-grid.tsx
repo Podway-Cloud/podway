@@ -29,7 +29,7 @@ function setScrollTop(c: HTMLElement | Window, y: number): void {
  * row (owner call). On card click we save the scroll position, and restore it on mount, so returning
  * from a launch (browser Back) lands at the same place in the grid instead of the top.
  */
-export default function AppsGrid({ apps, enabled }: { apps: CardEntry[]; enabled: boolean }) {
+export default function AppsGrid({ apps, enabled, publicRef }: { apps: CardEntry[]; enabled: boolean; publicRef?: string }) {
   const ref = useRef<HTMLUListElement>(null);
   useEffect(() => {
     let y: number | null = null;
@@ -77,7 +77,7 @@ export default function AppsGrid({ apps, enabled }: { apps: CardEntry[]; enabled
     >
       {apps.map((a) => (
         <li key={a.name}>
-          <AppCard entry={a} enabled={enabled} variant="app" />
+          <AppCard entry={a} enabled={enabled} variant="app" publicRef={publicRef} />
         </li>
       ))}
     </ul>

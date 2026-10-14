@@ -21,7 +21,9 @@ const featureRank = (name: string) => FEATURED_FIRST[name] ?? 99;
 // they're just not shown in the browse grid. Edit this set to show/hide an app.
 // HIDDEN_APPS lives in lib/app-catalog.ts — shared with the /apps pages and the landing lineup.
 
-export default async function EnvGallery() {
+/** `publicRef` set = the signed-out catalog on `/start` (landing-funnel-fixes): cards open the signed-out
+ * wizard with this ref ("" = no ref). */
+export default async function EnvGallery({ publicRef }: { publicRef?: string } = {}) {
   const all = await listEnvironments();
   const enabled = isProvisioningEnabled();
   const showApps = !editionOss();
@@ -54,13 +56,13 @@ export default async function EnvGallery() {
           <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {workspaces.map((w) => (
               <li key={w.name}>
-                <AppCard entry={w} enabled={enabled} variant="workspace" />
+                <AppCard entry={w} enabled={enabled} variant="workspace" publicRef={publicRef} />
               </li>
             ))}
           </ul>
         )
       }
-      apps={showApps ? <AppsGrid apps={apps} enabled={enabled} /> : undefined}
+      apps={showApps ? <AppsGrid apps={apps} enabled={enabled} publicRef={publicRef} /> : undefined}
     />
   );
 }

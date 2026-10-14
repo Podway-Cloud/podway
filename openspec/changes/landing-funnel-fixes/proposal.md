@@ -17,6 +17,11 @@ Show HN day (2026-10-13), PostHog: 19 visitors came from news.ycombinator.com an
    sign-in, and ask for sign-in on "Create my free pod". The choice is kept through OAuth (it already is
    for `/start?app=`).
 
+4. **The catalog opens to signed-out visitors** (owner, 2026-10-13): the main "Start free" button goes
+   to `/start?tab=apps`, which today asks sign-in first. Signed out, it SHALL show the app catalog
+   (same cards, same tabs) on a public page; each card links to `/start?app=<app>&ref=<ref>`, i.e. the
+   signed-out wizard. Signed in, nothing changes (the dashboard catalog).
+
 ## Decisions
 
 - (3) Anonymous visitors MAY see the wizard; sign-in only on "Create my free pod" (owner, 2026-10-13).

@@ -187,3 +187,14 @@ sign-in. Self-host, the catalog link (`/start?tab=apps`) and BYO-repo environmen
 
 - **WHEN** a signed-out visitor opens `/start?app=uptime-kuma`, names the pod and clicks Create
 - **THEN** they are asked to sign in, and after sign-in the wizard shows the name they typed
+
+### Requirement: The catalog link shows the catalog before sign-in
+
+On cloud, a signed-out visitor opening `/start?tab=apps` (the landing's main button) SHALL see the app
+catalog without an account. Each card SHALL open `/start?app=<app>` with the same `ref` (the signed-out
+wizard). Signed in, the link still goes to the dashboard catalog. Self-host keeps sign-in first.
+
+#### Scenario: A visitor clicks "Start free"
+
+- **WHEN** a signed-out visitor opens `/start?tab=apps&ref=x` and clicks an app card
+- **THEN** they see that app's wizard at `/start?app=<app>&ref=x`, still signed out

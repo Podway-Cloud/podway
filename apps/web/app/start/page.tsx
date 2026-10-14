@@ -8,6 +8,7 @@ import { POD_SIZES, CARDED_RAM_GB, noCardRamGb, type PodSize } from "@podway/sha
 import { stripeConfigured } from "@podway/control-plane";
 import LaunchConfigure from "@/components/launch-configure";
 import DashboardPage from "@/components/dashboard-page";
+import EnvGallery from "@/components/env-gallery";
 import { isProvisioningEnabled } from "@/lib/pod-service";
 import { harnessEnabled } from "@/lib/agent-harness";
 
@@ -63,6 +64,23 @@ export default async function StartPage({
     // Cloud app link: show the app's wizard BEFORE sign-in; Create asks for it (landing-funnel-fixes —
     // the one Show HN visitor who clicked an app left at the sign-in wall). OSS, the catalog (no app),
     // and BYO-repo envs (the repo picker needs a GitHub login) keep sign-in first.
+    // The landing's main button (`/start?tab=apps`, no app): the catalog, public; its cards open the
+    // signed-out wizard below with the same ref.
+    if (!editionOss() && !app && !size) {
+      return (
+        <main className="mx-auto w-full max-w-6xl px-4 py-8">
+          <DashboardPage
+            backHref="/"
+            backLabel="Podway"
+            title="Create a pod"
+            intro="Pick an app. You choose its size and name next, and sign in only when you create it."
+            wide
+          >
+            <EnvGallery publicRef={ref ?? ""} />
+          </DashboardPage>
+        </main>
+      );
+    }
     const anonDetail = !editionOss() && app ? await getEnvironmentDetail(app) : null;
     if (!anonDetail || anonDetail.byoRepo) redirect(`/signin?next=${encodeURIComponent(startPath)}`);
     const offer = ref && Object.hasOwn(FREE_POD_OFFERS, ref) ? FREE_POD_OFFERS[ref] : undefined;

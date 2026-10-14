@@ -49,15 +49,21 @@ export default function AppCard({
   entry: e,
   enabled,
   variant,
+  publicRef,
 }: {
   entry: CardEntry;
   enabled: boolean;
   variant: "workspace" | "app";
+  /** Signed-out catalog (`/start?tab=apps`): the card opens the signed-out wizard, keeping the ref. */
+  publicRef?: string;
 }) {
   const isApp = variant === "app";
   const categories = categoriesFor(e, variant);
   const TileIcon = e.name === "byo-project" ? FolderGit2 : Code2;
-  const href = `/dashboard/pods/new?env=${encodeURIComponent(e.name)}`;
+  const href =
+    publicRef != null
+      ? `/start?app=${encodeURIComponent(e.name)}${publicRef ? `&ref=${encodeURIComponent(publicRef)}` : ""}`
+      : `/dashboard/pods/new?env=${encodeURIComponent(e.name)}`;
   const updated = e.updatedAt ? formatUpdated(e.updatedAt) : "";
   // Monthly cost of the smallest pod this app runs on (the launch floors to minSize).
   const cost = priceForSize(e.minSize ?? DEFAULT_POD_SIZE);

@@ -89,18 +89,18 @@ test.describe("deep-link onboarding (/start)", () => {
     expect(await accountRef(USERS.approved.email)).toBe("e2e-unknown");
   });
 
-  test("a landing app-catalog link keeps the Apps tab through sign-in", async ({ page }) => {
+  // landing-funnel-fixes: signed out, the landing's catalog link shows the catalog; a card opens the
+  // signed-out wizard with the same ref. Signed in, it still goes to the dashboard catalog.
+  test("a landing app-catalog link shows the catalog signed out; a card opens the wizard with the ref", async ({ page }) => {
     await page.goto("/start?tab=apps&ref=e2e-app-catalog");
-    await page.waitForURL(/\/signin\?next=/);
-    const next = new URL(page.url()).searchParams.get("next");
-    expect(next).toBeTruthy();
-    const carried = new URL(next!, "http://localhost");
-    expect(carried.pathname).toBe("/start");
-    expect(carried.searchParams.get("tab")).toBe("apps");
-    expect(carried.searchParams.get("ref")).toBe("e2e-app-catalog");
+    await expect(page).toHaveURL(/\/start\?/);
+    await expect(page.getByRole("tab", { name: "Apps" })).toHaveAttribute("data-state", "active");
+    await page.getByRole("link", { name: "Launch Uptime Kuma" }).click();
+    await page.waitForURL(/\/start\?app=uptime-kuma&ref=e2e-app-catalog/);
+    await expect(page.getByRole("heading", { name: /new pod — uptime kuma/i })).toBeVisible();
 
     await login(page, "approved");
-    await page.goto(next!);
+    await page.goto("/start?tab=apps&ref=e2e-app-catalog");
     await page.waitForURL(/\/dashboard\/create\?tab=apps$/);
     await expect(page.getByRole("tab", { name: "Apps" })).toHaveAttribute("data-state", "active");
   });
