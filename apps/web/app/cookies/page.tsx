@@ -63,6 +63,14 @@ export default function CookiesPage() {
         visits and distinguish returning browsers. Declining, or clearing your cookie choice, stops
         them.
       </p>
+      <h2>Advertising cookies (Google Ads)</h2>
+      <p>
+        We run ads on Google. To measure which ads lead to a sign-up, every page loads the{" "}
+        <strong>Google Ads</strong> tag, which sets Google&rsquo;s advertising cookies (such as{" "}
+        <code>_gcl_au</code>) on every visit, whether or not you accept analytics. When you create an
+        account, it records one anonymous &ldquo;sign-up&rdquo; event. You can block these cookies in your
+        browser or with Google&rsquo;s ad settings.
+      </p>
       <p>
         We deliberately limit what analytics can see: the pod terminal and secret inputs are excluded
         from any session recording, outbound events are scrubbed of credential-shaped values, and the

@@ -150,13 +150,15 @@ Non-essential (analytics) cookies SHALL NOT be set, and analytics SHALL NOT capt
 visitor has consented. Until then analytics run in a cookieless, opted-out mode; a consent banner
 records the choice in a strictly-necessary first-party cookie, and only an explicit accept switches
 analytics to persistent storage and opts capturing in. Strictly-necessary cookies (session, the
-consent choice itself) are exempt. The consent surface SHALL be a non-blocking banner, not a
-full-screen wall.
+consent choice itself) are exempt. Exception (owner decision, 2026-10-14): Google Ads advertising
+cookies are set on every cloud visit, without consent — see "Google Ads measures sign-ups on cloud"; the
+cookie policy states it. The consent surface SHALL be a non-blocking banner, not a full-screen wall.
 
 #### Scenario: A visitor has not chosen yet
 
 - **WHEN** a first-time visitor loads the site
-- **THEN** no analytics cookies SHALL be set and no analytics SHALL be captured until they accept,
+- **THEN** no analytics cookies SHALL be set and no analytics SHALL be captured until they accept (Google Ads
+  advertising cookies excepted, see above),
   and a non-blocking consent banner SHALL offer accept/decline
 
 #### Scenario: A visitor accepts, then returns
@@ -2397,3 +2399,16 @@ It SHALL send the owner one summary email of what was updated and what was skipp
 
 - **WHEN** the account setting is off
 - **THEN** no pod of that account is updated without a click
+
+### Requirement: Google Ads measures sign-ups on cloud
+
+On cloud, every page SHALL load the Google Ads tag (`AW-18501280601`) through the existing Google tag, with
+Google's advertising storage granted by default (owner decision, 2026-10-14: not consent-gated), while
+analytics storage stays behind the cookie Accept. The dashboard SHALL fire one `sign_up` event for an account
+less than 15 minutes old, at most once per browser (`pw_signup_sent` cookie). The cookie policy SHALL say this.
+Self-host loads no Google tag.
+
+#### Scenario: A new account's first dashboard page
+
+- **WHEN** an account created minutes ago opens any dashboard page
+- **THEN** one `sign_up` event is sent and the browser is marked so it is not sent again; an older account never sends it

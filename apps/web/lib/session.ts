@@ -18,6 +18,8 @@ export interface CurrentUser {
   /** Whether the auth provider verified this email. GitHub OAuth always does; a future
    * unverified provider must not clear the admin gate on an allowlist match alone. */
   emailVerified: boolean;
+  /** Account creation time (ISO) — the Google Ads sign-up conversion fires only for a minutes-old account. */
+  createdAt?: string;
 }
 
 /**
@@ -34,7 +36,14 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   const session = await getSessionWithRetry(getAuth(), await headers());
   if (!session?.user) return null;
   const u = session.user;
-  return { id: u.id, email: u.email, name: u.name, image: u.image, emailVerified: Boolean(u.emailVerified) };
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    image: u.image,
+    emailVerified: Boolean(u.emailVerified),
+    createdAt: u.createdAt ? new Date(u.createdAt).toISOString() : undefined,
+  };
 }
 
 /** Require an authenticated user; redirect to sign-in otherwise. */

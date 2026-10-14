@@ -9,6 +9,10 @@ import { CONSENT_COOKIE } from "@/lib/consent";
 // 2026-09-06: repointed to the podway.io property. The previous value (G-5044P4GF1X) was the
 // pre-rename property, so every visit since the domain flip was being recorded against the old one.
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MRFZY65HKR";
+// Google Ads (owner, 2026-10-14): public conversion ID. Owner chose ad cookies on EVERY visit (not
+// consent-gated) — so ad_* storage is granted by default below, while analytics_storage keeps the
+// Accept gate. The cookie policy says so (app/cookies/page.tsx).
+const ADS_ID = "AW-18501280601";
 
 /**
  * Google Analytics 4, wired through the SAME cookie-consent gate as PostHog
@@ -33,9 +37,9 @@ export default function GoogleAnalytics() {
           function gtag(){dataLayer.push(arguments);}
           window.gtag = gtag;
           gtag('consent', 'default', {
-            ad_storage: 'denied',
-            ad_user_data: 'denied',
-            ad_personalization: 'denied',
+            ad_storage: 'granted',
+            ad_user_data: 'granted',
+            ad_personalization: 'granted',
             analytics_storage: 'denied',
           });
           try {
@@ -46,6 +50,7 @@ export default function GoogleAnalytics() {
           } catch (e) {}
           gtag('js', new Date());
           gtag('config', '${GA_ID}');
+          gtag('config', '${ADS_ID}');
         `}
       </Script>
       <Script
