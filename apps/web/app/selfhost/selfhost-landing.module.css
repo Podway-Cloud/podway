@@ -163,3 +163,17 @@
 .footer a:hover { color: var(--ink); }
 
 @media (prefers-reduced-motion: reduce) { .app { transition: none; } .app:hover { transform: none; } .typingCursor::after, .thinking span { animation: none; } .termBody { transition: none; } }
+
+/* First-screen drafts (preview only, landing-funnel-fixes §2). */
+.heroWide { padding-block: clamp(32px, 6vw, 64px) 40px; }
+.heroWide h1 { margin: 14px 0 0; font-size: var(--type-display); font-weight: 800; letter-spacing: -.03em; line-height: 1.05; text-wrap: balance; }
+.heroWide .sub { max-width: 52ch; }
+.heroApps { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 26px; }
+.heroApp, .heroAppMore { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel); padding: 12px 14px; color: var(--ink); font-size: var(--type-sm); font-weight: 650; text-decoration: none; }
+.heroApp img { flex: none; box-sizing: content-box; border-radius: 6px; background: #fff; padding: 3px; } /* black brand marks (Ghost, Umami, Vaultwarden) need a light tile, as in the catalog */
+.heroApp:hover, .heroAppMore:hover { border-color: var(--accent); }
+.heroAppMore { justify-content: center; color: var(--accent-light); }
+.upkeepCard { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 14px; background: var(--line); overflow: hidden; box-shadow: var(--shadow); }
+.upkeepCard li { display: grid; gap: 4px; background: var(--panel); padding: 16px 18px; }
+.upkeepCard b { color: var(--ok); font-size: var(--type-sm); }
+.upkeepCard span { color: var(--muted); font-size: var(--type-sm); }

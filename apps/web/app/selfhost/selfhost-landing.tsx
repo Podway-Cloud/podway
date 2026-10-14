@@ -93,8 +93,11 @@ const FAQS = [
 
 export default function SelfhostLanding({
   user,
+  hero,
 }: {
   user: Awaited<ReturnType<typeof getCurrentUser>>;
+  /** First-screen drafts for owner review (landing-funnel-fixes §2), shown only on /preview/landing/hero-*. */
+  hero?: "apps" | "upkeep";
 }) {
   const primaryHref = "/start?tab=apps&ref=selfhost-landing";
   const primaryLabel = "Start free";
@@ -122,31 +125,92 @@ export default function SelfhostLanding({
       </header>
 
       <main>
-        <section className={`${styles.wrap} ${styles.hero}`}>
-          <div>
-            <p className={styles.eyebrow}>open-source apps · hosted on Podway</p>
+        {hero === "apps" ? (
+          <section className={`${styles.wrap} ${styles.heroWide}`}>
+            <p className={styles.eyebrow}>open-source apps · hosted · run by Claude</p>
             <h1>
-              Self-host anything.<br />
-              <span className={styles.accent}>Your AI admin runs it.</span>
+              Run n8n, Ghost or Umami.<br />
+              <span className={styles.accent}>Claude keeps it running.</span>
             </h1>
             <p className={styles.sub}>
-              Choose an app like n8n, Ghost or Umami. Podway runs it 24/7 in a cloud pod.
-              Your AI admin handles setup, snapshots and upgrades, helps investigate problems and steer your app.
+              Pick an app. Podway hosts it 24/7, and Claude on your own Pro or Max plan sets it up, upgrades it
+              and fixes it when it breaks.
             </p>
-            <div className={styles.cta}>
-              <TrackedLink className={styles.btnPrimary} href={primaryHref} eventName="landing_primary_cta" item="selfhost-hero">
-                {primaryLabel}
+            <div className={styles.heroApps}>
+              {LINEUP.slice(0, 8).map((app) => (
+                <TrackedLink
+                  key={app.slug}
+                  className={styles.heroApp}
+                  href={`/start?app=${app.slug}&ref=selfhost-hero-apps`}
+                  eventName="landing_primary_cta"
+                  item={`hero-apps-${app.slug}`}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={app.logo} alt="" width={28} height={28} />
+                  <span>{app.name}</span>
+                </TrackedLink>
+              ))}
+              <TrackedLink className={styles.heroAppMore} href="/start?tab=apps&ref=selfhost-hero-apps" eventName="landing_primary_cta" item="hero-apps-all">
+                All apps →
               </TrackedLink>
-              <a className={styles.btnSecondary} href="#apps">Browse apps</a>
             </div>
             <p className={styles.fine}>
-              Bigger apps from <b>$7/month</b>, with ${SIGNUP_CREDIT_USD} credit when you add a card.<br />
-              Bring your Claude Pro or Max plan.
+              <b>First app free</b> during early access, no card. Needs a Claude Pro or Max plan.
             </p>
-          </div>
-
-          <SelfhostConversation />
-        </section>
+          </section>
+        ) : hero === "upkeep" ? (
+          <section className={`${styles.wrap} ${styles.hero}`}>
+            <div>
+              <p className={styles.eyebrow}>open-source apps · hosted · run by Claude</p>
+              <h1>
+                Self-hosted apps,<br />
+                <span className={styles.accent}>without the sysadmin work.</span>
+              </h1>
+              <p className={styles.sub}>
+                Pick n8n, Ghost, Umami or 25 more. Podway hosts it 24/7. Claude, on your own Pro or Max plan,
+                is its admin.
+              </p>
+              <div className={styles.cta}>
+                <TrackedLink className={styles.btnPrimary} href="/start?tab=apps&ref=selfhost-hero-upkeep" eventName="landing_primary_cta" item="hero-upkeep">
+                  Pick your app — first one free
+                </TrackedLink>
+              </div>
+              <p className={styles.fine}>No card for the first app. Bigger apps from <b>$7/month</b>.</p>
+            </div>
+            <ul className={styles.upkeepCard} aria-label="What Podway does for your app">
+              <li><b>Upgrades</b><span>A snapshot first, so a bad upgrade can be undone.</span></li>
+              <li><b>Watches it</b><span>Checked every 5 minutes. Down? Restarted, and you get an email.</span></li>
+              <li><b>Backups</b><span>Every night, encrypted, on separate storage.</span></li>
+              <li><b>Ask in Claude</b><span>“Why is my n8n slow?” — it reads the logs and proposes the fix.</span></li>
+            </ul>
+          </section>
+        ) : (
+        <section className={`${styles.wrap} ${styles.hero}`}>
+            <div>
+              <p className={styles.eyebrow}>open-source apps · hosted on Podway</p>
+              <h1>
+                Self-host anything.<br />
+                <span className={styles.accent}>Your AI admin runs it.</span>
+              </h1>
+              <p className={styles.sub}>
+                Choose an app like n8n, Ghost or Umami. Podway runs it 24/7 in a cloud pod.
+                Your AI admin handles setup, snapshots and upgrades, helps investigate problems and steer your app.
+              </p>
+              <div className={styles.cta}>
+                <TrackedLink className={styles.btnPrimary} href={primaryHref} eventName="landing_primary_cta" item="selfhost-hero">
+                  {primaryLabel}
+                </TrackedLink>
+                <a className={styles.btnSecondary} href="#apps">Browse apps</a>
+              </div>
+              <p className={styles.fine}>
+                Bigger apps from <b>$7/month</b>, with ${SIGNUP_CREDIT_USD} credit when you add a card.<br />
+                Bring your Claude Pro or Max plan.
+              </p>
+            </div>
+  
+            <SelfhostConversation />
+          </section>
+        )}
 
         <section className={`${styles.band} ${styles.lined}`}>
           <div className={styles.wrap}>

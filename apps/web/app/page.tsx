@@ -121,8 +121,13 @@ export default async function Home() {
       </>
     );
   }
+  // First-screen A/B inside the selfhost arm (owner picked Draft B, 2026-10-14): half the visitors, by
+  // the parity of their visitor id's last hex digit (stable per visitor), see the "upkeep" hero. The arm
+  // rides on the exposure's `item`, so no variant/migration change; read it per item in SQL.
+  const visitor = (await headers()).get(ACTIVE_LANDING_EXPERIMENT.requestHeaders.visitor) ?? "";
+  const upkeepHero = variant === "selfhost" && /[13579bdf]$/i.test(visitor);
   const landing = variant === "selfhost"
-    ? <SelfhostLanding user={user} />
+    ? <SelfhostLanding user={user} hero={upkeepHero ? "upkeep" : undefined} />
     : variant === "agent-home"
     ? <AgentHomeLanding user={user} />
     : variant === "agent-computer"
@@ -136,7 +141,10 @@ export default async function Home() {
           __html: JSON.stringify(acquisitionJsonLd).replace(/</g, "\\u003c"),
         }}
       />
-      <LandingExperimentExposure variant={variant} />
+      <LandingExperimentExposure
+        variant={variant}
+        item={variant === "selfhost" ? (upkeepHero ? "hero-upkeep" : "hero-current") : undefined}
+      />
       {landing}
     </>
   );

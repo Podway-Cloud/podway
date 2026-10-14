@@ -269,3 +269,16 @@ credits the link that brought the visitor.
 - **WHEN** a visitor opens `/agent-computer?ref=creator-evan`, signs in, and opens the dashboard
 - **THEN** the account's ref is `creator-evan`
 
+
+### Requirement: The selfhost arm splits its first screen 50/50
+
+Inside the `selfhost` arm, a visitor whose landing visitor id ends in an odd hex digit SHALL see the
+"upkeep" first screen ("Self-hosted apps, without the sysadmin work."); the others SHALL see the current
+one. The choice SHALL be stable per visitor, and the `landing_exposure` event SHALL carry `item`
+`hero-upkeep` or `hero-current`, so the funnel can be read per first screen (owner, 2026-10-14). Crawlers
+see the current one.
+
+#### Scenario: An odd visitor id
+
+- **WHEN** a selfhost-arm visitor with id `…f` opens `/`
+- **THEN** they see the upkeep first screen and their exposure is stored with item `hero-upkeep`
