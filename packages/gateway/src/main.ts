@@ -2,7 +2,7 @@ import path from "node:path";
 import type { IncomingMessage } from "node:http";
 import { createAuth, getSessionUserId, notifyOps, sendDunningEmail, sendEmail, type AuthEnv } from "@podway/auth";
 import { verifyBridgeToken, PREVIEW_SESSION_COOKIE, BRIDGE_TOKEN_PARAM } from "@podway/auth/bridge-token";
-import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService, FlyCertIssuer, BillingService, DunningService, LoginReminderService, drizzleReminderDeps, AppWatchService, DomainCertWatch, PodReports, SYSTEM_SENDER, stripeConfigured } from "@podway/control-plane";
+import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService, FlyCertIssuer, BillingService, DunningService, LoginReminderService, drizzleReminderDeps, AppWatchService, NightUpdateService, IDLE_UPDATE_DWELL_MS, DomainCertWatch, PodReports, SYSTEM_SENDER, stripeConfigured } from "@podway/control-plane";
 import { RelayRegistry } from "./relay-registry.js";
 import {
   IncusProvider,
@@ -383,6 +383,35 @@ async function main(): Promise<void> {
     setTimeout(runCertWatch, 5 * 60_000).unref();
     setInterval(runCertWatch, certWatchMs).unref();
     console.log(`podway-gateway domain cert watch every ${certWatchMs}ms`);
+  }
+
+  // Night auto-update (owner, 2026-10-13): opted-in accounts (user.night_update_tz set) get the idle bulk
+  // update once a night, 03:00–05:00 their time, and one summary email. Cloud only; see night-update.ts.
+  const nightMs = Number(process.env.PODWAY_NIGHT_UPDATE_SWEEP_MS ?? 15 * 60_000);
+  const nightPin = process.env.PODWAY_INCUS_IMAGE_DIGEST ?? null;
+  const nightImage = process.env.PODWAY_BASE_IMAGE;
+  if (nightMs > 0 && nightPin && nightImage && process.env.PODWAY_EDITION !== "oss") {
+    const night = new NightUpdateService({
+      listOwners: async () =>
+        (
+          await db
+            .select({ id: user.id, tz: user.nightUpdateTz, name: user.name, email: user.email })
+            .from(user)
+            .where(isNotNull(user.nightUpdateTz))
+        ).map((o) => ({ ...o, tz: o.tz! })),
+      behindPods: (ownerId) => control.podsBehind(ownerId, nightPin),
+      updateIdle: async (ownerId) =>
+        (await control.updateIdlePods(ownerId, nightPin, IDLE_UPDATE_DWELL_MS, nightImage)).started,
+      sendEmail: (to, subject, content) => sendEmail(to, subject, content),
+      appUrl: reminderAppUrl,
+    });
+    setInterval(() => {
+      void night
+        .sweep()
+        .then((r) => r.length && console.log("night_update_ran", JSON.stringify(r)))
+        .catch((e) => console.error("night_update_sweep_failed", e));
+    }, nightMs).unref();
+    console.log(`podway-gateway night auto-update sweep every ${nightMs}ms`);
   }
 
   const reminderMs = Number(process.env.PODWAY_LOGIN_REMINDER_SWEEP_MS ?? 60 * 60_000);

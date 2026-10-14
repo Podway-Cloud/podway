@@ -357,6 +357,18 @@ export function reloginSucceeded(exitCode: number, stdout: string): boolean {
  * (a pod with no app.manifest exits 0 with no output, which reads as healthy). */
 const APP_ENV = "cd ~/work 2>/dev/null && [ -f app.manifest ] || exit 0; . ./app.manifest; export COMPOSE_PROJECT_NAME=\"$APP_PROJECT\";";
 
+/** "Idle for 10 min" — the dwell for an idle bulk update (the button and the night run), so a pod merely
+ * paused between turns (reads `idle` instantly) isn't interrupted mid-task. See docs/plans/fleet-updates.md. */
+export const IDLE_UPDATE_DWELL_MS = 10 * 60 * 1000;
+
+/** Behind the pinned image? Compare CANONICAL short forms: the pin is a 12-char fingerprint while a pod
+ * row may be the full 64-char one (or vice-versa), so a raw === falsely marks a current pod "behind" (same
+ * format bug as the update dialog's "nothing changed", 2026-08-18). */
+function isBehind(p: { imageDigest: string | null }, pin: string): boolean {
+  const short = (d: string): string => (d.startsWith("sha256:") ? d.slice(7, 19) : d.slice(0, 12));
+  return !!p.imageDigest && short(p.imageDigest) !== short(pin);
+}
+
 export class PodService {
   private readonly log: Logger;
   /** Optional: without it the fleet simply does not learn, and every pod climbs the
@@ -2660,11 +2672,7 @@ export class PodService {
     const liveBy = new Map(live.map((l) => [l.id, l]));
     return pods
       .filter((p) => {
-        // Compare CANONICAL short forms: the pin is a 12-char fingerprint while a pod row may be the
-        // full 64-char one (or vice-versa), so a raw === falsely marks a current pod "behind" (same
-        // format bug as the update dialog's "nothing changed", 2026-08-18).
-        const short = (d: string): string => (d.startsWith("sha256:") ? d.slice(7, 19) : d.slice(0, 12));
-        if (!p.imageDigest || short(p.imageDigest) === short(pin)) return false; // not behind
+        if (!isBehind(p, pin)) return false;
         if (p.status !== "running" || p.updatingSince) return false; // must be up + not already updating
         if (p.autoUpdate === "off") return false; // owner excluded it (C)
         // T3 drives the pod's session (Claude yields to T3, so its status is always null); an auto-update
@@ -2693,6 +2701,12 @@ export class PodService {
         return eligible;
       })
       .map((p) => p.id);
+  }
+
+  /** Night auto-update summary: every pod of this owner that is behind the pin (eligible or not). */
+  async podsBehind(ownerId: string, pin: string | null): Promise<PodRecord[]> {
+    if (!pin) return [];
+    return (await this.listPods(ownerId)).filter((p) => isBehind(p, pin));
   }
 
   /** Fleet-updates (A): start an image update on every eligible idle pod. Kicks each off sequentially

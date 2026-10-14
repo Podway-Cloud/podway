@@ -1,4 +1,4 @@
-- [ ] 1 migration: nullable account column; OSS hidden
-- [ ] 2 control-plane: night runner over opted-in accounts (reuse updateIdlePods); tests
-- [ ] 3 gateway timer; skip while a pod-base build runs
-- [ ] 4 Settings toggle + morning summary email; e2e
+- [x] 1 migration: nullable `user.night_update_tz` (null = off); OSS hidden
+- [x] 2 control-plane: `NightUpdateService` over opted-in accounts (reuses `updateIdlePods`); tests
+- [x] 3 gateway 15-min timer (no pod-base-build signal exists; the recreate gate + concurrency cap protect the box)
+- [x] 4 Settings toggle + summary email; e2e

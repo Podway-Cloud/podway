@@ -2380,3 +2380,20 @@ When the owner confirms a new pod name, the dashboard SHALL send an owner-scoped
 
 - **WHEN** the owner enters a new pod name and immediately navigates to the pod list before the save responds
 - **THEN** the save completes and the new name appears on the pod card after the list reloads
+
+### Requirement: Idle pods can update themselves at night
+
+An account MAY turn on "Update idle pods automatically at night". When on, the platform SHALL run the
+existing idle bulk update for that account once a night between 03:00 and 05:00 in the owner's
+timezone, with the same eligibility rules (behind, running, idle, not T3, per-pod auto-update not off).
+It SHALL send the owner one summary email of what was updated and what was skipped and why (no email when no pod is behind). The owner's timezone is the browser's, stored when the setting is turned on (`user.night_update_tz`; null = off). Default: off. Cloud only.
+
+#### Scenario: A pod is busy at night
+
+- **WHEN** the night run finds a pod whose agent is busy
+- **THEN** it SHALL skip that pod and list it as "busy" in the summary
+
+#### Scenario: Setting off
+
+- **WHEN** the account setting is off
+- **THEN** no pod of that account is updated without a click

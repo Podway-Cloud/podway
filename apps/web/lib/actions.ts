@@ -7,6 +7,7 @@ import { createLogger } from "@podway/shared/log";
 import { getPostHogClient } from "./posthog-server";
 import type { MetricsSnapshot, PodIssue } from "@podway/shared";
 import type { PodLiveSignals, ClaudeSettings } from "@podway/control-plane";
+import { IDLE_UPDATE_DWELL_MS } from "@podway/control-plane";
 import { requireUser, editionOss } from "./session";
 import { syncOwnerBilling } from "./billing-sync";
 import { harnessEnabled } from "./agent-harness";
@@ -1070,9 +1071,6 @@ export async function updatePodImage(slug: string): Promise<ActionResult> {
   }
 }
 
-/** "Idle for 10 min" — the dwell for the bulk idle-update button, so a pod merely paused between
- * turns (reads `idle` instantly) isn't interrupted mid-task. See docs/plans/fleet-updates.md. */
-const IDLE_UPDATE_DWELL_MS = 10 * 60 * 1000;
 
 /**
  * "Agentic behavior" — how much a pod does on its own while its owner is away.

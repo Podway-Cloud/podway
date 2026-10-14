@@ -51,6 +51,8 @@ export const user = pgTable("user", {
   // FREE_POD_OFFERS, e.g. "selfhst-insider") and when — one pod up to the offer's size is never billed.
   freeOffer: text("free_offer"),
   freeOfferSince: timestamp("free_offer_since"),
+  /** "Update idle pods automatically at night": the owner's IANA timezone when ON, null = off. */
+  nightUpdateTz: text("night_update_tz"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
