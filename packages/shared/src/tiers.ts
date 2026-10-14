@@ -91,6 +91,9 @@ export const FREE_POD_OFFERS: Record<string, FreePodOffer> = {
   "creator-evan": { ramGb: 4, cap: 1, label: "Free pod · Podway creator" },
   "creator-mike": { ramGb: 4, cap: 1, label: "Free pod · Podway creator" },
   "creator-rajeev": { ramGb: 4, cap: 1, label: "Free pod · Podway creator" },
+  // First partner (owner, 2026-10-14): the claude-code-telegram maintainer tests podway before adding a
+  // "Deploy on Podway" section — a free Medium for the first account on his link.
+  "partner-claude-code-telegram": { ramGb: 4, cap: 1, label: "Free pod · Podway partner" },
 };
 
 /** The free-pod size (GB) an account's claimed offer grants; 0 for none / an unknown key. */
