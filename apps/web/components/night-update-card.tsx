@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, MoonStar } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { MoonStar } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { setNightUpdateTz } from "@/lib/notification-actions";
 
 /** Settings → Updates: let idle pods update themselves at night (night-update.ts). */
@@ -34,20 +34,11 @@ export function NightUpdateCard({ initial }: { initial: string | null }) {
           <div className="text-sm font-medium">Update idle pods automatically at night</div>
           <p className="text-[12.5px] text-muted-foreground">
             Between 03:00 and 05:00{tz ? ` (${tz})` : " your time"}, pods whose agent is idle update to the latest
-            version, and you get one email. A busy pod is skipped. {tz ? "On" : "Off"}.
+            version, and you get one email. A busy pod is skipped.
           </p>
           {error && <p className="text-[12.5px] text-destructive">{error}</p>}
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={toggle}
-          className={tz ? "border-warning/40 text-warning hover:bg-warning/10" : "border-success/40 text-success hover:bg-success/10"}
-        >
-          {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-          {tz ? "Turn off" : "Turn on"}
-        </Button>
+        <Switch checked={tz != null} disabled={busy} onCheckedChange={toggle} aria-label="Update idle pods automatically at night" />
       </div>
     </section>
   );

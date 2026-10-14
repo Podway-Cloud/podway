@@ -2,17 +2,18 @@ import { test, expect } from "@playwright/test";
 import { login, launchPod } from "./helpers";
 
 test.describe("notifications + bug reports", () => {
+  // Settings toggles are switches (owner, 2026-10-14), not Turn on/off buttons.
   test("Settings → turn login reminder emails off; it persists across a reload", async ({ page }) => {
     await login(page, "approved");
     await page.goto("/dashboard/settings");
-    await expect(page.getByText("Login reminder emails")).toBeVisible({ timeout: 30_000 });
-    const card = page.locator("section", { hasText: "Login reminder emails" });
-    await card.getByRole("button", { name: /^Turn off$/ }).click();
-    await expect(card.getByRole("button", { name: /^Turn on$/ })).toBeVisible();
+    const sw = page.getByRole("switch", { name: "Login reminder emails" });
+    await expect(sw).toHaveAttribute("aria-checked", "true", { timeout: 30_000 });
+    await sw.click();
+    await expect(sw).toHaveAttribute("aria-checked", "false");
     await page.reload();
-    await expect(card.getByRole("button", { name: /^Turn on$/ })).toBeVisible({ timeout: 30_000 });
-    await card.getByRole("button", { name: /^Turn on$/ }).click(); // leave the shared user as found
-    await expect(card.getByRole("button", { name: /^Turn off$/ })).toBeVisible();
+    await expect(sw).toHaveAttribute("aria-checked", "false", { timeout: 30_000 });
+    await sw.click(); // leave the shared user as found
+    await expect(sw).toHaveAttribute("aria-checked", "true");
   });
 
   // Night auto-update (owner, 2026-10-13): off by default; turning it on stores the browser's timezone.
@@ -20,14 +21,15 @@ test.describe("notifications + bug reports", () => {
     await login(page, "approved");
     await page.goto("/dashboard/settings");
     const card = page.locator("section", { hasText: "Update idle pods automatically at night" });
-    await expect(card.getByRole("button", { name: /^Turn on$/ })).toBeVisible({ timeout: 30_000 });
-    await card.getByRole("button", { name: /^Turn on$/ }).click();
-    await expect(card.getByRole("button", { name: /^Turn off$/ })).toBeVisible();
+    const sw = page.getByRole("switch", { name: "Update idle pods automatically at night" });
+    await expect(sw).toHaveAttribute("aria-checked", "false", { timeout: 30_000 });
+    await sw.click();
+    await expect(sw).toHaveAttribute("aria-checked", "true");
     const tz = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
     await page.reload();
     await expect(card.getByText(`(${tz})`)).toBeVisible({ timeout: 30_000 });
-    await card.getByRole("button", { name: /^Turn off$/ }).click(); // leave the shared user as found
-    await expect(card.getByRole("button", { name: /^Turn on$/ })).toBeVisible();
+    await sw.click(); // leave the shared user as found
+    await expect(sw).toHaveAttribute("aria-checked", "false");
   });
 
   test("Cockpit → Insights → Reports shows the pod's bug reports (empty state)", async ({ page }) => {
