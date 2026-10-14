@@ -175,3 +175,15 @@ attribution at login, so it survives beyond the transient carrier.
 
 - **WHEN** a user signs in without a deep-link selection
 - **THEN** sign-in SHALL behave exactly as before, with no attribution written and no forced app
+
+### Requirement: An app link shows the create wizard before sign-in
+
+On cloud, a signed-out visitor opening `/start?app=<app>` SHALL see that app's create wizard (size,
+name, the "free" label) without an account. "Create" SHALL send them to `/signin?next=/start?…`, and the
+wizard's saved draft SHALL bring their choices back after sign-in. No pod SHALL be created before
+sign-in. Self-host, the catalog link (`/start?tab=apps`) and BYO-repo environments keep sign-in first.
+
+#### Scenario: A visitor picks Uptime Kuma from the landing
+
+- **WHEN** a signed-out visitor opens `/start?app=uptime-kuma`, names the pod and clicks Create
+- **THEN** they are asked to sign in, and after sign-in the wizard shows the name they typed

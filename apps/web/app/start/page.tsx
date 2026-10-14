@@ -3,8 +3,13 @@ import { getCurrentUser, editionOss } from "@/lib/session";
 import { getEnvironmentDetail } from "@/lib/environments";
 import { recordFirstTouchRef, savePendingStart, claimOffer, applyRefCookie } from "@/lib/attribution";
 import { currentUserAllowed } from "@/lib/access";
-import { sanitizeRef } from "@podway/shared";
-import { POD_SIZES } from "@podway/shared/tiers";
+import { sanitizeRef, FREE_POD_OFFERS } from "@podway/shared";
+import { POD_SIZES, CARDED_RAM_GB, noCardRamGb, type PodSize } from "@podway/shared/tiers";
+import { stripeConfigured } from "@podway/control-plane";
+import LaunchConfigure from "@/components/launch-configure";
+import DashboardPage from "@/components/dashboard-page";
+import { isProvisioningEnabled } from "@/lib/pod-service";
+import { harnessEnabled } from "@/lib/agent-harness";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +59,47 @@ export default async function StartPage({
   const startPath = `/start${qp.size ? `?${qp.toString()}` : ""}`;
 
   const user = await getCurrentUser();
-  if (!user) redirect(`/signin?next=${encodeURIComponent(startPath)}`);
+  if (!user) {
+    // Cloud app link: show the app's wizard BEFORE sign-in; Create asks for it (landing-funnel-fixes —
+    // the one Show HN visitor who clicked an app left at the sign-in wall). OSS, the catalog (no app),
+    // and BYO-repo envs (the repo picker needs a GitHub login) keep sign-in first.
+    const anonDetail = !editionOss() && app ? await getEnvironmentDetail(app) : null;
+    if (!anonDetail || anonDetail.byoRepo) redirect(`/signin?next=${encodeURIComponent(startPath)}`);
+    const offer = ref && Object.hasOwn(FREE_POD_OFFERS, ref) ? FREE_POD_OFFERS[ref] : undefined;
+    const freeGb = noCardRamGb(ref, offer?.ramGb ?? 0);
+    return (
+      <main className="mx-auto w-full max-w-3xl px-4 py-8">
+        <DashboardPage
+          backHref="/"
+          backLabel="Podway"
+          title={`New pod — ${anonDetail.title}`}
+          intro={anonDetail.kind === "app" ? anonDetail.descriptionLong || undefined : undefined}
+        >
+          <LaunchConfigure
+            env={anonDetail.name}
+            secrets={anonDetail.secrets}
+            minSize={anonDetail.minSize}
+            sizeNote={anonDetail.sizeNote}
+            appName={anonDetail.kind === "app" ? anonDetail.title : undefined}
+            agentIds={anonDetail.agentIds}
+            enabled={isProvisioningEnabled()}
+            // No hard RAM wall before sign-in: the real budget is enforced on the signed-in wizard.
+            ram={{ used: 0, cap: CARDED_RAM_GB, unlimited: false }}
+            oss={false}
+            t3Enabled={harnessEnabled("t3")}
+            initialName={name || `my ${anonDetail.title}`}
+            initialSize={size as PodSize | undefined}
+            deeplink
+            refSource={ref ?? undefined}
+            billingEnabled={stripeConfigured()}
+            freeRamGb={freeGb}
+            freeOffer={offer}
+            signInHref={`/signin?next=${encodeURIComponent(startPath)}`}
+          />
+        </DashboardPage>
+      </main>
+    );
+  }
 
   // First-touch attribution: cloud growth concept only — self-host has no affiliate/attribution
   // surface (edition-parity). Set-once, never overwritten (recordFirstTouchRef).

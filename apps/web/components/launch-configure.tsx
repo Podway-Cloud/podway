@@ -91,6 +91,7 @@ export default function LaunchConfigure({
   billingEnabled = false,
   creditCents = 0,
   hasCard = false,
+  signInHref,
   freeRamGb = 0,
   freeOffer,
   minSize,
@@ -145,6 +146,9 @@ export default function LaunchConfigure({
   billingEnabled?: boolean;
   creditCents?: number;
   hasCard?: boolean;
+  /** Anonymous visitor (public /start): the wizard works, and Create goes HERE (sign-in) instead of
+   * launching. The sessionStorage draft brings their choices back after OAuth (landing-funnel-fixes). */
+  signInHref?: string;
   /** The no-card free RAM budget (GB): a pod that keeps a no-card account within it is free during early access
    * (billing never charges it — control-plane dunning.ts). */
   freeRamGb?: number;
@@ -348,13 +352,18 @@ export default function LaunchConfigure({
     // reliably hit by the e2e (Next→Next→Create in milliseconds) and latent for fast users.
     // history.replaceState updates the URL with no navigation; `?step=` is read on mount and
     // the sessionStorage draft already restores the field values.
-    window.history.replaceState(null, "", `/dashboard/pods/new?env=${encodeURIComponent(env)}&step=${next}`);
+    if (!signInHref) window.history.replaceState(null, "", `/dashboard/pods/new?env=${encodeURIComponent(env)}&step=${next}`);
   }
   const next = () => !isLast && canAdvance && goto(steps[idx + 1]);
   const back = () => !isFirst && goto(steps[idx - 1]);
 
   function submit() {
     setError(null);
+    if (signInHref) {
+      track("pod_launch_signin_required", { environment: env, size });
+      window.location.assign(signInHref); // the draft effect already saved every field
+      return;
+    }
     track("pod_launch_submitted", {
       environment: env,
       agent,
@@ -841,9 +850,9 @@ export default function LaunchConfigure({
                     ) : (
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <p className="text-[12.5px] text-muted-foreground">
-                          Add a card to get ${SIGNUP_CREDIT_USD} free and keep this pod running.
+                          {signInHref ? "After you sign in, add" : "Add"} a card to get ${SIGNUP_CREDIT_USD} free and keep this pod running.
                         </p>
-                        <div className="shrink-0"><AddCardButton hasCard={false} /></div>
+                        {!signInHref && <div className="shrink-0"><AddCardButton hasCard={false} /></div>}
                       </div>
                     )}
                   </div>
@@ -872,9 +881,14 @@ export default function LaunchConfigure({
               Back
             </Button>
             {isLast ? (
-              <Button onClick={submit} disabled={!launchable}>
-                {freePod ? "Create my free pod" : "Create pod"}
-              </Button>
+              <div className="flex flex-col items-end gap-1">
+                <Button onClick={submit} disabled={!launchable}>
+                  {freePod ? "Create my free pod" : "Create pod"}
+                </Button>
+                {signInHref && (
+                  <p className="text-[12px] text-muted-foreground">Next: sign in with GitHub or Google. Your choices are kept.</p>
+                )}
+              </div>
             ) : (
               <Button onClick={next} disabled={!canAdvance}>
                 Next

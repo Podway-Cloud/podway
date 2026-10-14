@@ -57,6 +57,29 @@ test.describe("deep-link onboarding (/start)", () => {
     await clearAccountRef(USERS.approved.email);
   });
 
+  // landing-funnel-fixes: the one Show HN visitor who clicked an app left at the sign-in wall.
+  test("an anonymous app link shows the wizard; Create asks for sign-in and the choices come back", async ({ page }) => {
+    await page.goto("/start?app=uptime-kuma&ref=e2e-anon");
+    await expect(page.getByRole("heading", { name: /new pod — uptime kuma/i })).toBeVisible();
+    await expect(page).toHaveURL(/\/start\?/); // no redirect to sign-in yet
+    await page.getByLabel("Name").fill("anon pick");
+    const next = page.getByRole("button", { name: /^next$/i });
+    while (await next.count()) await next.click();
+    await expect(page.getByText("Next: sign in with GitHub or Google. Your choices are kept.")).toBeVisible();
+    await page.getByRole("button", { name: /^create (my free )?pod$/i }).click();
+    await page.waitForURL(/\/signin\?next=/);
+    const carried = new URL(new URL(page.url()).searchParams.get("next")!, "http://localhost");
+    expect(carried.pathname).toBe("/start");
+    expect(carried.searchParams.get("app")).toBe("uptime-kuma");
+
+    // Signed in (test login stands in for OAuth), the carried link lands on the real wizard with the draft.
+    await login(page, "approved");
+    await page.goto(`${carried.pathname}${carried.search}`);
+    await page.waitForURL(/\/dashboard\/pods\/new\?/);
+    await expect(page.getByText("anon pick").first()).toBeVisible();
+    expect(await accountRef(USERS.approved.email)).toBe("e2e-anon");
+  });
+
   test("unknown app falls back to the catalog — no error, no launch", async ({ page }) => {
     await login(page, "approved");
     await page.goto("/start?app=does-not-exist&ref=e2e-unknown");
@@ -162,10 +185,12 @@ test.describe("deep-link onboarding (/start)", () => {
       .not.toContain("from=deeplink");
   });
 
+  // A BYO-repo env keeps sign-in FIRST (its repo picker needs a GitHub login); other app links show the
+  // wizard first (see "an anonymous app link shows the wizard…").
   test("unauthenticated deep link is carried through sign-in via next=, not a bare query param", async ({
     page,
   }) => {
-    await page.goto("/start?app=doc-qa&ref=e2e-oauth");
+    await page.goto("/start?app=byo-project&ref=e2e-oauth");
     await page.waitForURL(/\/signin\?next=/);
     const next = new URL(page.url()).searchParams.get("next");
     expect(next).toBeTruthy();
@@ -175,15 +200,14 @@ test.describe("deep-link onboarding (/start)", () => {
     // headless in this suite (no live GitHub app here); this proves the carrier is correct.
     const decoded = new URL(next!, "http://localhost");
     expect(decoded.pathname).toBe("/start");
-    expect(decoded.searchParams.get("app")).toBe("doc-qa");
+    expect(decoded.searchParams.get("app")).toBe("byo-project");
     expect(decoded.searchParams.get("ref")).toBe("e2e-oauth");
 
     // Sign in (test-login) and follow the carried destination — the same thing an OAuth
     // callback landing on `next` would do.
     await login(page, "approved");
     await page.goto(next!);
-    await page.waitForURL(/\/dashboard\/pods\/new\?/);
-    await expect(page.getByRole("heading", { name: /new pod — ask your docs/i })).toBeVisible();
+    await page.waitForURL(/\/dashboard\/pods\/new\?.*env=byo-project/);
     expect(await accountRef(USERS.approved.email)).toBe("e2e-oauth");
   });
 
