@@ -13,8 +13,6 @@ import {
   ShieldCheck,
   Wrench,
 } from "lucide-react";
-import dashboardImage from "../../../docs/images/dashboard.png";
-import ImageLightbox from "@/components/image-lightbox";
 import { TrackedLink } from "./landing-examples";
 import { getCurrentUser } from "@/lib/session";
 import styles from "./landing-agent.module.css";
@@ -113,40 +111,12 @@ export default async function AgentComputerLanding({
           </div>
         </div>
 
-        <figure className={styles.heroVisual}>
-          <div className={styles.dashboardFrame}>
-            <div className={styles.dashboardBar} aria-hidden>
-              <i /><i /><i />
-              <span>podway dashboard</span>
-            </div>
-            <ImageLightbox
-              className={styles.dashboardImage}
-              src={dashboardImage}
-              alt="Podway dashboard showing pods that are working, idle, or waiting for a reply, with app previews"
-              priority
-              sizes="(max-width: 1050px) 100vw, 58vw"
-            />
-          </div>
-          <figcaption>
-            <strong>See every pod at a glance.</strong>
-          </figcaption>
+        {/* The "Commute" film is the hero visual (owner, 2026-10-14): it shows the product — start at the
+            desk, continue from the phone — where the still dashboard picture only showed a screen. */}
+        <figure className={styles.heroVisual} aria-label="A short demo: start at your desk, continue from your phone">
+          <LandingDemoFrame className={styles.demoFrame} />
         </figure>
       </section>
-
-      {/* "Commute" demo film (approved by the owner via the podway GTM pod, 2026-09-29; it REPLACES the
-          old "Continue anywhere" laptop → phone picture, owner call): a silent,
-          self-contained coded animation. It sets page-wide styles (body, h1, *), so it lives in a
-          same-origin frame rather than inline, sized to its content (LandingDemoFrame). */}
-      <LandingSection id="demo" ariaLabel="A short demo: start at your desk, continue from your phone">
-        <div className={styles.sectionHeading}>
-          <div>
-            <p className={styles.eyebrow}>Desktop, phone, or web</p>
-            <h2>Start at your desk. Continue from your phone.</h2>
-          </div>
-        </div>
-        <LandingDemoFrame className={styles.demoFrame} />
-      </LandingSection>
-
 
       {/* The without/with comparison. Asked for by a real reader of this page (Nadya, 2026-09-06):
           "I'm missing a small comparison table — how it is without a pod and how with, what I don't

@@ -49,8 +49,9 @@ describe("revised landing bundles", () => {
     expect(computer).toContain("Claude Code cloud sessions or a pod?");
     expect(computer).toContain("If the connection drops without an error, Podway notices within about 3 minutes and reconnects.");
     expect(computer).not.toContain("QuoteWall");
-    expect(computer).toContain('import dashboardImage from "../../../docs/images/dashboard.png"');
-    expect(computer).toContain("See every pod at a glance.");
+    // The film is the hero visual now; the still dashboard picture and the separate demo block are gone (2026-10-14).
+    expect(computer).not.toContain("dashboardImage");
+    expect(computer).not.toContain("Start at your desk. Continue from your phone.");
     expect(computer).not.toContain("Open running apps and know when Claude is working or needs you.");
     // The "Commute" demo film replaced the "Continue anywhere" laptop → phone picture (owner, 2026-09-29).
     expect(computer).toContain("<LandingDemoFrame");
@@ -114,7 +115,8 @@ describe("revised landing bundles", () => {
   });
 
   it("shows the demo film where the continuity illustration was, and drops its styles", () => {
-    expect(computer).toContain('id="demo"');
+    expect(computer).not.toContain('id="demo"'); // the film is the hero visual now (2026-10-14)
+    expect(computer).toContain('<figure className={styles.heroVisual}');
     expect(agentStyles).not.toContain(".continuityVisual");
     expect(agentStyles).toContain(".demoFrame {");
   });
