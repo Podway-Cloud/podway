@@ -302,6 +302,10 @@ export function sanitizePodHealth(h: PodHealth): PodHealth {
         ? h.lastActivityMs
         : null,
     ...(typeof h.appListening === "boolean" ? { appListening: h.appListening } : {}),
+    ...(typeof h.jobsOverdueMs === "number" && Number.isFinite(h.jobsOverdueMs) && h.jobsOverdueMs >= 0
+      ? { jobsOverdueMs: h.jobsOverdueMs }
+      : {}),
+    ...(typeof h.reachable === "boolean" ? { reachable: h.reachable } : {}),
   };
 }
 
@@ -1036,6 +1040,8 @@ export class IncusProvider implements SandboxProvider {
       lastActivityMs: h?.lastActivityMs ?? null,
       appListening: h?.appListening,
       setupProgress: h?.setupProgress ?? null,
+      jobsOverdueMs: h?.jobsOverdueMs,
+      reachable: h != null,
     });
   }
 

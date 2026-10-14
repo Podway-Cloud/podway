@@ -2628,6 +2628,17 @@ export class PodService {
     return out;
   }
 
+  /** Every running pod with what it says about itself (fleet health alerts). One /healthz read each,
+   * one at a time so a big fleet never bursts the box. */
+  async fleetHealthSnapshot(): Promise<{ id: string; name: string | null; health: PodHealth }[]> {
+    const out = [];
+    for (const p of await this.store.list()) {
+      if (p.status !== "running") continue;
+      out.push({ id: p.id, name: p.name, health: await this.readHealth(p) });
+    }
+    return out;
+  }
+
   /** One app-watch check, run in the pod as `dev`: does the app answer, are its containers running, is
    * the home disk full? Plain words for the owner's email. An unreachable pod reads as healthy here —
    * the pod itself being down is the reconciler's job, not an app incident. */

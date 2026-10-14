@@ -7,6 +7,7 @@ import {
   localParts,
   dueJobs,
   reduceRuns,
+  jobsOverdueMs,
   type SchedulerOptions,
   type OpsJob,
 } from "../src/scheduler.js";
@@ -251,6 +252,23 @@ describe("runSchedulerTick", () => {
       expect(await runSchedulerTick(o)).toEqual({ fired: false, reason: "deferred" });
       expect(injected).toHaveLength(0);
     }
+  });
+
+  // Fleet health alerts read this on /healthz: a job held back (here: a question box open) has an age.
+  it("jobsOverdueMs: the age of a held-back job; cleared once a job fires", async () => {
+    const p = tmp();
+    writeJobs(p, [brief]);
+    let now = new Date("2026-07-22T08:00:30Z");
+    let st: { status: string; waitingFor?: string } = { status: "waiting", waitingFor: "input needed" };
+    const { o } = opts(p, now, { now: () => now, status: () => st });
+    expect(jobsOverdueMs(p.statePath, now.getTime())).toBeNull();
+    await runSchedulerTick(o);
+    now = new Date("2026-07-22T10:30:30Z");
+    await runSchedulerTick(o);
+    expect(jobsOverdueMs(p.statePath, now.getTime())).toBe(150 * 60_000);
+    st = { status: "idle" };
+    expect((await runSchedulerTick(o)).fired).toBe(true);
+    expect(jobsOverdueMs(p.statePath, now.getTime())).toBeNull();
   });
 
   it("dead-man: alerts once for a run that started but never reported back", async () => {

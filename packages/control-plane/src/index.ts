@@ -3,6 +3,7 @@ export * from "./billing.js";
 export * from "./dunning.js";
 export * from "./login-reminders.js";
 export * from "./app-watch.js";
+export * from "./fleet-health.js";
 export * from "./night-update.js";
 export * from "./domain-cert-watch.js";
 export * from "./pod-reports.js";

@@ -257,6 +257,11 @@ export interface PodHealth {
    * older pod image that predates the field — callers must treat that the same as null, never
    * as "setup still running". See openspec/changes/add-deploy-progress. */
   setupProgress?: string | null;
+  /** Age (ms) of the oldest scheduled job the pod is holding back; null = none overdue. Absent on older
+   * images (fleet health skips the check). */
+  jobsOverdueMs?: number | null;
+  /** false = the pod-agent did not answer /healthz (fleet health alerts). Absent = not reported. */
+  reachable?: boolean;
 }
 
 export type DoctorMode = "check" | "safe" | "invasive";

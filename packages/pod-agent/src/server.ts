@@ -1,3 +1,4 @@
+import { jobsOverdueMs } from "./scheduler.js";
 import http from "node:http";
 import { existsSync, copyFileSync, chmodSync, chownSync, appendFileSync, statSync, readFileSync, writeFileSync, rmSync, mkdirSync, readdirSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -648,6 +649,8 @@ export class AgentServer {
             ooms: this.oomWatcher.list(),
             // What is WRONG with this pod, in the owner's terms. Empty when healthy.
             issues: this.issues(),
+            // Age of the oldest held-back scheduled job (fleet health alerts); null = none overdue.
+            jobsOverdueMs: jobsOverdueMs("/home/dev/.podway/ops-state.json"),
             // The env's own current first-boot deploy milestone (podway-progress marker), or
             // null once setup is done / when the env emits none. See
             // openspec/changes/add-deploy-progress — a generic convention, no app-specific

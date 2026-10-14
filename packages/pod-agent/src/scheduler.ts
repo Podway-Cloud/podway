@@ -73,6 +73,9 @@ interface SchedulerState {
   stallAlerted?: string[];
   /** When the current run of busy-only deferrals began (ISO). Cleared when a job fires. */
   busySince?: string;
+  /** When a due job was first held back, for ANY reason (busy, a question open). Cleared when a job
+   * fires or nothing is due. /healthz reports its age as `jobsOverdueMs` (fleet health alerts). */
+  deferredSince?: string;
 }
 
 interface RunEvent {
@@ -327,10 +330,15 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
     }
     const forced = !canInject && busyOnly && now().getTime() - Date.parse(state.busySince!) >= BUSY_FORCE_MS;
     if (!canInject && !forced) {
+      if (!state.deferredSince) {
+        state.deferredSince = now().toISOString();
+        writeJson(opts.statePath, state, opts.uid, opts.gid);
+      }
       log.info("ops_run_deferred", { due: due.map((d) => d.job.id), status: s.status });
       return { fired: false, reason: "deferred" };
     }
     delete state.busySince;
+    delete state.deferredSince;
     if (forced) log.info("ops_run_forced_busy", { jobId: due[0].job.id });
     const { job, markTime } = due[0];
     const runId = makeRunId(job.id);
@@ -347,8 +355,9 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
     return { fired: true, kind: "run", jobId: job.id, runId };
   }
 
-  if (state.busySince) {
+  if (state.busySince || state.deferredSince) {
     delete state.busySince; // nothing due: a later job starts a fresh 30-min clock
+    delete state.deferredSince;
     writeJson(opts.statePath, state, opts.uid, opts.gid);
   }
 
@@ -437,4 +446,11 @@ export function startScheduler(opts: SchedulerOptions): () => void {
   timer.unref?.();
   void tick();
   return () => clearInterval(timer);
+}
+
+/** How long a due job has been held back (ms), or null (nothing overdue / no scheduler state). */
+export function jobsOverdueMs(statePath: string, nowMs = Date.now()): number | null {
+  const since = readJson<SchedulerState>(statePath, { jobs: {} }).deferredSince;
+  const t = since ? Date.parse(since) : NaN;
+  return Number.isNaN(t) ? null : Math.max(0, nowMs - t);
 }

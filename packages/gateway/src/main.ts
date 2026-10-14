@@ -2,7 +2,7 @@ import path from "node:path";
 import type { IncomingMessage } from "node:http";
 import { createAuth, getSessionUserId, notifyOps, sendDunningEmail, sendEmail, type AuthEnv } from "@podway/auth";
 import { verifyBridgeToken, PREVIEW_SESSION_COOKIE, BRIDGE_TOKEN_PARAM } from "@podway/auth/bridge-token";
-import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService, FlyCertIssuer, BillingService, DunningService, LoginReminderService, drizzleReminderDeps, AppWatchService, NightUpdateService, IDLE_UPDATE_DWELL_MS, DomainCertWatch, PodReports, SYSTEM_SENDER, stripeConfigured } from "@podway/control-plane";
+import { PodService, DrizzlePodStore, FetchMemory, AgentMessages, RelayService, SecretVault, DrizzleSecretStore, CustomDomainService, FlyCertIssuer, BillingService, DunningService, LoginReminderService, drizzleReminderDeps, AppWatchService, FleetHealthService, NightUpdateService, IDLE_UPDATE_DWELL_MS, DomainCertWatch, PodReports, SYSTEM_SENDER, stripeConfigured } from "@podway/control-plane";
 import { RelayRegistry } from "./relay-registry.js";
 import {
   IncusProvider,
@@ -351,6 +351,28 @@ async function main(): Promise<void> {
         .finally(() => (watching = false));
     }, appWatchMs).unref();
     console.log(`podway-gateway app watch every ${appWatchMs}ms`);
+  }
+
+  // Fleet health alerts (owner, 2026-10-13): every running pod's /healthz every 15 min → ops Telegram
+  // once per new problem, once when it clears (fleet-health.ts). notifyOps is a no-op unless TELEGRAM_OPS_*
+  // is set, so self-host stays silent unless configured.
+  const fleetHealthMs = Number(process.env.PODWAY_FLEET_HEALTH_MS ?? 15 * 60_000);
+  if (fleetHealthMs > 0 && process.env.TELEGRAM_OPS_BOT_TOKEN && process.env.TELEGRAM_OPS_CHAT_ID) {
+    const fleetHealth = new FleetHealthService({
+      listPods: () => control.fleetHealthSnapshot(),
+      notify: (text) => notifyOps(text),
+    });
+    let sweepingHealth = false;
+    setInterval(() => {
+      if (sweepingHealth) return;
+      sweepingHealth = true;
+      void fleetHealth
+        .sweep()
+        .then((r) => r.alerts && console.log("fleet_health_alerts", JSON.stringify(r)))
+        .catch((e) => console.error("fleet_health_sweep_failed", e))
+        .finally(() => (sweepingHealth = false));
+    }, fleetHealthMs).unref();
+    console.log(`podway-gateway fleet health every ${fleetHealthMs}ms`);
   }
 
   // Custom-domain certificates (owner, 2026-10-12): a real TLS handshake per active domain, daily; under

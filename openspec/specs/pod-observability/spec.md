@@ -222,3 +222,24 @@ in the future) is caught.
 - **THEN** neither the cockpit nor doctor reports remote control as active, so the owner is not misled
   into thinking the remote session works
 
+
+### Requirement: Ops is alerted when a pod is unhealthy
+
+The gateway SHALL read every running pod's `/healthz` every 15 minutes (`PODWAY_FLEET_HEALTH_MS`; only
+when `TELEGRAM_OPS_*` is set) and SHALL send ONE ops Telegram message when a pod newly shows: Claude's
+Remote Control `down` (auto-restore gave up; Codex is not counted), a dead agent or session (2 sweeps
+in a row), scheduled jobs held back more than 2 hours (`jobsOverdueMs`, a new `/healthz` field), the
+pod's own `disk-low`/`disk-critical` issue (under 15% free), or a pod-agent that does not answer (2
+sweeps). It SHALL send one "resolved" message when the problem clears, SHALL NOT repeat an open alert,
+and SHALL NOT resolve anything while the pod does not answer. Pods are named by their owner-given name,
+slug in brackets. Older images without `jobsOverdueMs` skip that check.
+
+#### Scenario: Remote Control restore gives up
+
+- **WHEN** a pod's Claude `rcState` becomes `down`
+- **THEN** ops gets one message naming the pod and the problem, and no repeat while it stays down
+
+#### Scenario: A problem clears
+
+- **WHEN** the same pod reads healthy again
+- **THEN** ops gets one "resolved" message
