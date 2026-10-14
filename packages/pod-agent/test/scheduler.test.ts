@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mkdtempSync, readFileSync, writeFileSync, existsSync, appendFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync, existsSync, appendFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -8,12 +8,14 @@ import {
   dueJobs,
   reduceRuns,
   jobsOverdueMs,
+  REAUDIT_NOTICE,
   type SchedulerOptions,
   type OpsJob,
 } from "../src/scheduler.js";
 
 function tmp() {
   const dir = mkdtempSync(path.join(tmpdir(), "sched-"));
+  writeFileSync(path.join(dir, "jobs-reaudit-v1"), "test\n"); // already re-audited; the re-audit tests remove it
   return {
     dir,
     jobsPath: path.join(dir, "ops-jobs.json"),
@@ -445,5 +447,32 @@ describe("runSchedulerTick", () => {
     });
     expect(await runSchedulerTick(o)).toEqual({ fired: true, kind: "stall", runId: "hung" });
     expect(injected[0]).toContain("Dead-man");
+  });
+
+  // One-time re-audit (owner, 2026-10-14): pods whose jobs predate job kinds get ONE nudge, when idle.
+  it("nudges a pod with old chat jobs to re-audit them exactly once, only when idle", async () => {
+    const p = tmp();
+    rmSync(path.join(p.dir, "jobs-reaudit-v1"));
+    writeJobs(p, [{ ...brief, schedule: { times: ["23:00"], timezone: "UTC" } }]); // a chat job, not due
+    let st = { status: "busy" };
+    const { o, injected } = opts(p, new Date("2026-07-22T08:00:30Z"), { status: () => st });
+    await runSchedulerTick(o);
+    expect(injected).toHaveLength(0); // busy: waits
+    st = { status: "idle" };
+    await runSchedulerTick(o);
+    await runSchedulerTick(o);
+    expect(injected.filter((t) => t === REAUDIT_NOTICE)).toHaveLength(1);
+    expect(REAUDIT_NOTICE).not.toContain("\n"); // typed as ONE line
+    expect(existsSync(path.join(p.dir, "jobs-reaudit-v1"))).toBe(true);
+  });
+
+  it("does not nudge a pod whose jobs are all script/agent jobs (or that has none)", async () => {
+    const p = tmp();
+    rmSync(path.join(p.dir, "jobs-reaudit-v1"));
+    writeJobs(p, [{ ...brief, kind: "exec", exec: "true", schedule: { times: ["23:00"], timezone: "UTC" } }]);
+    const { o, injected } = opts(p, new Date("2026-07-22T08:00:30Z"));
+    await runSchedulerTick(o);
+    expect(injected).toHaveLength(0);
+    expect(existsSync(path.join(p.dir, "jobs-reaudit-v1"))).toBe(true);
   });
 });

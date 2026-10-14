@@ -1373,6 +1373,15 @@ SHALL run as a separate headless agent process with the file as its prompt, SHAL
 session, and SHALL post one summary line when it ends unless its result is `OK`. A chat job keeps today's
 behavior, with a one-line trigger. Every run SHALL be logged with its scheduled and started time.
 
+#### Scenario: A pod with jobs from before job kinds is nudged once to re-audit them
+
+- **WHEN** a pod-agent with job kinds first runs on a pod that has chat (`--do`) jobs and no
+  `~/.podway/jobs-reaudit-v1` marker
+- **THEN** it SHALL send the agent ONE one-line notice (when the agent is idle) asking it to move jobs that
+  need no judgement to `--exec`, AI jobs that do not need the chat to `--prompt-file`, keep `--do` only for
+  jobs that need the conversation, change nothing that writes code or data, and report to the owner; then
+  write the marker. A pod with no chat jobs SHALL get the marker without a notice (owner, 2026-10-14).
+
 #### Scenario: A plain HTTP call every hour
 
 - **WHEN** a job is added with `--every 60 --exec "curl -fsS …"` and the agent is busy

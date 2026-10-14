@@ -160,6 +160,27 @@ function liveFor(statePath: string) {
   return l;
 }
 
+/** One-time re-audit (owner, 2026-10-14): a pod whose jobs predate job kinds gets ONE nudge to move them.
+ * One line — the notice is typed into the session, and a newline would submit it half-typed. */
+export const REAUDIT_NOTICE =
+  "[podway] Scheduled jobs now come in three kinds — please re-audit yours once: run `podway schedule list`; " +
+  "move jobs that need no judgement (a curl, a script, a check) to `--exec`; move AI jobs that don't need this chat " +
+  "to `--prompt-file` (instructions in a file, they run in the background and post one line); fold hand-written " +
+  "`podway startup` loops that only keep time into `--exec` jobs; keep `--do` only for jobs that need this " +
+  "conversation. Recreate each job with `podway schedule add …`, then `podway schedule remove` the old one. Do not " +
+  "change what a job does, and nothing that writes code or the database. When done, tell the owner in one short " +
+  "list what you moved and why.";
+const REAUDIT_MARKER = "jobs-reaudit-v1";
+const reauditMarker = (statePath: string) => path.join(path.dirname(statePath), REAUDIT_MARKER);
+function markReaudited(opts: { statePath: string; uid?: number; gid?: number }): void {
+  try {
+    writeFileSync(reauditMarker(opts.statePath), `${new Date().toISOString()}\n`);
+    chownBestEffort(reauditMarker(opts.statePath), opts.uid, opts.gid);
+  } catch {
+    /* best-effort: the worst case is one more nudge after a restart */
+  }
+}
+
 function kindOf(job: OpsJob): JobKind {
   return job.kind ?? "chat";
 }
@@ -361,10 +382,17 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
   const graceMs = opts.stallGraceMs ?? DEFAULT_STALL_GRACE_MS;
   const makeRunId = opts.makeRunId ?? ((jobId: string) => `${jobId}-${now().getTime()}`);
 
-  if (!existsSync(opts.jobsPath)) return { fired: false, reason: "no-config" };
-  const cfg = readJson<JobsConfig>(opts.jobsPath, { jobs: [] });
+  const cfg = existsSync(opts.jobsPath) ? readJson<JobsConfig>(opts.jobsPath, { jobs: [] }) : { jobs: [] };
   const jobs = Array.isArray(cfg.jobs) ? cfg.jobs : [];
-  if (jobs.length === 0) return { fired: false, reason: "no-jobs" };
+  const l = liveFor(opts.statePath);
+  // Re-audit once: a pod with chat jobs from before job kinds gets the nudge; a pod without any is marked
+  // done, so a job it adds later (with the new rules in front of it) never triggers it.
+  if (!existsSync(reauditMarker(opts.statePath)) && !l.notices.includes(REAUDIT_NOTICE)) {
+    if (jobs.some((j) => kindOf(j) === "chat")) l.notices.push(REAUDIT_NOTICE);
+    else markReaudited(opts);
+  }
+  if (!existsSync(opts.jobsPath)) return { fired: false, reason: "no-config" };
+  if (jobs.length === 0 && l.notices.length === 0) return { fired: false, reason: "no-jobs" };
 
   const state = readJson<SchedulerState>(opts.statePath, { jobs: {} });
   // A daily slot that passed BEFORE the job existed is not "missed": without this, a job added at
@@ -380,7 +408,6 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
   }
   if (seeded) writeJson(opts.statePath, state, opts.uid, opts.gid);
   const due = dueJobs(jobs, state, now());
-  const l = liveFor(opts.statePath);
   const runBg = opts.runBackground ?? defaultRunBackground(opts);
   const dropOneShot = (job: OpsJob) => {
     if (typeof job.schedule?.at !== "string") return;
@@ -440,8 +467,10 @@ export async function runSchedulerTick(opts: SchedulerOptions): Promise<TickResu
 
   // A finished background run's one-line notice, when the agent can take it (never the busy fallback).
   if (l.notices.length > 0 && canInject) {
-    await inject(l.notices.shift()!);
-    log.info("ops_notice_sent", {});
+    const notice = l.notices.shift()!;
+    await inject(notice);
+    if (notice === REAUDIT_NOTICE) markReaudited(opts);
+    log.info("ops_notice_sent", { reaudit: notice === REAUDIT_NOTICE });
     return { fired: true, kind: "notice" };
   }
 
