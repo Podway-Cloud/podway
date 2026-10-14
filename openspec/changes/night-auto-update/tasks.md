@@ -1,0 +1,4 @@
+- [ ] 1 migration: nullable account column; OSS hidden
+- [ ] 2 control-plane: night runner over opted-in accounts (reuse updateIdlePods); tests
+- [ ] 3 gateway timer; skip while a pod-base build runs
+- [ ] 4 Settings toggle + morning summary email; e2e

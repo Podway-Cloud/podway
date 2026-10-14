@@ -1,0 +1,4 @@
+- [ ] 1 pod-agent: add `jobsOverdueMs` to health (image)
+- [ ] 2 control-plane: sweep + per-pod/problem dedupe + resolved messages; unit tests
+- [ ] 3 gateway: 15-min timer; ops Telegram sender (reuse `packages/auth/src/notify.ts`)
+- [ ] 4 Live: break test:1 (stop the agent) → one alert; fix → one "resolved"
