@@ -126,14 +126,15 @@ test.describe("admin access requests", () => {
 
     // A tap on a FAR cell of that row opens that pod — not whichever row is first. The far DATA cell:
     // the last column is the row's Update action, which must NOT navigate.
-    const row = page.locator("tbody tr", { hasText: slug });
-    await row.locator("td").nth(-2).click();
-    // Generous timeout: whichever test reaches /admin/pods/[id] FIRST pays for the
-    // dev server to compile that route (~3.6s observed), and the default 5s left
-    // ~1s of slack — so this flaked about one run in three while the click itself
-    // was always correct. The server log showed the right pod being fetched while
-    // the assertion was already timing out.
-    await expect(page).toHaveURL(new RegExp(`/admin/pods/${slug}$`), { timeout: 20_000 });
+    // The table lists EVERY pod and other tests create pods meanwhile, so a row can move between "find"
+    // and "tap" (CI flake, 2026-10-14). Retry the tap; the original bug sent EVERY tap to the same wrong
+    // pod, so a retry never hides it. 20 s per try: the first visit compiles /admin/pods/[id] (~3.6 s).
+    await expect(async () => {
+      if (!page.url().endsWith("/admin/pods")) await page.goto("/admin/pods");
+      const row = page.locator("tbody tr", { hasText: slug });
+      await row.locator("td").nth(-2).click();
+      await expect(page).toHaveURL(new RegExp(`/admin/pods/${slug}$`), { timeout: 20_000 });
+    }).toPass({ timeout: 75_000 });
   });
 
   test("the drill-in offers doctor and states each fact once", async ({ page }) => {
