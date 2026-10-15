@@ -79,16 +79,16 @@ test.describe("onboarding hero", () => {
     await expect(link).toHaveAttribute("href", /e2e=2/);
     await expect(page.getByPlaceholder(/Paste the code/i)).toHaveValue("");
 
-    // Rejected again, but the link stays the SAME (Claude 2.1.296 retries in place): the card still
-    // reports it after its timeout instead of sitting on "Authenticating…" forever.
+    // Rejected again with the SAME link (claude 2.1.296 retries in place): the pod-agent sees "OAuth error"
+    // on the screen, counts it, and the card says so at once. The "code" makes the fake shell print it.
     const popup2 = page.waitForEvent("popup");
     await link.click();
     await (await popup2).close();
-    await page.getByPlaceholder(/Paste the code/i).fill("e2e-auth-code-456");
+    await page.getByPlaceholder(/Paste the code/i).fill("echo OAuth error: Invalid code");
     await page.getByRole("button", { name: /^Submit code$/i }).click();
     await expect(page.getByRole("button", { name: /Sent ✓/ })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/That code didn.t work/)).toHaveCount(0);
-    await expect(page.getByText(/That code didn.t work/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator('[role="alert"][data-reason="pod"]')).toBeVisible({ timeout: 30_000 });
     await expect(link).toHaveAttribute("href", /e2e=2/);
     await expect(page.getByPlaceholder(/Paste the code/i)).toHaveValue("");
   });

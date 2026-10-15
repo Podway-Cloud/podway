@@ -2736,7 +2736,7 @@ export class AgentServer {
     const s = idleStatus(this.session.idleMs(), this.opts.idleThresholdMs, this.session.isAlive);
     const cred = this.cred();
     void paneCharCount(this.agentTarget(), { uid: this.tmuxUid, gid: this.tmuxGid }).then(
-      (paneChars) => this.send(ws, { type: "status", ...s, paneChars, cred }),
+      (paneChars) => this.send(ws, { type: "status", ...s, paneChars, cred, codeRejections: this.codeRejections }),
     );
   }
 
@@ -2787,7 +2787,7 @@ export class AgentServer {
     const pane = await capturePane(this.session.sessionName, exec);
     this.recordPane(pane);
     const paneChars = (pane.match(/\S/g) ?? []).length;
-    this.broadcast({ type: "status", ...s, paneChars, cred: this.cred() });
+    this.broadcast({ type: "status", ...s, paneChars, cred: this.cred(), codeRejections: this.codeRejections });
 
     // Watchdog LAST: it must judge the pod's shape after refreshWindows and
     // advanceAddedAgents have run this tick, or it would "repair" a window that
@@ -2932,6 +2932,8 @@ export class AgentServer {
   private readonly menuStuck = new Map<string, string>();
   /** When the pod-agent pressed Enter on a rejected first-sign-in code, per agent (oauthRetryAllowed). */
   private readonly oauthRetries = new Map<string, number[]>();
+  /** Sign-in codes the CLI rejected (oauth-retry gate seen), sent in every status frame for the cockpit. */
+  private codeRejections = 0;
   private readonly menuUnknown = new Map<string, { hash: string; ticks: number; warned: boolean }>();
 
   /**
@@ -3016,12 +3018,14 @@ export class AgentServer {
         if (oauthRetryAllowed(times, now, existsSync(this.credPathFor(id)))) {
           this.oauthRetries.set(id, [...times.filter((t) => now - t < 10 * 60_000), now]);
           this.menuGateState.set(id, { ...st, drives: 0 });
+          this.codeRejections++;
           this.log.warn("login_oauth_retry_auto", { agent: id, window: w, attempt: times.length + 1 });
           execFile("tmux", ["send-keys", "-t", target, "Enter"], { uid: this.tmuxUid, gid: this.tmuxGid }, () => {});
           continue;
         }
       }
       if (gate === "proceed" || gate === "oauth-retry") {
+        if (gate === "oauth-retry" && !st.surfaced) this.codeRejections++;
         if (!st.surfaced) this.log.warn("menu_watchdog_needs_owner", { agent: id, gate, window: w });
         this.menuStuck.set(id, gateLabel(gate));
         this.menuGateState.set(id, { ...st, surfaced: true });

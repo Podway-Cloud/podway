@@ -914,17 +914,20 @@ sign-in link in that view (remembered per pod for the browser session). When the
 asks for a code again — at most 3 times per 10 minutes, at least 10 s apart; never for an already-authed
 agent's re-login, which stays an owner decision. (Claude 2.1.296 keeps the SAME link on that retry; older
 CLIs could start a fresh login with a new link.) While a submitted code is pending the cockpit SHALL keep
-polling the persisted sign-in link. The card SHALL say "That code didn't work. Open the sign-in link again
-and copy the full code." and clear the paste box when EITHER the link changes (then the new link must be
-opened) OR the pod is still at the sign-in step 20 s after Submit (same link).
+polling the persisted sign-in link. The pod-agent SHALL count each rejected code it sees (the oauth-retry
+gate) and send the count as `codeRejections` in every terminal status frame. The card SHALL say "That code
+didn't work. Open the sign-in link again and copy the full code." and clear the paste box when the link
+changes (then the new link must be opened), or when `codeRejections` rises after Submit. A pod-agent that
+does not send `codeRejections` (older image) falls back to a guess: still at the sign-in step 20 s after
+Submit.
 (A real visitor pasted a non-code before opening the link and the pod sat at the retry screen for 4 h,
 2026-10-15.)
 
 #### Scenario: A wrong code
 
 - **WHEN** a new owner submits a code the CLI rejects
-- **THEN** the pod-agent presses Enter on the retry screen, and the card shows the error (on a new link, or
-  after 20 s with the same link) with an empty box
+- **THEN** the pod-agent presses Enter on the retry screen and its `codeRejections` count rises, and the
+  card shows the error at once (an older image: on a new link, or after 20 s) with an empty box
 
 ### Requirement: The sign-in link survives a refresh mid-login
 

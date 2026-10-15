@@ -413,32 +413,38 @@ export default function PodCockpit(props: PodCockpitProps) {
     }
   };
   const submittedFor = useRef<string | null>(null);
-  const [codeRejected, setCodeRejected] = useState(false);
-  useEffect(() => {
-    if (!submittedFor.current || !authUrl || authUrl === submittedFor.current) return;
+  // Why the last code failed: a NEW link arrived, the pod reported it ("pod"), or the timeout fired.
+  const [codeRejected, setCodeRejected] = useState<false | "new-link" | "pod" | "timeout">(false);
+  // The pod-agent's count of rejected codes (status frame). null = an older pod that doesn't report it.
+  const rejectionsSeen = useRef<number | null>(null);
+  const markRejected = (reason: "new-link" | "pod" | "timeout") => {
     submittedFor.current = null;
-    setCodeRejected(true);
+    setCodeRejected(reason);
     setAuthCode("");
     setAuthSubmitting(false);
+    if (reason !== "new-link") return;
     setLinkOpened(false); // the NEW link must be opened
     try {
       sessionStorage.removeItem(linkKey);
     } catch {
       /* best-effort */
     }
+  };
+  useEffect(() => {
+    if (!submittedFor.current || !authUrl || authUrl === submittedFor.current) return;
+    markRejected("new-link");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authUrl, linkKey]);
-  // Claude 2.1.296 keeps the SAME link when the pod-agent retries a rejected code (seen on a scratch pod,
-  // 2026-10-15), so no new link arrives. Still on the sign-in step 20 s after Submit → the code was rejected.
-  // ponytail: a time heuristic; a pod-reported "code rejected" signal is the exact fix if it misfires.
+  // Older pods only: claude 2.1.296 keeps the SAME link when the pod-agent retries a rejected code (scratch
+  // pod, 2026-10-15), so no new link arrives. Still on the sign-in step 20 s after Submit → rejected. A pod
+  // that reports `codeRejections` is exact (status handler below), so the guess is skipped for it.
   useEffect(() => {
     if (!authSubmitting || phase !== "login" || !submittedFor.current) return;
     const t = window.setTimeout(() => {
-      submittedFor.current = null;
-      setCodeRejected(true);
-      setAuthCode("");
-      setAuthSubmitting(false);
+      if (rejectionsSeen.current == null) markRejected("timeout");
     }, 20_000);
     return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authSubmitting, phase]);
   const [sessionUrl, setSessionUrl] = useState<string | null>(props.sessionUrl);
   const [stepStartedAt, setStepStartedAt] = useState<number>(Date.now());
@@ -809,6 +815,11 @@ export default function PodCockpit(props: PodCockpitProps) {
     });
     clientRef.current = client;
     client.on("status", (s) => {
+      if (typeof s.codeRejections === "number") {
+        const before = rejectionsSeen.current;
+        rejectionsSeen.current = s.codeRejections;
+        if (before != null && s.codeRejections > before && submittedFor.current) markRejected("pod");
+      }
       const cred = s.cred;
       if (!cred) return;
       if (!cred.authed && phaseRef.current === "creating") setPhase("login");
@@ -1623,7 +1634,7 @@ export default function PodCockpit(props: PodCockpitProps) {
                 )}
                 <div className="flex flex-col gap-1.5">
                   {codeRejected && (
-                    <p role="alert" className="text-sm text-destructive">
+                    <p role="alert" data-reason={codeRejected} className="text-sm text-destructive">
                       That code didn&rsquo;t work. Open the sign-in link again and copy the full code.
                     </p>
                   )}

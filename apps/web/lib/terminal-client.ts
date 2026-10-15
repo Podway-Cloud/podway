@@ -30,6 +30,7 @@ export interface TerminalClientEvents {
     paneChars?: number;
     /** The agent's login state (per-pod login) — drives the launch wizard. */
     cred?: { agent: string; authed: boolean; hash: string };
+    codeRejections?: number;
   }) => void;
   exit: (code: number) => void;
   state: (state: ConnState) => void;
@@ -192,6 +193,7 @@ export class TerminalClient {
           ready: m.ready,
           paneChars: m.paneChars,
           cred: m.cred,
+          codeRejections: m.codeRejections,
         });
         break;
       case "windows":

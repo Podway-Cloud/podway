@@ -118,6 +118,9 @@ export type AgentMessage =
       ready: boolean;
       paneChars?: number;
       cred?: { agent: string; authed: boolean; hash: string };
+      /** How many sign-in codes the CLI rejected ("OAuth error") since the pod-agent started. The cockpit
+       *  shows "That code didn't work" when it rises after a Submit. Absent on older pod-agents. */
+      codeRejections?: number;
     }
   /** The pod's current tmux windows, pushed whenever the set or active window
    * changes, so the client can render/refresh its tab strip. */

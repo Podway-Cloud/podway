@@ -66,7 +66,9 @@ export async function startTerminalStack(opts: {
     bootCommand: "bash --norc -i",
     host: "127.0.0.1",
     port: unauthedPort,
-    // no credential → not signed in
+    // A credential path that does NOT exist → `cred.authed: false`, like a real pod before sign-in. Naming
+    // the agent also arms the menu watchdog, so a rejected code ("OAuth error") is counted and reported.
+    credential: { agent: "claude-code", path: path.join(os.tmpdir(), `podway-e2e-nocreds-${process.pid}.json`) },
     exitForRestart: () => {},
   });
   await agentUnauthed.listen();
