@@ -5,7 +5,7 @@
 # Built from the repo ROOT context (compose sets context: ..). V1 is a full-workspace
 # image — simple and correct; the slim standalone-only pattern of apps/web/Dockerfile
 # (Fly) can shrink it later.
-FROM node:22-slim
+FROM node:24-slim
 RUN npm install -g pnpm@10
 # node-pty (via @podway/pod-agent in the workspace install) compiles native — toolchain needed.
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ ca-certificates curl \

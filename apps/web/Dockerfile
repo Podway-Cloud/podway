@@ -4,7 +4,7 @@
 #   fly deploy --config apps/web/fly.toml --dockerfile apps/web/Dockerfile .
 #
 # (Unverified until the auth live path is wired — needs a Neon DB + GitHub OAuth app.)
-FROM node:22-slim AS base
+FROM node:24-slim AS base
 RUN npm install -g pnpm@10
 WORKDIR /app
 
