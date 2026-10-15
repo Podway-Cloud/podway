@@ -94,6 +94,29 @@ export const FREE_POD_OFFERS: Record<string, FreePodOffer> = {
   // First partner (owner, 2026-10-14): the claude-code-telegram maintainer tests podway before adding a
   // "Deploy on Podway" section — a free Medium for the first account on his link.
   "partner-claude-code-telegram": { ramGb: 4, cap: 1, label: "Free pod · Podway partner" },
+  // 18 more creators (owner, 2026-10-15; keys from the podway GTM pod): same deal as creator-evan.
+  ...Object.fromEntries(
+    [
+      "creator-ronnie",
+      "creator-hyperautomation",
+      "creator-hafiz",
+      "creator-robert",
+      "creator-krzysztof",
+      "creator-luca",
+      "creator-inam",
+      "creator-searls",
+      "creator-wmedia",
+      "creator-homelabhaven",
+      "creator-automatewithmarc",
+      "creator-devdigest",
+      "creator-tristen",
+      "creator-smartlife",
+      "creator-cleberg",
+      "creator-rsgm",
+      "creator-brennan",
+      "creator-phunky",
+    ].map((k) => [k, { ramGb: 4, cap: 1, label: "Free pod · Podway creator" }]),
+  ),
 };
 
 /** The free-pod size (GB) an account's claimed offer grants; 0 for none / an unknown key. */
