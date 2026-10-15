@@ -86,3 +86,15 @@ export function recoveryDue(history: RepairAttempt[], now: number): boolean {
   const last = history.reduce<number | null>((m, a) => (m === null || a.at > m ? a.at : m), null);
   return last !== null && now - last >= RECOVERY_COOLDOWN_MS;
 }
+
+/**
+ * A rejected Claude sign-in code ("OAuth error: Invalid code … Press Enter to retry") during the FIRST
+ * sign-in: Enter starts a fresh login with a new link, so the pod-agent may press it itself — at most 3
+ * times per 10 min, ≥10 s apart. An already-authed agent (a re-login) stays an owner decision.
+ * (A visitor pasted a non-code before opening the link and the pod sat at this screen for 4 h, 2026-10-15.)
+ */
+export function oauthRetryAllowed(times: readonly number[], now: number, authed: boolean): boolean {
+  if (authed) return false;
+  const recent = times.filter((t) => now - t < 10 * 60_000);
+  return recent.length < 3 && (recent.length === 0 || now - recent[recent.length - 1]! >= 10_000);
+}

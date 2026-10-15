@@ -21,6 +21,7 @@ export function PasteCodeInput({
   submitLabel = "Submit code",
   submittedLabel = "Sent ✓",
   placeholder = "Paste the code here",
+  disabled = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -30,6 +31,8 @@ export function PasteCodeInput({
   submitLabel?: string;
   submittedLabel?: string;
   placeholder?: string;
+  /** Submit blocked (e.g. the sign-in link wasn't opened yet). */
+  disabled?: boolean;
 }) {
   return (
     <div className="mt-2 flex flex-col gap-2">
@@ -64,7 +67,7 @@ export function PasteCodeInput({
         variant="outline"
         className="self-start"
         onClick={onSubmit}
-        disabled={!value.trim() || submitting}
+        disabled={!value.trim() || submitting || disabled}
       >
         {submitting ? <Loader2 className="mr-1 size-3.5 animate-spin" /> : null}
         {submitted ? submittedLabel : submitLabel}

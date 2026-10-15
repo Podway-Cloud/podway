@@ -906,6 +906,23 @@ physically move as its pod went Working → Waiting → Idle (owner report, 2026
   for input, goes idle, or errors)
 - **THEN** its card SHALL stay exactly where the owner placed it
 
+### Requirement: A rejected sign-in code is never a dead end
+
+During a pod's FIRST Claude sign-in, "Submit code" SHALL stay disabled until the owner has opened the
+sign-in link in that view (remembered per pod for the browser session). When the CLI rejects a code
+("OAuth error: Invalid code … Press Enter to retry"), the pod-agent SHALL press Enter itself to start a
+fresh login — at most 3 times per 10 minutes, at least 10 s apart; never for an already-authed agent's
+re-login, which stays an owner decision. While a submitted code is pending the cockpit SHALL keep polling
+the persisted sign-in link; when it changes, the card SHALL say "That code didn't work. Open the new
+sign-in link below and copy the full code.", clear the paste box and require the new link to be opened.
+(A real visitor pasted a non-code before opening the link and the pod sat at the retry screen for 4 h,
+2026-10-15.)
+
+#### Scenario: A wrong code
+
+- **WHEN** a new owner submits a code the CLI rejects
+- **THEN** the pod-agent restarts the login, the card shows the error and the new link, and the box is empty
+
 ### Requirement: The sign-in link survives a refresh mid-login
 
 The Claude sign-in (OAuth) URL shown during a pod's first login SHALL be captured to durable state
@@ -916,7 +933,8 @@ navigate-away/refresh, not client-only. It SHALL be cleared once the pod is auth
 While the pod is at the sign-in step and no captured value is yet shown, the cockpit SHALL POLL the
 persisted value from the backend, not rely solely on the page-load prop or a live terminal frame — so
 a value captured server-side AFTER the page loaded (notably a Codex device code, which reaches the
-client via no frame) appears without a manual refresh. Polling stops as soon as a value lands.
+client via no frame) appears without a manual refresh. Polling stops as soon as a value lands, and
+resumes while a submitted code is pending (a rejected code brings a new link).
 
 #### Scenario: Refresh during sign-in
 

@@ -391,6 +391,42 @@ export default function PodCockpit(props: PodCockpitProps) {
   // sign-in card unmounts then). Without a live terminal to echo the result, this is the only signal
   // the user gets that the submit took — reverting straight to "Submit code" reads as a failure.
   const [authSubmitting, setAuthSubmitting] = useState(false);
+  // Sign-in dead end (real visitor, 2026-10-15): a non-code pasted BEFORE opening the link was rejected,
+  // and the card showed neither an error nor a new link. Submit waits for the link to be opened (kept per
+  // pod across a reload), and a NEW link after a submit means the code was rejected (the pod-agent restarts
+  // the login on "Invalid code" — oauthRetryAllowed) → say so and clear the box.
+  const linkKey = `podway:signin-link-opened:${slug}`;
+  const [linkOpened, setLinkOpened] = useState(false);
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(linkKey) === "1") setLinkOpened(true); // after mount: no SSR mismatch
+    } catch {
+      /* storage blocked */
+    }
+  }, [linkKey]);
+  const openedLink = () => {
+    setLinkOpened(true);
+    try {
+      sessionStorage.setItem(linkKey, "1");
+    } catch {
+      /* best-effort */
+    }
+  };
+  const submittedFor = useRef<string | null>(null);
+  const [codeRejected, setCodeRejected] = useState(false);
+  useEffect(() => {
+    if (!submittedFor.current || !authUrl || authUrl === submittedFor.current) return;
+    submittedFor.current = null;
+    setCodeRejected(true);
+    setAuthCode("");
+    setAuthSubmitting(false);
+    setLinkOpened(false); // the NEW link must be opened
+    try {
+      sessionStorage.removeItem(linkKey);
+    } catch {
+      /* best-effort */
+    }
+  }, [authUrl, linkKey]);
   const [sessionUrl, setSessionUrl] = useState<string | null>(props.sessionUrl);
   const [stepStartedAt, setStepStartedAt] = useState<number>(Date.now());
   const [, forceTick] = useState(0);
@@ -917,12 +953,14 @@ export default function PodCockpit(props: PodCockpitProps) {
   // "Getting your sign-in code…" forever even though the code is already in the DB
   // (seen live on improved-tapir-143b, 2026-07-25). Stops as soon as a value lands.
   useEffect(() => {
-    if (authUrl || phase !== "login" || status !== "running") return;
+    // Also polls while a submitted code is pending: a rejected code makes the pod-agent restart the login,
+    // and the NEW link must reach the card (2026-10-15 dead end).
+    if ((authUrl && !authSubmitting) || phase !== "login" || status !== "running") return;
     let tries = 0;
     let stop = false;
     const poll = async () => {
       const v = await getPodAuthUrl(slug).catch(() => null);
-      if (v && !stop) setAuthUrl(v);
+      if (v && !stop) setAuthUrl((cur) => (cur === v ? cur : v));
     };
     void poll(); // immediately — the code is often already captured server-side
     const t = setInterval(() => {
@@ -933,7 +971,7 @@ export default function PodCockpit(props: PodCockpitProps) {
       stop = true;
       clearInterval(t);
     };
-  }, [authUrl, phase, status, slug]);
+  }, [authUrl, authSubmitting, phase, status, slug]);
 
   useEffect(() => {
     if (phase !== "agent") return;
@@ -965,6 +1003,8 @@ export default function PodCockpit(props: PodCockpitProps) {
       // via the pod-agent input action, which types it into the agent's window over HTTP.
       void sendAgentSigninCode(slug, agent, code);
     }
+    submittedFor.current = authUrl;
+    setCodeRejected(false);
     setCodeSent(true);
     setAuthSubmitting(true);
     window.setTimeout(() => setCodeSent(false), 2000); // "Sent ✓" flashes, then → "Authenticating…"
@@ -1547,6 +1587,7 @@ export default function PodCockpit(props: PodCockpitProps) {
                     href={authUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={openedLink}
                   >
                     <span className="text-lg font-semibold">Open the Claude sign-in page</span>
                     <span className="text-sm text-[var(--link-accent)]">then copy the code it gives you ↗</span>
@@ -1568,11 +1609,19 @@ export default function PodCockpit(props: PodCockpitProps) {
                   </div>
                 )}
                 <div className="flex flex-col gap-1.5">
-                  <p className="text-sm text-muted-foreground">Paste the code Claude gives you</p>
+                  {codeRejected && (
+                    <p role="alert" className="text-sm text-destructive">
+                      That code didn&rsquo;t work. Open the new sign-in link below and copy the full code.
+                    </p>
+                  )}
+                  <p className="text-sm text-muted-foreground">
+                    {linkOpened ? "Paste the code Claude gives you" : "Open the sign-in link first — then paste the code it gives you"}
+                  </p>
                   <PasteCodeInput
                     value={authCode}
                     onChange={setAuthCode}
-                    onSubmit={submitCode}
+                    onSubmit={() => linkOpened && submitCode()}
+                    disabled={!linkOpened}
                     submitting={authSubmitting}
                     submitted={codeSent}
                   />

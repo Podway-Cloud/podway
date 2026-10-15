@@ -62,9 +62,22 @@ test.describe("onboarding hero", () => {
     // …and the paste-a-code control accepts a code and reports it sent (typed into the PTY).
     // Placeholder is "Paste the code here" (paste-code-input.tsx's default); the spec still looked
     // for the older "Authorization code" wording and waited 90s for an input that never matched.
+    // Submit waits until the link was opened (2026-10-15: a code pasted before opening it was a dead end).
     await page.getByPlaceholder(/Paste the code/i).fill("e2e-auth-code-123");
+    await expect(page.getByRole("button", { name: /^Submit code$/i })).toBeDisabled();
+    const popup = page.waitForEvent("popup");
+    await link.click();
+    await (await popup).close();
     await page.getByRole("button", { name: /^Submit code$/i }).click();
     await expect(page.getByRole("button", { name: /Sent ✓/ })).toBeVisible({ timeout: 10_000 });
+
+    // The code is rejected: the pod restarts the login with a NEW link → the card says so and clears the box.
+    await page.request.post("/api/e2e/record-auth-url", {
+      data: { slug, url: "https://claude.ai/oauth/authorize?e2e=2" },
+    });
+    await expect(page.getByText(/That code didn.t work/)).toBeVisible({ timeout: 20_000 });
+    await expect(link).toHaveAttribute("href", /e2e=2/);
+    await expect(page.getByPlaceholder(/Paste the code/i)).toHaveValue("");
   });
 
   test("an OLD pod with no login opens the cockpit (Settings reachable), not the setup wizard", async ({ page }) => {

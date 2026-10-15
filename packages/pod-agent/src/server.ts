@@ -50,7 +50,7 @@ import { parseLoginPane, nextLoginAttempt, type LoginAttempt } from "./login-cap
 import { buildReport, ReportLimiter, REPORTS_OUTBOX, secretValuesFrom, type ReportInput } from "./bug-report.js";
 import { bridgeDeadSinceMs, rcBridgeDead } from "./rc-heartbeat.js";
 import { credentialsPathForAgent, sanitizeSessionName, podNameFromSpec, loginCommandFor, RESERVED_ANTHROPIC_KEY, RESERVED_CLAUDE_OAUTH_TOKEN } from "./boot.js";
-import { shouldRepair, pruneHistory, isCapped, recoveryDue, type RepairAttempt } from "./repair-policy.js";
+import { shouldRepair, pruneHistory, isCapped, recoveryDue, oauthRetryAllowed, type RepairAttempt } from "./repair-policy.js";
 import {
   collectDescendants,
   devServerProcess,
@@ -2930,6 +2930,8 @@ export class AgentServer {
    * (logged once per pane) that the CLI changed its menu wording, the way tonight's reconnect hang
    * rode a version bump. Both read from the pane already captured in menuWatchdog. */
   private readonly menuStuck = new Map<string, string>();
+  /** When the pod-agent pressed Enter on a rejected first-sign-in code, per agent (oauthRetryAllowed). */
+  private readonly oauthRetries = new Map<string, number[]>();
   private readonly menuUnknown = new Map<string, { hash: string; ticks: number; warned: boolean }>();
 
   /**
@@ -3003,9 +3005,22 @@ export class AgentServer {
         continue;
       }
       // "Do you want to proceed" is an owner decision we must NOT answer — surface it straight away
-      // instead of burning the drive budget on a no-op. A rejected OAuth code is the same shape: Enter
-      // RESUBMITS the dead code (making it worse, not progress), so it gets the same immediate
-      // surface rather than cycling through the drive-then-give-up path (test:1, 2026-08-26/27).
+      // instead of burning the drive budget on a no-op. A rejected OAuth code past the auto-retry above
+      // (an authed agent's re-login, or the cap) gets the same immediate surface. On claude 2.1.296 Enter
+      // starts a FRESH login with a new link (verified on a stuck pod, 2026-10-15) — earlier CLIs resubmitted.
+      // A rejected code during the FIRST sign-in: Enter starts a fresh login (new link the cockpit picks
+      // up), so press it ourselves — bounded. An authed agent's re-login stays the owner's call (below).
+      if (gate === "oauth-retry") {
+        const now = Date.now();
+        const times = this.oauthRetries.get(id) ?? [];
+        if (oauthRetryAllowed(times, now, existsSync(this.credPathFor(id)))) {
+          this.oauthRetries.set(id, [...times.filter((t) => now - t < 10 * 60_000), now]);
+          this.menuGateState.set(id, { ...st, drives: 0 });
+          this.log.warn("login_oauth_retry_auto", { agent: id, window: w, attempt: times.length + 1 });
+          execFile("tmux", ["send-keys", "-t", target, "Enter"], { uid: this.tmuxUid, gid: this.tmuxGid }, () => {});
+          continue;
+        }
+      }
       if (gate === "proceed" || gate === "oauth-retry") {
         if (!st.surfaced) this.log.warn("menu_watchdog_needs_owner", { agent: id, gate, window: w });
         this.menuStuck.set(id, gateLabel(gate));

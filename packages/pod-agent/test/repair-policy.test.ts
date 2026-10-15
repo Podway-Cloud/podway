@@ -3,6 +3,7 @@ import {
   shouldRepair,
   pruneHistory,
   isCapped,
+  oauthRetryAllowed,
   recoveryDue,
   MAX_ATTEMPTS,
   WINDOW_MS,
@@ -81,5 +82,19 @@ describe("recoveryDue — opt-in self-heal after the cap", () => {
   it("shouldRepair itself is UNCHANGED by recovery — it stays a hard stop at the cap (agent watchdog safety)", () => {
     // The cap must remain absolute for shouldRepair's callers; recovery is a separate, opt-in path.
     expect(shouldRepair(capped, lastAt + RECOVERY_COOLDOWN_MS + 1)).toMatchObject({ allow: false, reason: "capped" });
+  });
+});
+
+describe("oauthRetryAllowed (rejected first sign-in code)", () => {
+  const t0 = 1_000_000;
+  it("retries a not-yet-authed agent, ≥10 s apart, at most 3 per 10 min", () => {
+    expect(oauthRetryAllowed([], t0, false)).toBe(true);
+    expect(oauthRetryAllowed([t0], t0 + 5_000, false)).toBe(false); // too soon
+    expect(oauthRetryAllowed([t0], t0 + 10_000, false)).toBe(true);
+    expect(oauthRetryAllowed([t0, t0 + 10_000, t0 + 20_000], t0 + 60_000, false)).toBe(false); // capped
+    expect(oauthRetryAllowed([t0, t0 + 10_000, t0 + 20_000], t0 + 11 * 60_000, false)).toBe(true); // window passed
+  });
+  it("never retries an already-authed agent (a re-login is the owner's call)", () => {
+    expect(oauthRetryAllowed([], t0, true)).toBe(false);
   });
 });
