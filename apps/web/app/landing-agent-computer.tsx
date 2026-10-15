@@ -8,9 +8,11 @@ import {
   FlaskConical,
   MonitorSmartphone,
   Server,
-  Globe2,
   KeyRound,
+  MessagesSquare,
   ShieldCheck,
+  Wifi,
+  Zap,
   Wrench,
 } from "lucide-react";
 import { TrackedLink } from "./landing-examples";
@@ -32,20 +34,14 @@ import {
 // Owner-approved copy (via the podway GTM pod, confirmed in chat 2026-10-14). Cloud-session facts:
 // code.claude.com/docs/en/claude-code-on-the-web ("Environment expired": the VM is reclaimed when idle;
 // conversation restored, running background work not).
-const CLOUD_VS_POD: readonly (readonly [string, string, string])[] = [
-  ["Keeps working with the laptop closed", "Yes", "Yes"],
-  ["When it\u2019s idle", "The machine is reclaimed; your chat comes back, running work doesn\u2019t", "Stays on. Nothing is reclaimed"],
-  ["Dev servers, databases, workers", "Stop with the machine", "Keep running"],
-  ["Starts from", "A fresh copy of your GitHub repo", "Your files, tools and services, already there"],
-  ["Cost", "Included in your Claude plan", "Pods start at $4/month. First one free to start"],
-];
-
-const FAQ: readonly (readonly [string, string])[] = [
-  ["Do I need a Claude plan?", "Yes. You sign in with your own Claude Pro or Max plan. Podway runs the official Claude Code CLI and doesn\u2019t add any markup."],
-  ["Claude Code has cloud sessions now. Why would I need a pod?", "Cloud sessions are great for one-off tasks on a GitHub repo, and they\u2019re included in your plan. But they\u2019re sessions, not a computer you keep: when one goes idle, the machine is reclaimed and anything running in the background stops. A pod stays on. Your dev server, database and scheduled jobs keep running, and your files are still there tomorrow."],
-  ["Can I use it from my phone?", "Yes. Your Claude Code session is always running on the pod, so you open it from the Claude app on your phone, no PC needed."],
-  ["What if Remote Control drops?", "If Claude\u2019s login expires or the agent crashes, Podway restarts it and reconnects Remote Control on its own. If the connection drops without an error, Podway notices within about 3 minutes and reconnects. Pod restarts and updates reconnect too."],
-  ["Can I start several sessions from my phone?", "Each pod runs one always-on session. For several jobs at once, use several pods."],
+// Ordered by demand (GTM search + issue research, 2026-10-15): plan/pricing, Remote Control, phone, cloud.
+// A blank line in an answer starts a new paragraph; the optional 3rd item is an anchor id.
+const FAQ: readonly (readonly [string, string, string?])[] = [
+  ["Do I need a Claude plan?", "Yes, Claude Pro or Max. Podway runs the official Claude Code CLI and adds no markup."],
+  ["What if Remote Control drops?", "Podway reconnects it for you. After a crash or an expired login, it restarts Claude. A silent drop is caught within about 3 minutes. Restarts and updates reconnect too."],
+  ["Can I use it from my phone?", "Yes. The session runs on the pod, so you open it in the Claude app on your phone. No computer needed."],
+  ["Claude Code cloud sessions or a pod?", "Both work with your laptop closed.\n\nA cloud session comes with your Claude plan. When it\u2019s idle, the machine is reclaimed: your chat stays, but servers and running work stop. Each session starts from a fresh copy of your repo.\n\nA pod costs from $4/month, and your first pod is free. It stays on: servers, databases, and workers keep running, and your files and tools are already there.\n\nUse cloud sessions for one-off repo tasks. Use a pod for work that keeps running.", "cloud-vs-pod"],
+  ["Can I run several sessions at once?", "Each pod runs one always-on session. For more jobs at once, use more pods."],
 ];
 
 export default async function AgentComputerLanding({
@@ -139,61 +135,56 @@ export default async function AgentComputerLanding({
             live in the separate "More than remote access" section (now folded in here). Each card
             names ONE difference and states both sides once. */}
         <div className={styles.changeGrid}>
+        {/* Ordered by demand: GitHub issue themes + Google searches (GTM research, 2026-10-15). */}
         <article className={styles.changeCard}>
-          <Boxes className={styles.changeIcon} aria-hidden />
-          <h3>Keep the whole stack running</h3>
+          <Zap className={styles.changeIcon} aria-hidden />
+          <h3>No more permission prompts</h3>
           <dl>
-            <dt>Laptop</dt><dd>Servers, databases, workers, and scheduled jobs stop when your laptop does.</dd>
-            <dt>Pod</dt><dd>Dev servers, databases, workers, scheduled jobs, monitors, and project skills stay together and keep running.</dd>
+            <dt>Laptop</dt><dd>Claude stops to ask before each command.</dd>
+            <dt>Pod</dt><dd>Claude runs without prompts and keeps going. Other pods can wake it with a message, and Autopilot nudges it when it stops.</dd>
           </dl>
         </article>
         <article className={styles.changeCard}>
-          <Eye className={styles.changeIcon} aria-hidden />
-          <h3>Test and verify the real app</h3>
+          <Wifi className={styles.changeIcon} aria-hidden />
+          <h3>No more dropped sessions</h3>
           <dl>
-            <dt>Laptop</dt><dd>Builds slow your laptop, and there&rsquo;s no live app to check.</dd>
-            <dt>Pod</dt><dd>Claude builds, runs it, and clicks through the live app to verify &mdash; while you&rsquo;re away.</dd>
-          </dl>
-        </article>
-        <article className={styles.changeCard}>
-          <Globe2 className={styles.changeIcon} aria-hidden />
-          <h3>Develop or run in production</h3>
-          <dl>
-            <dt>Laptop</dt><dd>Localhost only &mdash; going live means deploying to a third-party service.</dd>
-            <dt>Pod</dt><dd>Develop with a live preview, or run your production server directly from the pod.</dd>
+            <dt>Laptop</dt><dd>The session drops when your laptop sleeps, crashes, or updates.</dd>
+            <dt>Pod</dt><dd>The session runs on the pod around the clock. Podway reconnects Remote Control and keeps you signed in.</dd>
           </dl>
         </article>
         <article className={styles.changeCard}>
           <ShieldCheck className={styles.changeIcon} aria-hidden />
-          <h3>Protect your personal environment</h3>
+          <h3>Your laptop stays yours</h3>
           <dl>
             <dt>Laptop</dt><dd>Claude works on your everyday computer.</dd>
-            <dt>Pod</dt><dd>Claude works in an isolated computer, away from your personal files, browser sessions, and local network.</dd>
+            <dt>Pod</dt><dd>Claude works on an isolated computer. Your files, browser, and network stay out of reach.</dd>
+          </dl>
+        </article>
+        <article className={styles.changeCard}>
+          <MessagesSquare className={styles.changeIcon} aria-hidden />
+          <h3>No more lost conversations</h3>
+          <dl>
+            <dt>Laptop</dt><dd>A crash or a new laptop loses the thread.</dd>
+            <dt>Pod</dt><dd>Conversations live on the pod&rsquo;s disk and in the nightly backup. They resume after restarts.</dd>
+          </dl>
+        </article>
+        <article className={styles.changeCard}>
+          <Boxes className={styles.changeIcon} aria-hidden />
+          <h3>Nothing stops when you close the lid</h3>
+          <dl>
+            <dt>Laptop</dt><dd>Servers and jobs stop when your laptop does.</dd>
+            <dt>Pod</dt><dd>Servers, databases, workers, and jobs run around the clock. Develop with a live preview, or serve production from the pod.</dd>
+          </dl>
+        </article>
+        <article className={styles.changeCard}>
+          <Eye className={styles.changeIcon} aria-hidden />
+          <h3>Claude checks its own work</h3>
+          <dl>
+            <dt>Laptop</dt><dd>Builds slow your laptop, and there is no live app to check.</dd>
+            <dt>Pod</dt><dd>Claude builds and runs the app, then clicks through it to check its work.</dd>
           </dl>
         </article>
         </div>
-      </LandingSection>
-
-      <LandingSection id="cloud-vs-pod">
-        <div className={styles.sectionHeading}>
-          <div>
-            <h2>Claude Code cloud sessions or a pod?</h2>
-          </div>
-          <p>Both keep Claude working when your laptop is closed. The difference is what&rsquo;s still there when you come back.</p>
-        </div>
-        <div className={styles.compareWrap}>
-          <table className={styles.compareTable}>
-            <thead>
-              <tr><th scope="col"><span className={styles.srOnly}>Question</span></th><th scope="col">Cloud session</th><th scope="col">Pod</th></tr>
-            </thead>
-            <tbody>
-              {CLOUD_VS_POD.map(([q, cloud, pod]) => (
-                <tr key={q}><th scope="row">{q}</th><td>{cloud}</td><td>{pod}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className={styles.compareNote}>Use cloud sessions for one-off repo tasks. Use a pod for work that has to keep running.</p>
       </LandingSection>
 
       <LandingSection id="fleet">
@@ -233,10 +224,10 @@ export default async function AgentComputerLanding({
           </div>
         </div>
         <div className={styles.faqList}>
-          {FAQ.map(([q, a]) => (
-            <details key={q} className={styles.faqItem}>
+          {FAQ.map(([q, a, id]) => (
+            <details key={q} id={id} className={styles.faqItem}>
               <summary>{q}</summary>
-              <p>{a}</p>
+              {a.split("\n\n").map((para) => <p key={para}>{para}</p>)}
             </details>
           ))}
         </div>

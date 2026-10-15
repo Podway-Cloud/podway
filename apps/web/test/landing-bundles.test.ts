@@ -47,7 +47,7 @@ describe("revised landing bundles", () => {
     expect(computer).toContain('Give <span className={styles.noWrap}>Claude Code</span> a computer that never sleeps.');
     expect(computer).toContain("Your first pod is free during early access. No card needed.");
     expect(computer).toContain("Claude Code cloud sessions or a pod?");
-    expect(computer).toContain("If the connection drops without an error, Podway notices within about 3 minutes and reconnects.");
+    expect(computer).toContain("A silent drop is caught within about 3 minutes.");
     expect(computer).not.toContain("QuoteWall");
     // The film is the hero visual now; the still dashboard picture and the separate demo block are gone (2026-10-14).
     expect(computer).not.toContain("dashboardImage");
@@ -71,15 +71,17 @@ describe("revised landing bundles", () => {
     expect(computer).not.toContain("Codex support · Pilot");
     expect(computer).toContain("Without a pod, and with one.");
     expect(computer).toContain("Claude Code is the same either way. What changes is where it lives.");
-    expect(computer).toContain("Keep the whole stack running");
-    expect(computer).toContain("Dev servers, databases, workers, scheduled jobs, monitors, and project skills stay together and keep running.");
-    expect(computer).toContain("Test and verify the real app");
-    expect(computer).toContain("Claude builds, runs it, and clicks through the live app to verify");
-    expect(computer).toContain("Develop or run in production");
+    expect(computer).toContain("Nothing stops when you close the lid");
+    expect(computer).toContain("Servers, databases, workers, and jobs run around the clock.");
+    expect(computer).toContain("Claude checks its own work");
+    expect(computer).toContain("Claude builds and runs the app, then clicks through it to check its work.");
+    expect(computer).not.toContain("Develop or run in production");
     expect(computer).toContain("Develop with a live preview");
-    expect(computer).toContain("run your production server directly from the pod");
-    expect(computer).toContain("Protect your personal environment");
-    expect(computer).toContain("Claude works in an isolated computer, away from your personal files, browser sessions, and local network.");
+    expect(computer).toContain("serve production from the pod");
+    expect(computer).toContain("Your laptop stays yours");
+    expect(computer).toContain("No more dropped sessions");
+    expect(computer).toContain("No more lost conversations");
+    expect(computer).toContain("No more permission prompts");
     expect(computer).toContain("<LandingPodNetwork />");
     expect(computer).not.toContain('/landing/pod-cutaway-v1.jpg');
     expect(computer).toContain("A boundary for agent work");
