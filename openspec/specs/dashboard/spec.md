@@ -2409,10 +2409,11 @@ When the owner confirms a new pod name, the dashboard SHALL send an owner-scoped
 
 ### Requirement: Idle pods can update themselves at night
 
-An account MAY turn on "Update idle pods automatically at night". When on, the platform SHALL run the
+"Update idle pods automatically at night" SHALL be ON for every account unless its owner switches it off
+(`user.night_update_off`; default false, owner 2026-10-15). When on, the platform SHALL run the
 existing idle bulk update for that account once a night between 03:00 and 05:00 in the owner's
 timezone, with the same eligibility rules (behind, running, idle, not T3, per-pod auto-update not off).
-It SHALL send the owner one summary email of what was updated and what was skipped and why (no email when no pod is behind). The owner's timezone is the browser's, stored when the setting is turned on (`user.night_update_tz`; null = off). Default: off. Cloud only.
+It SHALL send the owner one summary email of what was updated and what was skipped and why (no email when no pod is behind). The owner's timezone is the browser's (`user.night_update_tz`): the dashboard reports it once a session and it is stored while none is known; switching the setting also stores it. Until a timezone is known the window is 03:00–05:00 UTC. A pod set to auto-update "off" is still skipped. Cloud only.
 
 #### Scenario: A pod is busy at night
 

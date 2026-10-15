@@ -3,19 +3,24 @@
 import { useState } from "react";
 import { MoonStar } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
-import { setNightUpdateTz } from "@/lib/notification-actions";
+import { setNightUpdate } from "@/lib/notification-actions";
 
 /** Settings → Updates: let idle pods update themselves at night (night-update.ts). */
-export function NightUpdateCard({ initial }: { initial: string | null }) {
-  const [tz, setTz] = useState(initial);
+export function NightUpdateCard({ initial }: { initial: { on: boolean; tz: string | null } }) {
+  const [on, setOn] = useState(initial.on);
+  const [tz, setTz] = useState(initial.tz);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const toggle = () => {
-    const next = tz ? null : Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     setBusy(true);
     setError(null);
-    void setNightUpdateTz(next)
-      .then((r) => (r.error ? setError(r.error) : setTz(next)))
+    void setNightUpdate(!on, browserTz)
+      .then((r) => {
+        if (r.error) return setError(r.error);
+        setOn(!on);
+        setTz(browserTz);
+      })
       .finally(() => setBusy(false));
   };
   return (
@@ -38,7 +43,7 @@ export function NightUpdateCard({ initial }: { initial: string | null }) {
           </p>
           {error && <p className="text-[12.5px] text-destructive">{error}</p>}
         </div>
-        <Switch checked={tz != null} disabled={busy} onCheckedChange={toggle} aria-label="Update idle pods automatically at night" />
+        <Switch checked={on} disabled={busy} onCheckedChange={toggle} aria-label="Update idle pods automatically at night" />
       </div>
     </section>
   );

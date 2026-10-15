@@ -16,20 +16,21 @@ test.describe("notifications + bug reports", () => {
     await expect(sw).toHaveAttribute("aria-checked", "true");
   });
 
-  // Night auto-update (owner, 2026-10-13): off by default; turning it on stores the browser's timezone.
-  test("Settings → night updates are off by default; turning them on keeps the timezone", async ({ page }) => {
+  // Night auto-update: ON by default (owner, 2026-10-15); switching it stores the browser's timezone.
+  test("Settings → night updates are on by default; switching keeps the timezone", async ({ page }) => {
     await login(page, "approved");
     await page.goto("/dashboard/settings");
     const card = page.locator("section", { hasText: "Update idle pods automatically at night" });
     const sw = page.getByRole("switch", { name: "Update idle pods automatically at night" });
-    await expect(sw).toHaveAttribute("aria-checked", "false", { timeout: 30_000 });
+    await expect(sw).toHaveAttribute("aria-checked", "true", { timeout: 30_000 });
     await sw.click();
-    await expect(sw).toHaveAttribute("aria-checked", "true");
+    await expect(sw).toHaveAttribute("aria-checked", "false");
     const tz = await page.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
     await page.reload();
-    await expect(card.getByText(`(${tz})`)).toBeVisible({ timeout: 30_000 });
+    await expect(sw).toHaveAttribute("aria-checked", "false", { timeout: 30_000 });
+    await expect(card.getByText(`(${tz})`)).toBeVisible();
     await sw.click(); // leave the shared user as found
-    await expect(sw).toHaveAttribute("aria-checked", "false");
+    await expect(sw).toHaveAttribute("aria-checked", "true");
   });
 
   test("Cockpit → Insights → Reports shows the pod's bug reports (empty state)", async ({ page }) => {

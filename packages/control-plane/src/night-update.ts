@@ -2,7 +2,7 @@
  * Night auto-update (owner, 2026-10-13): for an account that turned on "Update idle pods automatically at
  * night", run the SAME idle bulk update the dashboard button runs (PodService.updateIdlePods — its rules
  * decide eligibility, not this file) once a night between 03:00 and 05:00 in the owner's timezone, then
- * email one summary: what updated, what was skipped and why. Default off.
+ * email one summary: what updated, what was skipped and why. Default ON since 2026-10-15 (user.night_update_off).
  *
  * Pure of I/O: every side effect is a dependency. The box is protected by updateIdlePods' own
  * concurrency cap + the global recreate gate (no separate "a pod-base build is running" signal exists).

@@ -3,7 +3,7 @@ import RelayConnectCard from "@/components/relay-connect-card";
 import { GithubAccountCard } from "@/components/github-account-card";
 import ThemeSwitcher from "@/components/theme-switcher";
 import { myRelayLive } from "@/lib/relay-actions";
-import { getReminderEmails, getNightUpdateTz } from "@/lib/notification-actions";
+import { getReminderEmails, getNightUpdate } from "@/lib/notification-actions";
 import { NightUpdateCard } from "@/components/night-update-card";
 import { NotificationsCard } from "@/components/notifications-card";
 import { editionOss } from "@/lib/session";
@@ -22,7 +22,7 @@ export default async function SettingsPage() {
   const oss = editionOss();
   const relay = oss ? null : await myRelayLive();
   const reminderEmails = await getReminderEmails();
-  const nightTz = oss ? null : await getNightUpdateTz();
+  const night = oss ? null : await getNightUpdate();
   return (
     <DashboardPage title="Settings">
       <div className="space-y-4">
@@ -33,7 +33,7 @@ export default async function SettingsPage() {
 
         <NotificationsCard initial={reminderEmails} />
         {/* Night auto-update is cloud-only: self-host updates are a host-level compose pull. */}
-        {!oss && <NightUpdateCard initial={nightTz} />}
+        {night && <NightUpdateCard initial={night} />}
 
         <section className="overflow-hidden rounded-xl border border-border bg-card">
           <div className="flex items-start gap-2.5 px-5 py-4">

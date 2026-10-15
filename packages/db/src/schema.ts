@@ -53,6 +53,8 @@ export const user = pgTable("user", {
   freeOfferSince: timestamp("free_offer_since"),
   /** "Update idle pods automatically at night": the owner's IANA timezone when ON, null = off. */
   nightUpdateTz: text("night_update_tz"),
+  /** Night auto-update is ON unless the owner switched it off (default on, owner 2026-10-15). */
+  nightUpdateOff: boolean("night_update_off").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });

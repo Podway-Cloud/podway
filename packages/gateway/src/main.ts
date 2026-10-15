@@ -407,7 +407,7 @@ async function main(): Promise<void> {
     console.log(`podway-gateway domain cert watch every ${certWatchMs}ms`);
   }
 
-  // Night auto-update (owner, 2026-10-13): opted-in accounts (user.night_update_tz set) get the idle bulk
+  // Night auto-update (owner, 2026-10-13; ON by default 2026-10-15): every account not switched off gets the idle bulk
   // update once a night, 03:00–05:00 their time, and one summary email. Cloud only; see night-update.ts.
   const nightMs = Number(process.env.PODWAY_NIGHT_UPDATE_SWEEP_MS ?? 15 * 60_000);
   const nightPin = process.env.PODWAY_INCUS_IMAGE_DIGEST ?? null;
@@ -419,8 +419,8 @@ async function main(): Promise<void> {
           await db
             .select({ id: user.id, tz: user.nightUpdateTz, name: user.name, email: user.email })
             .from(user)
-            .where(isNotNull(user.nightUpdateTz))
-        ).map((o) => ({ ...o, tz: o.tz! })),
+            .where(eq(user.nightUpdateOff, false))
+        ).map((o) => ({ ...o, tz: o.tz ?? "UTC" })), // tz not learned yet → UTC
       behindPods: (ownerId) => control.podsBehind(ownerId, nightPin),
       updateIdle: async (ownerId) =>
         (await control.updateIdlePods(ownerId, nightPin, IDLE_UPDATE_DWELL_MS, nightImage)).started,

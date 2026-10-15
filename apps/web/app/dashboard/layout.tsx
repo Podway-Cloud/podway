@@ -5,6 +5,7 @@ import DelinquencyBanner from "@/components/delinquency-banner";
 import { linkCurrentLandingAttribution } from "@/lib/landing-experiment-attribution";
 import { supportIdentityHash } from "@/lib/support-identity";
 import SignupConversion from "@/components/signup-conversion";
+import TimezoneLearner from "@/components/timezone-learner";
 
 /** A Google Ads sign-up conversion fires only for an account this new (every first landing is a dashboard page). */
 const NEW_ACCOUNT_MS = 15 * 60_000;
@@ -42,6 +43,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       nav={nav}
     >
       <DelinquencyBanner ownerId={user.id} />
+      {!oss && <TimezoneLearner />}
       {!oss && user.createdAt && Date.now() - Date.parse(user.createdAt) < NEW_ACCOUNT_MS && <SignupConversion />}
       {children}
     </DashboardShell>
