@@ -3,7 +3,7 @@
 # gateway devDep for integration tests) whose node-pty compiles from source, so
 # the build stage carries a compile toolchain. The runner stage stays slim; the
 # gateway itself never loads node-pty at runtime.
-FROM node:22-slim AS base
+FROM node:24-slim AS base
 RUN npm install -g pnpm@10
 WORKDIR /app
 
