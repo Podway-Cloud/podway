@@ -48,7 +48,7 @@ import type { RcState } from "@podway/shared/protocol";
 import { classifyRcState, isOrphanedRcYield, shouldAttemptRcRestore } from "./rc-state.js";
 import { parseLoginPane, nextLoginAttempt, type LoginAttempt } from "./login-capture.js";
 import { buildReport, ReportLimiter, REPORTS_OUTBOX, secretValuesFrom, type ReportInput } from "./bug-report.js";
-import { lastHeartbeatMs, rcSilentlyDropped, RC_SILENT_MS } from "./rc-heartbeat.js";
+import { bridgeDeadSinceMs, rcBridgeDead } from "./rc-heartbeat.js";
 import { credentialsPathForAgent, sanitizeSessionName, podNameFromSpec, loginCommandFor, RESERVED_ANTHROPIC_KEY, RESERVED_CLAUDE_OAUTH_TOKEN } from "./boot.js";
 import { shouldRepair, pruneHistory, isCapped, recoveryDue, type RepairAttempt } from "./repair-policy.js";
 import {
@@ -2813,7 +2813,7 @@ export class AgentServer {
   private primaryAuthFailTicks = 0;
   private primaryNeedsReauth = false;
   private pendingRcRestore = false;
-  /** The owed restore is for a silent drop: disconnect first, judge success by heartbeats. */
+  /** The owed restore is for a silent drop: disconnect first, judge success by a "connected" line after the teardown. */
   private rcRestoreCycle = false;
   private rcRestore = { attempts: 0, lastAt: 0, surfaced: false };
   /** Last-classified gate for the primary agent's pane, cached from failStateWatchdog's async tick
@@ -2864,12 +2864,12 @@ export class AgentServer {
     this.primaryNeedsReauth = needs;
     if (needs) return; // logged out — nothing to restore until the owner re-logs-in (surfaced on healthz)
 
-    // 1b. Silent drop (anthropics/claude-code#34255): RC heartbeats stopped while claude runs. The URL
-    // stays on disk, so only the heartbeat can tell; the restore must disconnect the dead link first.
+    // 1b. Silent drop (anthropics/claude-code#34255): claude logged the bridge as torn down / failed and never
+    // reconnected. The URL stays on disk, so only its log can tell; the restore disconnects first.
     if (
       !this.pendingRcRestore &&
       !existsSync(CLAUDE_RC_OFF) &&
-      rcSilentlyDropped(lastHeartbeatMs(), sessionStateFromDisk().startedAt ?? null, Date.now())
+      rcBridgeDead(bridgeDeadSinceMs(), Date.now())
     ) {
       this.log.warn("rc_silent_drop_detected", { agent: this.credential.agent });
       this.pendingRcRestore = true;
@@ -2890,9 +2890,8 @@ export class AgentServer {
       this.log.info("rc_restore_skipped_login_required", { auto: true });
       return;
     }
-    const beat = this.rcRestoreCycle ? lastHeartbeatMs() : null;
-    if (this.rcRestoreCycle ? beat != null && Date.now() - beat < RC_SILENT_MS : sessionStateFromDisk().url) {
-      // RC is back (heartbeats again / a fresh bridge session id appeared) → done, reset the budget.
+    if (this.rcRestoreCycle ? bridgeDeadSinceMs() == null : sessionStateFromDisk().url) {
+      // RC is back (connected after the teardown / a fresh bridge session id appeared) → done, reset the budget.
       this.log.info("rc_autorestore_ok", { attempts: this.rcRestore.attempts, silentDrop: this.rcRestoreCycle });
       if (this.rcRestoreCycle) this.lastSessionUrl = undefined; // the cycle links a NEW session; re-capture it
       this.pendingRcRestore = false;
