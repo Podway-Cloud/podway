@@ -40,7 +40,7 @@ test.describe("onboarding hero", () => {
   });
 
   test("the Claude sign-in step shows the auth link and accepts a pasted code", async ({ page }) => {
-    test.setTimeout(90_000);
+    test.setTimeout(150_000);
     await login(page, "approved");
     const slug = await launchPod(page, "nextjs-starter", { name: "NO-SESSION signin" });
 
@@ -76,6 +76,19 @@ test.describe("onboarding hero", () => {
       data: { slug, url: "https://claude.ai/oauth/authorize?e2e=2" },
     });
     await expect(page.getByText(/That code didn.t work/)).toBeVisible({ timeout: 20_000 });
+    await expect(link).toHaveAttribute("href", /e2e=2/);
+    await expect(page.getByPlaceholder(/Paste the code/i)).toHaveValue("");
+
+    // Rejected again, but the link stays the SAME (Claude 2.1.296 retries in place): the card still
+    // reports it after its timeout instead of sitting on "Authenticating…" forever.
+    const popup2 = page.waitForEvent("popup");
+    await link.click();
+    await (await popup2).close();
+    await page.getByPlaceholder(/Paste the code/i).fill("e2e-auth-code-456");
+    await page.getByRole("button", { name: /^Submit code$/i }).click();
+    await expect(page.getByRole("button", { name: /Sent ✓/ })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/That code didn.t work/)).toHaveCount(0);
+    await expect(page.getByText(/That code didn.t work/)).toBeVisible({ timeout: 30_000 });
     await expect(link).toHaveAttribute("href", /e2e=2/);
     await expect(page.getByPlaceholder(/Paste the code/i)).toHaveValue("");
   });

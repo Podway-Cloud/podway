@@ -910,18 +910,21 @@ physically move as its pod went Working → Waiting → Idle (owner report, 2026
 
 During a pod's FIRST Claude sign-in, "Submit code" SHALL stay disabled until the owner has opened the
 sign-in link in that view (remembered per pod for the browser session). When the CLI rejects a code
-("OAuth error: Invalid code … Press Enter to retry"), the pod-agent SHALL press Enter itself to start a
-fresh login — at most 3 times per 10 minutes, at least 10 s apart; never for an already-authed agent's
-re-login, which stays an owner decision. While a submitted code is pending the cockpit SHALL keep polling
-the persisted sign-in link; when it changes, the card SHALL say "That code didn't work. Open the new
-sign-in link below and copy the full code.", clear the paste box and require the new link to be opened.
+("OAuth error: Invalid code … Press Enter to retry"), the pod-agent SHALL press Enter itself so the CLI
+asks for a code again — at most 3 times per 10 minutes, at least 10 s apart; never for an already-authed
+agent's re-login, which stays an owner decision. (Claude 2.1.296 keeps the SAME link on that retry; older
+CLIs could start a fresh login with a new link.) While a submitted code is pending the cockpit SHALL keep
+polling the persisted sign-in link. The card SHALL say "That code didn't work. Open the sign-in link again
+and copy the full code." and clear the paste box when EITHER the link changes (then the new link must be
+opened) OR the pod is still at the sign-in step 20 s after Submit (same link).
 (A real visitor pasted a non-code before opening the link and the pod sat at the retry screen for 4 h,
 2026-10-15.)
 
 #### Scenario: A wrong code
 
 - **WHEN** a new owner submits a code the CLI rejects
-- **THEN** the pod-agent restarts the login, the card shows the error and the new link, and the box is empty
+- **THEN** the pod-agent presses Enter on the retry screen, and the card shows the error (on a new link, or
+  after 20 s with the same link) with an empty box
 
 ### Requirement: The sign-in link survives a refresh mid-login
 

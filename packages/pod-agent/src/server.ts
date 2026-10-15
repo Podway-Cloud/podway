@@ -3007,9 +3007,9 @@ export class AgentServer {
       // "Do you want to proceed" is an owner decision we must NOT answer — surface it straight away
       // instead of burning the drive budget on a no-op. A rejected OAuth code past the auto-retry above
       // (an authed agent's re-login, or the cap) gets the same immediate surface. On claude 2.1.296 Enter
-      // starts a FRESH login with a new link (verified on a stuck pod, 2026-10-15) — earlier CLIs resubmitted.
-      // A rejected code during the FIRST sign-in: Enter starts a fresh login (new link the cockpit picks
-      // up), so press it ourselves — bounded. An authed agent's re-login stays the owner's call (below).
+      // returns to "Paste code here" with the SAME link (scratch pod, 2026-10-15); the cockpit flags the
+      // rejected code by its 20 s timeout. A rejected code during the FIRST sign-in: press Enter ourselves —
+      // bounded. An authed agent's re-login stays the owner's call (below).
       if (gate === "oauth-retry") {
         const now = Date.now();
         const times = this.oauthRetries.get(id) ?? [];

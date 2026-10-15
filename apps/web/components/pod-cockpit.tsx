@@ -393,8 +393,8 @@ export default function PodCockpit(props: PodCockpitProps) {
   const [authSubmitting, setAuthSubmitting] = useState(false);
   // Sign-in dead end (real visitor, 2026-10-15): a non-code pasted BEFORE opening the link was rejected,
   // and the card showed neither an error nor a new link. Submit waits for the link to be opened (kept per
-  // pod across a reload), and a NEW link after a submit means the code was rejected (the pod-agent restarts
-  // the login on "Invalid code" — oauthRetryAllowed) → say so and clear the box.
+  // pod across a reload), and a NEW link after a submit means the code was rejected → say so and clear the box.
+  // (The pod-agent presses Enter on "Invalid code" — oauthRetryAllowed; same-link case: the timeout below.)
   const linkKey = `podway:signin-link-opened:${slug}`;
   const [linkOpened, setLinkOpened] = useState(false);
   useEffect(() => {
@@ -427,6 +427,19 @@ export default function PodCockpit(props: PodCockpitProps) {
       /* best-effort */
     }
   }, [authUrl, linkKey]);
+  // Claude 2.1.296 keeps the SAME link when the pod-agent retries a rejected code (seen on a scratch pod,
+  // 2026-10-15), so no new link arrives. Still on the sign-in step 20 s after Submit → the code was rejected.
+  // ponytail: a time heuristic; a pod-reported "code rejected" signal is the exact fix if it misfires.
+  useEffect(() => {
+    if (!authSubmitting || phase !== "login" || !submittedFor.current) return;
+    const t = window.setTimeout(() => {
+      submittedFor.current = null;
+      setCodeRejected(true);
+      setAuthCode("");
+      setAuthSubmitting(false);
+    }, 20_000);
+    return () => window.clearTimeout(t);
+  }, [authSubmitting, phase]);
   const [sessionUrl, setSessionUrl] = useState<string | null>(props.sessionUrl);
   const [stepStartedAt, setStepStartedAt] = useState<number>(Date.now());
   const [, forceTick] = useState(0);
@@ -1611,7 +1624,7 @@ export default function PodCockpit(props: PodCockpitProps) {
                 <div className="flex flex-col gap-1.5">
                   {codeRejected && (
                     <p role="alert" className="text-sm text-destructive">
-                      That code didn&rsquo;t work. Open the new sign-in link below and copy the full code.
+                      That code didn&rsquo;t work. Open the sign-in link again and copy the full code.
                     </p>
                   )}
                   <p className="text-sm text-muted-foreground">
